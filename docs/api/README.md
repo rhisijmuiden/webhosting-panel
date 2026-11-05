@@ -38,6 +38,20 @@ A final full backup is kept; `POST .../restore` brings it back within that time.
 
 **Overage billing**: `GET /usage?period=2026-10` once a month.
 
+**Customer orders from inside the panel** (for example Microsoft 365
+mailboxes from the M365 DNS wizard, or a bigger plan):
+
+1. The CRM keeps the catalog in the panel up to date with webshop prices:
+   `PUT /catalog` after every price change (`kind: m365` products appear in the
+   M365 wizard, `plan_upgrade` on the plan page, `shop_url` is used for "Buy
+   hosting" links).
+2. The customer picks a product and quantity; the panel sends an
+   `order.requested` webhook with the price it showed.
+3. The CRM creates the order/quote and answers with
+   `PATCH /orders/{id}` (`awaiting_payment` with a `checkout_url`, then
+   `completed`, or `rejected` with a message). The customer sees the status in
+   the panel.
+
 **"Open hosting panel" button** in the customer portal:
 `POST /customers/ext:<id>/login-link`, then redirect to the returned `url`.
 
@@ -73,4 +87,4 @@ abort_unless(hash_equals($expected, $sig['v1'] ?? '') && abs(time() - (int) $sig
 Events: `subscription.provisioned`, `subscription.failed`,
 `subscription.changed`, `subscription.suspended`, `subscription.unsuspended`,
 `subscription.terminated`, `usage.limit_reached`, `backup.failed`,
-`customer.updated`, `ping`. Retries: 1 min, 5 min, 30 min, 2 h, 6 h, 24 h.
+`customer.updated`, `order.requested`, `order.cancelled`, `ping`. Retries: 1 min, 5 min, 30 min, 2 h, 6 h, 24 h.

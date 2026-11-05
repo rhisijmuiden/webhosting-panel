@@ -49,6 +49,16 @@ tags:
   - name: Usage
   - name: Jobs
   - name: Webhooks
+  - name: Catalog
+    description: |
+      Products the customer can order from inside the panel (for example
+      Microsoft 365 mailboxes from the M365 wizard, or a bigger plan). The CRM
+      pushes them with the price from the webshop; the panel never calls the
+      webshop itself.
+  - name: Orders
+    description: |
+      Order requests made by customers in the panel. They reach the CRM as an
+      `order.requested` webhook; the CRM answers with the status.
 
 paths:
   /ping:
@@ -567,6 +577,99 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/WebhookDelivery" }
 
+  /catalog:
+    get:
+      tags: [Catalog]
+      operationId: getCatalog
+      summary: The catalog as the panel currently shows it.
+      responses:
+        "200":
+          description: Catalog.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Catalog" }
+    put:
+      tags: [Catalog]
+      operationId: replaceCatalog
+      summary: Replace the whole catalog (send it after every price change in the webshop).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Catalog" }
+      responses:
+        "200":
+          description: Stored.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Catalog" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /orders:
+    get:
+      tags: [Orders]
+      operationId: listOrders
+      summary: List order requests made in the panel.
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/OrderStatus" }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A page of orders.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, next_cursor]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Order" } }
+                  next_cursor: { type: [string, "null"] }
+
+  /orders/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Orders]
+      operationId: getOrder
+      summary: Get an order request.
+      responses:
+        "200":
+          description: The order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Orders]
+      operationId: updateOrder
+      summary: Report what the CRM did with the order (shown to the customer).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: "#/components/schemas/OrderStatus" }
+                external_id: { type: string, maxLength: 64, description: Order id in the CRM. }
+                message: { type: string, maxLength: 1000, description: Shown to the customer in their locale. }
+                checkout_url: { type: [string, "null"], format: uri, description: Payment or confirmation page in the webshop. }
+      responses:
+        "200":
+          description: The changed order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
 webhooks:
   event:
     post:
@@ -919,6 +1022,75 @@ components:
         - usage.limit_reached
         - backup.failed
         - customer.updated
+        - order.requested
+        - order.cancelled
+
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount: { type: string, pattern: "^[0-9]+\\.[0-9]{2}$", examples: ["6.50"], description: Excl. VAT. }
+        currency: { type: string, enum: [EUR], default: EUR }
+        vat_rate: { type: string, examples: ["21"] }
+        interval: { type: string, enum: [once, month, year] }
+
+    Product:
+      type: object
+      required: [code, kind, name, price]
+      properties:
+        code: { type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,63}$", examples: [m365-business-basic] }
+        kind:
+          type: string
+          enum: [m365, plan_upgrade, domain, ssl, addon, other]
+          description: "`m365` products are offered in the Microsoft 365 wizard, `plan_upgrade` on the plan page (with `plan_code`)."
+        name:
+          type: object
+          required: [en]
+          properties:
+            en: { type: string }
+            nl: { type: string }
+        description:
+          type: object
+          properties:
+            en: { type: string }
+            nl: { type: string }
+        price: { $ref: "#/components/schemas/Money" }
+        plan_code: { type: [string, "null"] }
+        per_unit: { type: boolean, default: false, description: Price per mailbox or seat; the customer chooses a quantity. }
+        shop_url: { type: [string, "null"], format: uri, description: Product page in the webshop. }
+        active: { type: boolean, default: true }
+
+    Catalog:
+      type: object
+      required: [products]
+      properties:
+        shop_url: { type: [string, "null"], format: uri, description: "Webshop home, used for \"Buy hosting\" links (for example on the parking page)." }
+        updated_at: { type: string, format: date-time, readOnly: true }
+        products: { type: array, items: { $ref: "#/components/schemas/Product" } }
+
+    OrderStatus:
+      type: string
+      enum: [requested, awaiting_payment, accepted, completed, rejected, cancelled]
+
+    Order:
+      type: object
+      required: [id, status, customer_id, product_code, quantity, created_at]
+      properties:
+        id: { type: string }
+        external_id: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/OrderStatus" }
+        customer_id: { type: string }
+        customer_external_id: { type: string }
+        subscription_id: { type: [string, "null"] }
+        domain: { type: [string, "null"], examples: [example.nl] }
+        product_code: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        price_shown: { $ref: "#/components/schemas/Money" }
+        note: { type: [string, "null"], maxLength: 1000, description: Free text from the customer. }
+        message: { type: [string, "null"] }
+        checkout_url: { type: [string, "null"], format: uri }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 
     WebhookEndpointInput:
       type: object
@@ -966,7 +1138,8 @@ components:
             `usage.limit_reached`: `{usage: Usage, limit: "disk_mb"}`;
             `backup.failed`: `{subscription_id, scope, target, message}`;
             `customer.updated`: `{customer: Customer}` (when the customer changes
-            their own details in the panel).
+            their own details in the panel);
+            `order.requested` / `order.cancelled`: `{order: Order}`.
           additionalProperties: true
       examples:
         - id: 01JC7Z3V9Q0K8Z6WQ9T2M4N5PB
