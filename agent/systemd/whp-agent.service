@@ -1,0 +1,23 @@
+[Unit]
+Description=Webhosting Panel agent (applies panel changes as root)
+After=network.target nftables.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -m whp_agent
+WorkingDirectory=/opt/webhosting-panel/agent
+Environment=PYTHONPATH=/opt/webhosting-panel/agent
+Environment=PYTHONDONTWRITEBYTECODE=1
+RuntimeDirectory=whp-agent
+RuntimeDirectoryMode=0750
+Group=whp
+UMask=0027
+Restart=always
+RestartSec=2
+# Hardening that still lets the agent manage the system
+NoNewPrivileges=no
+ProtectHome=read-only
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
