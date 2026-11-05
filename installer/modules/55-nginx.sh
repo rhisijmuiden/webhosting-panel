@@ -9,6 +9,12 @@ module_nginx() {
 
   backup_once /etc/nginx/nginx.conf
   NGINX_WORKER_CONNECTIONS=4096
+  # Page cache: 5% of free disk, between 1 and 20 GB.
+  local free_gb
+  free_gb=$(df -BG --output=avail /var/cache | tail -n1 | tr -dc 0-9)
+  NGINX_CACHE_MAX=$(( free_gb / 20 ))
+  (( NGINX_CACHE_MAX < 1 )) && NGINX_CACHE_MAX=1
+  (( NGINX_CACHE_MAX > 20 )) && NGINX_CACHE_MAX=20
   render "$TPL/nginx/nginx.conf" /etc/nginx/nginx.conf
   install -d -m 0755 /etc/nginx/whp /etc/nginx/whp/sites
   install -d -m 0700 -o www-data -g www-data /var/cache/nginx/whp

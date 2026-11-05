@@ -162,6 +162,7 @@ mail_rspamd() {
 module_mail() {
   mail_users
   mail_rspamd
+  mail_postfix   # creates the postfix user and spool that Dovecot's sockets live in
   mail_dovecot
-  mail_postfix
+  svc_restart postfix
 }

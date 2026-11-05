@@ -57,6 +57,10 @@ echo 'SECRET=1' >/var/www/vhosts/site.test/public/.env
 check ".env is not served" bash -c "[[ \$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: site.test' http://127.0.0.1/.env) == 404 ]]"
 check "open_basedir blocks /etc/passwd" bash -c "printf '<?php var_dump(@file_get_contents(\"/etc/passwd\"));' >/var/www/vhosts/site.test/public/x.php && curl -s -H 'Host: site.test' http://127.0.0.1/x.php | grep -q 'bool(false)'"
 check "site runs as its own user" bash -c "printf '<?php echo posix_getpwuid(posix_geteuid())[\"name\"];' >/var/www/vhosts/site.test/public/u.php && curl -s -H 'Host: site.test' http://127.0.0.1/u.php | grep -q s_site_test"
+check "site has its own systemd unit in whp-sites.slice" bash -c "systemctl is-active --quiet whp-site-site_test && [[ \$(systemctl show -p Slice --value whp-site-site_test) == whp-sites.slice ]]"
+check "per-site memory accounting" bash -c "whp-site show site.test | jq -e '.resources.memory_bytes > 0'"
+check "per-site limits" bash -c "whp-site limits site.test --cpu 150% --memory 512M && [[ \$(systemctl show -p CPUQuotaPerSecUSec --value whp-site-site_test) == 1.500000s ]]"
+check "site still answers after limits" bash -c "curl -s -H 'Host: site.test' http://127.0.0.1/ | grep -q php="
 check "security headers" bash -c "curl -sI -H 'Host: site.test' http://127.0.0.1/ | grep -qi x-content-type-options"
 check "add laravel site" whp-site add app.test --profile laravel --no-ssl --json
 printf '<?php echo "laravel-docroot";\n' >/var/www/vhosts/app.test/app/public/index.php

@@ -104,13 +104,19 @@ module_panel() {
 
   # Helper CLIs
   local b
+  chmod 0755 "$WHP_CODE_DIR"/installer/bin/*
   for b in whp-site whp-cert whp-status whp-malware-scan; do
     ln -sf "$WHP_CODE_DIR/installer/bin/$b" "/usr/local/sbin/$b"
   done
+  # Per-site PHP-FPM units (created by whp-site) live in this slice.
+  render "$TPL/systemd/whp-sites.slice" /etc/systemd/system/whp-sites.slice
+  render "$TPL/systemd/whp-sites.target" /etc/systemd/system/whp-sites.target
+  install -d -m 0755 "$WHP_ETC/php-fpm"
+  install -d -m 0750 "$WHP_LOG_DIR/php-fpm"
   render "$TPL/systemd/whp-cert-retry.service" /etc/systemd/system/whp-cert-retry.service
   render "$TPL/systemd/whp-cert-retry.timer" /etc/systemd/system/whp-cert-retry.timer
   run systemctl daemon-reload
-  svc_enable whp-cert-retry.timer
+  svc_enable whp-cert-retry.timer whp-sites.target
 
   # Components from later phases, in this order, when present.
   local c

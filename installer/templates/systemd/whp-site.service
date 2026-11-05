@@ -1,0 +1,23 @@
+# Managed by whp-site. Site {{SITE_DOMAIN}}, PHP {{SITE_PHP}}.
+[Unit]
+Description=PHP {{SITE_PHP}} for {{SITE_DOMAIN}}
+After=network.target mariadb.service valkey-server.service
+PartOf=whp-sites.target
+
+[Service]
+Type=notify
+Slice=whp-sites.slice
+ExecStart=/usr/sbin/php-fpm{{SITE_PHP}} --nodaemonize --fpm-config /etc/webhosting-panel/php-fpm/{{SITE_ID}}.conf -d opcache.memory_consumption={{SITE_OPCACHE_MB}} -d opcache.jit_buffer_size=32M
+ExecReload=/bin/kill -USR2 $MAINPID
+Restart=on-failure
+RestartSec=2s
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=false
+
+[Install]
+WantedBy=multi-user.target whp-sites.target
