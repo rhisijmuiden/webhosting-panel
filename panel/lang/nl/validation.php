@@ -1,0 +1,57 @@
+<?php
+
+// Dutch validation messages for the rules the panel uses. Missing rules fall back to English.
+return [
+    'boolean' => ':Attribute moet waar of onwaar zijn.',
+    'confirmed' => 'De bevestiging van :attribute komt niet overeen.',
+    'current_password' => 'Het wachtwoord is onjuist.',
+    'email' => ':Attribute moet een geldig e-mailadres zijn.',
+    'exists' => 'De gekozen :attribute bestaat niet.',
+    'in' => 'De gekozen :attribute is ongeldig.',
+    'integer' => ':Attribute moet een geheel getal zijn.',
+    'max' => [
+        'numeric' => ':Attribute mag niet groter zijn dan :max.',
+        'string' => ':Attribute mag niet meer dan :max tekens bevatten.',
+    ],
+    'min' => [
+        'numeric' => ':Attribute moet minimaal :min zijn.',
+        'string' => ':Attribute moet minimaal :min tekens bevatten.',
+    ],
+    'numeric' => ':Attribute moet een getal zijn.',
+    'password' => [
+        'letters' => ':Attribute moet minimaal één letter bevatten.',
+        'mixed' => ':Attribute moet minimaal één hoofdletter en één kleine letter bevatten.',
+        'numbers' => ':Attribute moet minimaal één cijfer bevatten.',
+        'symbols' => ':Attribute moet minimaal één symbool bevatten.',
+        'uncompromised' => 'Dit :attribute komt voor in een datalek. Kies een ander :attribute.',
+    ],
+    'regex' => 'Het formaat van :attribute is ongeldig.',
+    'required' => ':Attribute is verplicht.',
+    'required_if' => ':Attribute is verplicht als :other :value is.',
+    'string' => ':Attribute moet tekst zijn.',
+    'unique' => ':Attribute is al in gebruik.',
+
+    'attributes' => [
+        'address' => 'adres',
+        'code' => 'code',
+        'company' => 'bedrijf',
+        'confirm' => 'bevestiging',
+        'current_password' => 'huidig wachtwoord',
+        'customer_id' => 'klant',
+        'description' => 'omschrijving',
+        'disk_mb' => 'schijfruimte',
+        'domain' => 'domeinnaam',
+        'email' => 'e-mailadres',
+        'from_address' => 'afzenderadres',
+        'from_name' => 'afzendernaam',
+        'host' => 'SMTP-server',
+        'locale' => 'taal',
+        'name' => 'naam',
+        'password' => 'wachtwoord',
+        'phone' => 'telefoon',
+        'port' => 'poort',
+        'reason' => 'reden',
+        'test_to' => 'ontvanger',
+        'username' => 'gebruikersnaam',
+    ],
+];
