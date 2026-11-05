@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8edcb335431618ce1bd3c988f17631e3",
+    "content-hash": "a5de7e7ab27dd7684e4bb17da603a0a5",
     "packages": [
         {
             "name": "brick/math",
@@ -3304,6 +3304,54 @@
                 "source": "https://github.com/ramsey/uuid/tree/4.9.4"
             },
             "time": "2026-09-16T11:39:30+00:00"
+        },
+        {
+            "name": "rhis/dns-mail",
+            "version": "dev-claude/project-thread-o92eyn",
+            "dist": {
+                "type": "path",
+                "url": "../packages/dns-mail",
+                "reference": "07f079120591471615bb13ea243a655f33fefcdd"
+            },
+            "require": {
+                "ext-curl": "*",
+                "ext-json": "*",
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^11.5"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\DnsMail\\Laravel\\DnsMailServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\DnsMail\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "Rhis\\DnsMail\\Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "phpunit"
+                ]
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Cloudflare DNS sync, per-domain mail routing (RHIS mail or Microsoft 365) and SnappyMail webmail config for the Webhosting Panel.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "symfony/clock",
@@ -8478,7 +8526,9 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": {
+        "rhis/dns-mail": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
