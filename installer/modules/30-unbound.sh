@@ -19,6 +19,15 @@ module_unbound() {
   local i
   for i in 1 2 3 4 5; do
     if dig +short +time=2 +tries=1 @127.0.0.1 debian.org A | grep -q .; then
+      if systemctl is-active --quiet systemd-resolved 2>/dev/null; then
+        # Unbound takes over; this also closes LLMNR (5355) and mDNS.
+        systemctl disable --now systemd-resolved >/dev/null 2>&1 || true
+        systemctl mask systemd-resolved >/dev/null 2>&1 || true
+      fi
+      if [[ -L /etc/resolv.conf ]]; then
+        cp --remove-destination "$(readlink -f /etc/resolv.conf)" /etc/resolv.conf.whp-orig 2>/dev/null || true
+        rm -f /etc/resolv.conf
+      fi
       if ! grep -qE '^nameserver 127\.0\.0\.1$' /etc/resolv.conf 2>/dev/null; then
         backup_once /etc/resolv.conf
         # Write in place: in containers resolv.conf is often a bind mount.

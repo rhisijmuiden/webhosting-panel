@@ -104,6 +104,27 @@ CONF
   printf '[Journal]\nSystemMaxUse=1G\nMaxRetentionSec=1month\n' >/etc/systemd/journald.conf.d/whp.conf
   systemctl restart systemd-journald 2>/dev/null || true
 
+  # Cloud images (cloud-init) rewrite /etc/hosts and the hostname on boot.
+  if [[ -d /etc/cloud/cloud.cfg.d ]]; then
+    printf '# Managed by the Webhosting Panel installer\npreserve_hostname: true\nmanage_etc_hosts: false\n' \
+      >/etc/cloud/cloud.cfg.d/99-whp.cfg
+  fi
+
+  # Swap: without it MariaDB or ClamAV get killed under memory pressure.
+  if ! is_container && [[ -z $(swapon --show --noheadings 2>/dev/null) && ! -e /swapfile ]]; then
+    local swap_mb
+    swap_mb=$(( $(ram_mb) / 2 ))
+    (( swap_mb < 2048 )) && swap_mb=2048
+    (( swap_mb > 8192 )) && swap_mb=8192
+    if fallocate -l "${swap_mb}M" /swapfile 2>>"$WHP_INSTALL_LOG"; then
+      chmod 0600 /swapfile
+      run mkswap /swapfile
+      run swapon /swapfile
+      grep -q '^/swapfile ' /etc/fstab || printf '/swapfile none swap sw 0 0\n' >>/etc/fstab
+      ok "swap ${swap_mb} MB"
+    fi
+  fi
+
   if ! is_container; then
     render "$TPL/sysctl/90-whp.conf" /etc/sysctl.d/90-whp.conf
     sysctl -q -e --system >/dev/null 2>&1 || true
