@@ -54,10 +54,53 @@ function in `agent/whp_agent/actions/<module>.py` decorated with
 them to a shell. Long work returns `{"job": "<id>"}` and is followed with
 `job.status`.
 
-Actions added by phase 2: `ping`, `system.info`, `service.status`,
-`service.restart`, `firewall.list`, `firewall.add`, `firewall.delete`,
-`crowdsec.decisions`, `crowdsec.ban`, `crowdsec.unban`, `panel.version`,
-`panel.check_update`, `panel.update`, `panel.set_channel`, `job.status`.
+Writing an action:
+
+```python
+from whp_agent.registry import action, ActionError
+from whp_agent import validate as v
+from whp_agent.run import run          # argv list, never a shell
+from whp_agent.jobs import start_job   # for long work
+
+@action("mail.dkim_get")
+def dkim_get(params):
+    domain = v.domain(params, "domain")
+    ...
+    raise ActionError("not_found", f"No DKIM key for {domain}")
+```
+
+Error codes: `invalid_params`, `not_found`, `unknown_action`, `forbidden`,
+`conflict`, `command_failed`, `timeout`, `internal` (plus `unreachable` on the
+PHP side when the socket is down). Only `root` and `whp` may connect
+(checked with `SO_PEERCRED`).
+
+Actions added by phase 2:
+
+| Action | What |
+| --- | --- |
+| `ping`, `actions.list`, `system.info`, `job.status` | Basics |
+| `service.list`, `service.status`, `service.restart` | systemd services |
+| `firewall.list`, `firewall.add`, `firewall.delete` | Panel rules, see below |
+| `crowdsec.decisions`, `crowdsec.metrics`, `crowdsec.ban`, `crowdsec.unban` | Through `/usr/bin/cscli` |
+| `site.list`, `site.add`, `site.show`, `site.php`, `site.cache`, `site.ssl`, `site.quota`, `site.remove` | Through the installer's `whp-site … --json` |
+| `stats.sample` | Server and per-site usage, rates since the previous call |
+| `panel.version`, `panel.check_update`, `panel.update`, `panel.set_channel` | Updates and release channel |
+
+### Firewall
+
+The installer owns the base ruleset (`table inet whp`, policy drop, fixed
+ports). The agent keeps panel rules in `/etc/webhosting-panel/firewall.json`
+and writes `/etc/nftables.d/whp-panel.nft` with elements for the installer's
+sets (`tcp_open`, `udp_open`, `blocked_v4`, `blocked_v6`), checks the ruleset
+with `nft -c` and runs `systemctl reload nftables`.
+
+### Usage statistics
+
+Every site runs as `whp-site-<id>.service` in
+`/sys/fs/cgroup/whp.slice/whp-sites.slice/` (`<id>` is the domain with `.` and
+`-` as `_`). The panel stores one sample a minute (`whp:metrics:collect`) and
+rolls them up hourly (`whp:metrics:rollup`): minutes kept 48 hours, hours 90
+days, days forever.
 
 Other phases add their own module (`dns.py`, `mail.py`, `backup.py`), for
 example `backup.run` calling `whp-backup … --json`.

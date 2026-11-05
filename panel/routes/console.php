@@ -1,8 +1,6 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+Schedule::command('whp:metrics:collect')->everyMinute()->withoutOverlapping();
+Schedule::command('whp:metrics:rollup')->hourlyAt(2)->withoutOverlapping();

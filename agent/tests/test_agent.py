@@ -97,5 +97,29 @@ class SitesTest(unittest.TestCase):
             sites.site_add({"domain": "a.nl", "docroot": "../../etc"})
 
 
+class StatsTest(unittest.TestCase):
+    def test_sample_reads_slices(self):
+        from whp_agent.actions import stats
+
+        with tempfile.TemporaryDirectory() as tmp:
+            site = os.path.join(tmp, "whp-site-example_nl.service")
+            os.makedirs(site)
+            with open(os.path.join(site, "cpu.stat"), "w") as fh:
+                fh.write("usage_usec 1000000\nuser_usec 1\n")
+            with open(os.path.join(site, "memory.current"), "w") as fh:
+                fh.write("52428800\n")
+            with open(os.path.join(site, "io.stat"), "w") as fh:
+                fh.write("8:0 rbytes=4096 wbytes=8192 rios=1 wios=2\n")
+            with mock.patch.object(stats, "CGROUP_ROOT", tmp):
+                stats._previous.clear()
+                first = stats.sample({})
+                self.assertTrue(first["first_sample"])
+                self.assertEqual(first["sites"][0]["site_id"], "example_nl")
+                self.assertEqual(first["sites"][0]["memory_bytes"], 52428800)
+                second = stats.sample({})
+                self.assertFalse(second["first_sample"])
+                self.assertIn("net_rx_bps", second)
+
+
 if __name__ == "__main__":
     unittest.main()

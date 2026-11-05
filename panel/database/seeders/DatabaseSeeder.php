@@ -37,5 +37,7 @@ class DatabaseSeeder extends Seeder
             }
             User::create(['name' => $name, 'email' => $email, 'password' => 'password', 'role' => User::ROLE_CLIENT, 'customer_id' => $customer->id, 'locale' => $locale]);
         }
+
+        $this->call(DemoMetricsSeeder::class);
     }
 }

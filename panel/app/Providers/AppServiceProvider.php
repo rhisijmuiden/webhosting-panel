@@ -58,6 +58,7 @@ class AppServiceProvider extends ServiceProvider
             ->add('customers', 'Customers', 'admin.customers.index', icon: 'customers', section: 'Hosting', order: 10)
             ->add('packages', 'Packages', 'admin.packages.index', icon: 'package', section: 'Hosting', order: 20)
             ->add('websites', 'Websites', 'admin.websites.index', icon: 'globe', section: 'Hosting', order: 30)
+            ->add('statistics', 'Statistics', 'admin.statistics.index', icon: 'chart', section: 'Server', order: 90)
             ->add('services', 'Services', 'admin.services.index', icon: 'server', section: 'Server', order: 100)
             ->add('security', 'Security', 'admin.security.index', icon: 'shield', section: 'Server', order: 110)
             ->add('firewall', 'Firewall', 'admin.firewall.index', icon: 'firewall', section: 'Server', order: 120)

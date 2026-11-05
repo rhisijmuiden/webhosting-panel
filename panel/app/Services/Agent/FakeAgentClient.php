@@ -2,6 +2,8 @@
 
 namespace App\Services\Agent;
 
+use App\Models\Website;
+use App\Services\Metrics;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
@@ -82,8 +84,27 @@ class FakeAgentClient implements AgentClient
             'site.ssl' => ['domain' => $params['domain'], 'ssl' => 'active'],
             'site.remove', 'site.quota' => ['domain' => $params['domain'] ?? ''],
             'site.list' => ['sites' => []],
+            'stats.sample' => $this->statsSample(),
             default => throw new AgentException('unknown_action', "Unknown action: {$action}"),
         };
+    }
+
+    private function statsSample(): array
+    {
+        $h = (int) now()->format('G');
+        $day = 0.5 + 0.5 * sin(($h - 8) / 24 * 2 * M_PI);
+
+        return [
+            'first_sample' => false, 'interval_seconds' => 60,
+            'cpu_percent' => round(8 + 30 * $day + mt_rand(0, 80) / 10, 1), 'load1' => round(0.4 + 2 * $day, 2),
+            'memory_used' => (int) ((5 + 3 * $day) * 1024 ** 3), 'memory_total' => 16 * 1024 ** 3, 'swap_used' => 0,
+            'disk_used' => 120 * 1024 ** 3, 'disk_total' => 400 * 1024 ** 3,
+            'net_rx_bps' => (int) ((200 + 900 * $day) * 1024), 'net_tx_bps' => (int) ((600 + 2400 * $day) * 1024),
+            'sites' => Website::pluck('domain')->values()->map(fn ($d, $i) => [
+                'site_id' => Metrics::siteId($d), 'cpu_percent' => round((12 / ($i + 1)) * $day + mt_rand(0, 20) / 10, 2),
+                'memory_bytes' => (int) ((300 / ($i + 1)) * 1024 ** 2), 'io_read_bps' => 20000, 'io_write_bps' => 9000,
+            ])->all(),
+        ];
     }
 
     private function firewallAdd(array $params): array

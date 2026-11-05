@@ -41,3 +41,4 @@ Route::post('system/channel', [Admin\SystemController::class, 'channel'])->name(
 Route::get('system/jobs/{job}', [Admin\SystemController::class, 'job'])->name('system.job');
 
 Route::get('activity', Admin\ActivityController::class)->name('activity.index');
+Route::get('statistics', Admin\StatisticsController::class)->name('statistics.index');
