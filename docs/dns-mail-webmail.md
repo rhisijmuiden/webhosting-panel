@@ -73,7 +73,20 @@ mail.set_routing        {mail_host, brand?, domains: [{domain, provider: rhis|mi
 mail.dkim_generate      {domain, replace?: bool, bits?: 2048|3072} -> {domain, selector, algorithm, bits, public_key}
 mail.dkim_get           {domain} -> {domain, selector, algorithm, public_key}
 mail.issue_endpoint_cert {domain, email?} -> {job}
+mail.mailboxes_sync     {mailboxes: [{email, password_hash: "{ARGON2ID}$argon2id$…", quota_mb?, enabled?, send_as?: [...]}],
+                         aliases: [{address ("@domain" = catch-all), targets: [...]}]}
+                        -> {changed, created_homes, mailboxes, aliases, skipped_not_local}   (always send the full list)
+mail.mailbox_usage      {} -> {usage: {email: {used_kb, limit_kb}}}
+mail.mailbox_purge      {email} -> {email, moved_to}   (only after the mailbox is gone; moves mail to /var/vmail/.deleted)
 ```
+
+Mailboxes: the panel hashes passwords with PHP `password_hash(..., PASSWORD_ARGON2ID)`
+and sends `{ARGON2ID}` + that hash, so plain passwords never reach the agent.
+`mail.mailboxes_sync` rewrites `/etc/dovecot/users` and the Postfix maps
+`virtual_mailboxes`, `virtual_aliases` and `sender_login` (every mailbox may
+send as itself plus its `send_as` addresses), creates `/var/vmail/<domain>/<user>`
+(vmail, 0700) before the first login, and skips addresses on domains that are
+not RHIS mail domains. A disabled mailbox still receives mail but cannot log in.
 
 ## Planned next
 
