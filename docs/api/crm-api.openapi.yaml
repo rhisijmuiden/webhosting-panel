@@ -1,0 +1,984 @@
+openapi: 3.1.0
+info:
+  title: Webhosting Panel CRM API
+  version: 1.0.0
+  summary: Lets the RHIS CRM create customers and hosting packages in the panel.
+  description: |
+    The CRM (which owns billing, contracts and invoices) is the source of truth
+    for customers and orders. The panel is the source of truth for what runs on
+    the server. The CRM calls this API to provision, change, suspend and
+    terminate hosting; the panel calls the CRM back through webhooks.
+
+    **Authentication.** Every request carries `Authorization: Bearer <token>`.
+    Tokens are created by an admin in the panel (Settings > API tokens) with the
+    ability `crm`, and can be limited to source IP addresses.
+
+    **Idempotency.** `POST` requests accept an `Idempotency-Key` header (any
+    unique string up to 255 characters, for example the CRM order id). A repeat
+    with the same key within 24 hours returns the original response instead of
+    doing the work twice.
+
+    **Long running work.** Provisioning, plan changes and termination return
+    `202 Accepted` with a `job`. Follow it with `GET /jobs/{id}` or wait for the
+    webhook.
+
+    **Identifiers.** Panel ids are ULIDs. Every customer and subscription also
+    stores the CRM's own id as `external_id`, and every endpoint that takes an
+    `{id}` also accepts `ext:<external_id>`.
+
+    **Errors** always have the shape of the `Error` schema. Validation errors
+    use `422` with per field messages in `error.details`.
+  contact:
+    name: RHIS IJmuiden
+  license:
+    name: Proprietary
+servers:
+  - url: https://{panelHost}:8443/api/v1/crm
+    variables:
+      panelHost:
+        default: panel.example.com
+security:
+  - bearerAuth: []
+tags:
+  - name: System
+  - name: Plans
+    description: Hosting packages as sold in the CRM (limits and features).
+  - name: Customers
+  - name: Subscriptions
+    description: A hosting account of a customer on one plan, with a primary domain.
+  - name: Usage
+  - name: Jobs
+  - name: Webhooks
+
+paths:
+  /ping:
+    get:
+      tags: [System]
+      operationId: ping
+      summary: Check connectivity and the token.
+      responses:
+        "200":
+          description: The API is reachable and the token is valid.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, panel_version, api_version]
+                properties:
+                  ok: { type: boolean, const: true }
+                  panel_version: { type: string, examples: ["1.0.0"] }
+                  api_version: { type: string, examples: ["1.0.0"] }
+                  server: { type: string, examples: ["web01.rhis.nl"] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /plans:
+    get:
+      tags: [Plans]
+      operationId: listPlans
+      summary: List plans.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A page of plans.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlanPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Plans]
+      operationId: createPlan
+      summary: Create a plan.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlanInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Plan" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /plans/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PlanId"
+    get:
+      tags: [Plans]
+      operationId: getPlan
+      summary: Get a plan.
+      responses:
+        "200":
+          description: The plan.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Plan" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Plans]
+      operationId: updatePlan
+      summary: Change a plan.
+      description: |
+        Changed limits apply to every subscription on the plan, except limits
+        that a subscription overrides. Lowering a limit below current usage is
+        allowed; the subscription is then over its limit and gets a
+        `usage.limit_reached` webhook, nothing is deleted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlanInput" }
+      responses:
+        "200":
+          description: The changed plan.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Plan" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Plans]
+      operationId: deletePlan
+      summary: Delete a plan that no subscription uses.
+      responses:
+        "204": { description: Deleted. }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /customers:
+    get:
+      tags: [Customers]
+      operationId: listCustomers
+      summary: List customers.
+      parameters:
+        - name: external_id
+          in: query
+          schema: { type: string }
+        - name: email
+          in: query
+          schema: { type: string, format: email }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A page of customers.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerPage" }
+    post:
+      tags: [Customers]
+      operationId: createCustomer
+      summary: Create a customer and their panel login.
+      description: |
+        Creates the panel account. If `send_welcome` is true the customer gets
+        a welcome mail (in their `locale`) with a link to set a password.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /customers/{id}:
+    parameters:
+      - $ref: "#/components/parameters/CustomerId"
+    get:
+      tags: [Customers]
+      operationId: getCustomer
+      summary: Get a customer.
+      responses:
+        "200":
+          description: The customer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Customers]
+      operationId: updateCustomer
+      summary: Change customer details.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerUpdate" }
+      responses:
+        "200":
+          description: The changed customer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Customers]
+      operationId: deleteCustomer
+      summary: Delete a customer without active subscriptions.
+      responses:
+        "204": { description: Deleted. }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /customers/{id}/login-link:
+    parameters:
+      - $ref: "#/components/parameters/CustomerId"
+    post:
+      tags: [Customers]
+      operationId: createLoginLink
+      summary: One time link that logs the customer (or an admin acting as them) into the panel.
+      description: |
+        Used for a "Go to hosting panel" button in the CRM customer portal. The
+        link is valid once, for 5 minutes. With `as_admin` the session is shown
+        as an admin impersonating the customer and is logged as such.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                as_admin: { type: boolean, default: false }
+                redirect: { type: string, description: Panel path to open after login., examples: ["/client/sites"] }
+      responses:
+        "201":
+          description: The link.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, expires_at]
+                properties:
+                  url: { type: string, format: uri }
+                  expires_at: { type: string, format: date-time }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /subscriptions:
+    get:
+      tags: [Subscriptions]
+      operationId: listSubscriptions
+      summary: List subscriptions.
+      parameters:
+        - name: customer_id
+          in: query
+          schema: { type: string }
+        - name: external_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/SubscriptionStatus" }
+        - name: domain
+          in: query
+          schema: { type: string }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A page of subscriptions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionPage" }
+    post:
+      tags: [Subscriptions]
+      operationId: createSubscription
+      summary: Provision hosting for a customer.
+      description: |
+        Creates the system user, web root, PHP-FPM pool, Nginx vhost, database
+        quota, mail domain (when `mail.provider` is `rhis`), DNS zone in
+        Cloudflare (when `dns.provider` is `cloudflare`) and a Let's Encrypt
+        certificate. Runs as a job; the subscription has status `provisioning`
+        until the job ends.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubscriptionInput" }
+      responses:
+        "202":
+          description: Accepted, provisioning runs as a job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionAccepted" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /subscriptions/{id}:
+    parameters:
+      - $ref: "#/components/parameters/SubscriptionId"
+    get:
+      tags: [Subscriptions]
+      operationId: getSubscription
+      summary: Get a subscription.
+      responses:
+        "200":
+          description: The subscription.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Subscription" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Subscriptions]
+      operationId: updateSubscription
+      summary: Change plan (upgrade/downgrade), limit overrides or PHP version.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubscriptionUpdate" }
+      responses:
+        "202":
+          description: Accepted, the change runs as a job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionAccepted" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Subscriptions]
+      operationId: terminateSubscription
+      summary: Terminate hosting.
+      description: |
+        Takes a final full backup, then removes sites, databases, mailboxes and
+        the system user. The final backup is kept for `keep_backup_days`, so a
+        mistake can be undone with `POST /subscriptions/{id}/restore`.
+      parameters:
+        - name: keep_backup_days
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 365, default: 30 }
+      responses:
+        "202":
+          description: Accepted, termination runs as a job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionAccepted" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /subscriptions/{id}/suspend:
+    parameters:
+      - $ref: "#/components/parameters/SubscriptionId"
+    post:
+      tags: [Subscriptions]
+      operationId: suspendSubscription
+      summary: Suspend, for example after an unpaid invoice.
+      description: |
+        Sites show a suspension page (HTTP 503), FTP/SFTP and panel login for the
+        customer are blocked, mail keeps being received but cannot be read or
+        sent until unsuspended. Nothing is deleted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, enum: [unpaid, abuse, customer_request, other] }
+                note: { type: string, maxLength: 500 }
+                keep_mail_flowing: { type: boolean, default: true }
+      responses:
+        "200":
+          description: Suspended.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Subscription" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /subscriptions/{id}/unsuspend:
+    parameters:
+      - $ref: "#/components/parameters/SubscriptionId"
+    post:
+      tags: [Subscriptions]
+      operationId: unsuspendSubscription
+      summary: Lift a suspension.
+      responses:
+        "200":
+          description: Active again.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Subscription" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /subscriptions/{id}/restore:
+    parameters:
+      - $ref: "#/components/parameters/SubscriptionId"
+    post:
+      tags: [Subscriptions]
+      operationId: restoreTerminatedSubscription
+      summary: Bring back a terminated subscription from its final backup.
+      responses:
+        "202":
+          description: Accepted, the restore runs as a job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionAccepted" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /subscriptions/{id}/usage:
+    parameters:
+      - $ref: "#/components/parameters/SubscriptionId"
+    get:
+      tags: [Usage]
+      operationId: getSubscriptionUsage
+      summary: Current usage against the limits.
+      responses:
+        "200":
+          description: Usage.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Usage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /usage:
+    get:
+      tags: [Usage]
+      operationId: listUsage
+      summary: Usage of all subscriptions for one month, for billing overage.
+      parameters:
+        - name: period
+          in: query
+          required: true
+          description: Month as YYYY-MM (UTC).
+          schema: { type: string, pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$", examples: ["2026-10"] }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A page of usage records.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, next_cursor]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Usage" }
+                  next_cursor: { type: [string, "null"] }
+
+  /jobs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Jobs]
+      operationId: getJob
+      summary: Follow a long running job.
+      responses:
+        "200":
+          description: The job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /webhooks:
+    get:
+      tags: [Webhooks]
+      operationId: listWebhooks
+      summary: List webhook endpoints.
+      responses:
+        "200":
+          description: Endpoints.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/WebhookEndpoint" }
+    post:
+      tags: [Webhooks]
+      operationId: createWebhook
+      summary: Register an endpoint in the CRM that receives events.
+      description: The response contains the signing secret once; store it in the CRM.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookEndpointInput" }
+      responses:
+        "201":
+          description: Created, with the secret.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/WebhookEndpoint"
+                  - type: object
+                    required: [secret]
+                    properties:
+                      secret: { type: string, description: "Shown only now. Prefix whsec_." }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /webhooks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [Webhooks]
+      operationId: deleteWebhook
+      summary: Remove an endpoint.
+      responses:
+        "204": { description: Deleted. }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /webhooks/{id}/test:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Webhooks]
+      operationId: testWebhook
+      summary: Send a `ping` event to the endpoint.
+      responses:
+        "200":
+          description: Delivery result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookDelivery" }
+
+webhooks:
+  event:
+    post:
+      summary: Event sent by the panel to the CRM.
+      description: |
+        `POST` with a JSON body to every endpoint subscribed to the event type.
+
+        Headers:
+        - `X-WHP-Event`: the event type
+        - `X-WHP-Delivery`: unique delivery id (use it to drop duplicates)
+        - `X-WHP-Signature`: `t=<unix time>,v1=<hex HMAC-SHA256>` where the HMAC
+          key is the endpoint secret and the message is `<t>.<raw body>`.
+          Reject the request when the signature does not match or `t` is more
+          than 5 minutes old.
+
+        A `2xx` answer within 10 seconds counts as delivered. Otherwise the panel
+        retries after 1 min, 5 min, 30 min, 2 h, 6 h and 24 h, then marks the
+        delivery failed (visible in the panel under Settings > API).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookEvent" }
+      responses:
+        "200": { description: Received. }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Panel API token with the `crm` ability.
+
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+      description: Value of `next_cursor` from the previous page.
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      schema: { type: string, maxLength: 255 }
+    PlanId:
+      name: id
+      in: path
+      required: true
+      description: Plan id or `code:<code>`.
+      schema: { type: string }
+    CustomerId:
+      name: id
+      in: path
+      required: true
+      description: Customer id or `ext:<external_id>`.
+      schema: { type: string }
+    SubscriptionId:
+      name: id
+      in: path
+      required: true
+      description: Subscription id or `ext:<external_id>`.
+      schema: { type: string }
+
+  responses:
+    Unauthorized:
+      description: Missing, invalid or revoked token, or the source IP is not allowed.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Not found.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: The request conflicts with the current state (duplicate, in use, wrong status).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationError:
+      description: Validation failed.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              examples: [validation_failed, not_found, conflict, unauthorized, rate_limited]
+            message: { type: string }
+            details:
+              type: object
+              additionalProperties:
+                type: array
+                items: { type: string }
+
+    Limits:
+      type: object
+      description: "`null` means unlimited."
+      properties:
+        disk_mb: { type: [integer, "null"], minimum: 0, examples: [10240] }
+        traffic_gb_month: { type: [integer, "null"], minimum: 0 }
+        domains: { type: [integer, "null"], minimum: 0, description: Domains incl. the primary domain. }
+        subdomains: { type: [integer, "null"], minimum: 0 }
+        mailboxes: { type: [integer, "null"], minimum: 0 }
+        mailbox_quota_mb: { type: [integer, "null"], minimum: 0 }
+        mail_aliases: { type: [integer, "null"], minimum: 0 }
+        databases: { type: [integer, "null"], minimum: 0 }
+        ftp_accounts: { type: [integer, "null"], minimum: 0 }
+        cron_jobs: { type: [integer, "null"], minimum: 0 }
+        php_workers: { type: [integer, "null"], minimum: 1, description: PHP-FPM max_children per site. }
+        php_memory_limit_mb: { type: [integer, "null"], minimum: 64 }
+
+    Features:
+      type: object
+      properties:
+        ssh_access: { type: boolean, default: false }
+        wordpress_toolkit: { type: boolean, default: true }
+        page_cache: { type: boolean, default: true }
+        backups: { type: boolean, default: true }
+        backup_retention_days: { type: integer, minimum: 1, maximum: 365, default: 30 }
+        customer_restore: { type: boolean, default: true, description: Customer can restore their own backups. }
+        php_versions:
+          type: array
+          items: { type: string, enum: ["8.3", "8.4", "8.5"] }
+          default: ["8.3", "8.4", "8.5"]
+
+    PlanInput:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,63}$", description: Product code in the CRM., examples: [hosting-basic] }
+        name: { type: string, maxLength: 100, examples: [Hosting Basic] }
+        description: { type: string, maxLength: 1000 }
+        limits: { $ref: "#/components/schemas/Limits" }
+        features: { $ref: "#/components/schemas/Features" }
+        active: { type: boolean, default: true, description: Inactive plans cannot be used for new subscriptions. }
+
+    Plan:
+      allOf:
+        - $ref: "#/components/schemas/PlanInput"
+        - type: object
+          required: [id, subscriptions_count, created_at, updated_at]
+          properties:
+            id: { type: string }
+            subscriptions_count: { type: integer }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+
+    PlanPage:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Plan" } }
+        next_cursor: { type: [string, "null"] }
+
+    Address:
+      type: object
+      properties:
+        street: { type: string }
+        postal_code: { type: string }
+        city: { type: string }
+        country: { type: string, pattern: "^[A-Z]{2}$", examples: [NL] }
+
+    CustomerInput:
+      type: object
+      required: [external_id, name, email]
+      properties:
+        external_id: { type: string, maxLength: 64, description: Customer id in the CRM. }
+        name: { type: string, maxLength: 150, description: Contact person. }
+        company: { type: [string, "null"], maxLength: 150 }
+        email: { type: string, format: email }
+        phone: { type: [string, "null"] }
+        locale: { type: string, enum: [en, nl], default: en }
+        address: { $ref: "#/components/schemas/Address" }
+        send_welcome: { type: boolean, default: true }
+
+    CustomerUpdate:
+      type: object
+      properties:
+        name: { type: string, maxLength: 150 }
+        company: { type: [string, "null"], maxLength: 150 }
+        email: { type: string, format: email }
+        phone: { type: [string, "null"] }
+        locale: { type: string, enum: [en, nl] }
+        address: { $ref: "#/components/schemas/Address" }
+
+    Customer:
+      allOf:
+        - $ref: "#/components/schemas/CustomerInput"
+        - type: object
+          required: [id, username, subscriptions_count, created_at, updated_at]
+          properties:
+            id: { type: string }
+            username: { type: string, description: Panel login name. }
+            subscriptions_count: { type: integer }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+
+    CustomerPage:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Customer" } }
+        next_cursor: { type: [string, "null"] }
+
+    SubscriptionStatus:
+      type: string
+      enum: [provisioning, active, suspended, terminating, terminated, failed]
+
+    SubscriptionInput:
+      type: object
+      required: [customer_id, plan_id, external_id, primary_domain]
+      properties:
+        customer_id: { type: string, description: Customer id or `ext:<external_id>`. }
+        plan_id: { type: string, description: Plan id or `code:<code>`. }
+        external_id: { type: string, maxLength: 64, description: Order or contract id in the CRM. }
+        primary_domain: { type: string, examples: [example.nl] }
+        php_version: { type: string, enum: ["8.3", "8.4", "8.5"], default: "8.4" }
+        limit_overrides: { $ref: "#/components/schemas/Limits" }
+        dns:
+          type: object
+          properties:
+            provider: { type: string, enum: [cloudflare, external], default: cloudflare }
+        mail:
+          type: object
+          properties:
+            provider:
+              type: string
+              enum: [rhis, m365, none]
+              default: rhis
+              description: "`rhis` = mail on this server, `m365` = MX/SPF/DKIM records for Microsoft 365."
+        install:
+          type: object
+          description: Optional application to install after provisioning.
+          properties:
+            app: { type: string, enum: [wordpress] }
+            admin_email: { type: string, format: email }
+            locale: { type: string, enum: [en_US, nl_NL], default: nl_NL }
+
+    SubscriptionUpdate:
+      type: object
+      properties:
+        plan_id: { type: string }
+        php_version: { type: string, enum: ["8.3", "8.4", "8.5"] }
+        limit_overrides: { $ref: "#/components/schemas/Limits" }
+        external_id: { type: string, maxLength: 64 }
+
+    Subscription:
+      type: object
+      required: [id, external_id, customer_id, plan_id, primary_domain, status, created_at, updated_at]
+      properties:
+        id: { type: string }
+        external_id: { type: string }
+        customer_id: { type: string }
+        plan_id: { type: string }
+        primary_domain: { type: string }
+        domains: { type: array, items: { type: string } }
+        status: { $ref: "#/components/schemas/SubscriptionStatus" }
+        suspension:
+          type: [object, "null"]
+          properties:
+            reason: { type: string }
+            note: { type: string }
+            since: { type: string, format: date-time }
+        php_version: { type: string }
+        limits:
+          allOf:
+            - $ref: "#/components/schemas/Limits"
+          description: Effective limits (plan plus overrides).
+        server: { type: string, description: Host name of the server. }
+        ipv4: { type: string }
+        ipv6: { type: [string, "null"] }
+        system_user: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        terminated_at: { type: [string, "null"], format: date-time }
+
+    SubscriptionAccepted:
+      type: object
+      required: [subscription, job]
+      properties:
+        subscription: { $ref: "#/components/schemas/Subscription" }
+        job: { $ref: "#/components/schemas/Job" }
+
+    SubscriptionPage:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Subscription" } }
+        next_cursor: { type: [string, "null"] }
+
+    UsageValue:
+      type: object
+      required: [used]
+      properties:
+        used: { type: number }
+        limit: { type: [number, "null"] }
+
+    Usage:
+      type: object
+      required: [subscription_id, external_id, measured_at]
+      properties:
+        subscription_id: { type: string }
+        external_id: { type: string }
+        period: { type: string, description: "YYYY-MM, only in /usage." }
+        measured_at: { type: string, format: date-time }
+        disk_mb: { $ref: "#/components/schemas/UsageValue" }
+        traffic_gb_month: { $ref: "#/components/schemas/UsageValue" }
+        domains: { $ref: "#/components/schemas/UsageValue" }
+        mailboxes: { $ref: "#/components/schemas/UsageValue" }
+        databases: { $ref: "#/components/schemas/UsageValue" }
+        backup_storage_mb: { $ref: "#/components/schemas/UsageValue" }
+
+    Job:
+      type: object
+      required: [id, type, status, created_at]
+      properties:
+        id: { type: string }
+        type: { type: string, examples: [subscription.provision, subscription.change_plan, subscription.terminate] }
+        status: { type: string, enum: [queued, running, succeeded, failed] }
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        step: { type: [string, "null"], examples: ["Requesting certificate"] }
+        error: { type: [string, "null"] }
+        subscription_id: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+
+    WebhookEventType:
+      type: string
+      enum:
+        - ping
+        - subscription.provisioned
+        - subscription.failed
+        - subscription.changed
+        - subscription.suspended
+        - subscription.unsuspended
+        - subscription.terminated
+        - usage.limit_reached
+        - backup.failed
+        - customer.updated
+
+    WebhookEndpointInput:
+      type: object
+      required: [url, events]
+      properties:
+        url: { type: string, format: uri, description: Must be https. }
+        events:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/WebhookEventType" }
+        description: { type: string, maxLength: 200 }
+
+    WebhookEndpoint:
+      allOf:
+        - $ref: "#/components/schemas/WebhookEndpointInput"
+        - type: object
+          required: [id, created_at]
+          properties:
+            id: { type: string }
+            created_at: { type: string, format: date-time }
+            last_delivery: { oneOf: [{ $ref: "#/components/schemas/WebhookDelivery" }, { type: "null" }] }
+
+    WebhookDelivery:
+      type: object
+      required: [id, event, status]
+      properties:
+        id: { type: string }
+        event: { $ref: "#/components/schemas/WebhookEventType" }
+        status: { type: string, enum: [pending, delivered, retrying, failed] }
+        http_status: { type: [integer, "null"] }
+        attempts: { type: integer }
+        delivered_at: { type: [string, "null"], format: date-time }
+
+    WebhookEvent:
+      type: object
+      required: [id, type, created_at, data]
+      properties:
+        id: { type: string, description: Same as X-WHP-Delivery. }
+        type: { $ref: "#/components/schemas/WebhookEventType" }
+        created_at: { type: string, format: date-time }
+        data:
+          type: object
+          description: |
+            `subscription.*`: `{subscription: Subscription}`;
+            `usage.limit_reached`: `{usage: Usage, limit: "disk_mb"}`;
+            `backup.failed`: `{subscription_id, scope, target, message}`;
+            `customer.updated`: `{customer: Customer}` (when the customer changes
+            their own details in the panel).
+          additionalProperties: true
+      examples:
+        - id: 01JC7Z3V9Q0K8Z6WQ9T2M4N5PB
+          type: subscription.provisioned
+          created_at: "2026-11-05T21:14:03Z"
+          data:
+            subscription:
+              id: 01JC7Z2G7S4M1B0V8K6R3D9QXW
+              external_id: ORD-2026-0412
+              customer_id: 01JC7Z1A2B3C4D5E6F7G8H9J0K
+              plan_id: 01JC7YZ8X7W6V5U4T3S2R1Q0PN
+              primary_domain: example.nl
+              status: active
+              created_at: "2026-11-05T21:12:40Z"
+              updated_at: "2026-11-05T21:14:03Z"
