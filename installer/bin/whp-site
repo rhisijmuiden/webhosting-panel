@@ -146,14 +146,23 @@ site_apply() {
     rm -f "/etc/nginx/sites-enabled/whp-$SITE_DOMAIN.conf"
     die "nginx config test failed for $SITE_DOMAIN (see $WHP_INSTALL_LOG)"
   fi
+  nginx_reload_wait
+}
+
+# Reload nginx and wait until the old workers (old config) are gone,
+# so the next request is answered with the new configuration.
+nginx_reload_wait() {
+  local master old cur i
+  master=$(cat /run/nginx.pid 2>/dev/null || true)
+  old=$( [[ -n $master ]] && pgrep -P "$master" | sort || true)
   systemctl reload nginx
-  # A reload is asynchronous: wait until the new workers serve this site.
-  local code
-  for i in {1..30}; do
-    code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $SITE_DOMAIN" "http://127.0.0.1/.well-known/acme-challenge/whp-probe" || true)
-    [[ $code == 404 || $code == 301 ]] && break
-    sleep 0.2
+  [[ -n $old ]] || return 0
+  for i in {1..100}; do
+    cur=$(pgrep -P "$master" | sort || true)
+    [[ -z $(comm -12 <(printf '%s\n' "$old") <(printf '%s\n' "$cur")) ]] && break
+    sleep 0.1
   done
+  return 0
 }
 
 # Render a template to stdout (same rules as render()).
