@@ -154,7 +154,8 @@ site_apply() {
 nginx_reload_wait() {
   local master old cur i
   master=$(cat /run/nginx.pid 2>/dev/null || true)
-  old=$( [[ -n $master ]] && pgrep -P "$master" | sort || true)
+  old=''
+  if [[ -n $master ]]; then old=$(pgrep -P "$master" | sort || true); fi
   systemctl reload nginx
   [[ -n $old ]] || return 0
   for i in {1..100}; do

@@ -22,7 +22,8 @@ module_nginx() {
   if nginx_has_http3; then
     NGINX_QUIC_DEFAULT="listen 443 quic reuseport default_server;
     listen [::]:443 quic reuseport default_server;"
-    NGINX_ALT_SVC="add_header Alt-Svc 'h3=\":443\"; ma=86400' always;"
+    # shellcheck disable=SC2016 # nginx variable
+    NGINX_ALT_SVC='add_header Alt-Svc $whp_alt_svc always;'
   else
     NGINX_QUIC_DEFAULT="# HTTP/3 not available in this nginx build"
     NGINX_ALT_SVC="# HTTP/3 not available in this nginx build"
