@@ -147,6 +147,13 @@ site_apply() {
     die "nginx config test failed for $SITE_DOMAIN (see $WHP_INSTALL_LOG)"
   fi
   systemctl reload nginx
+  # A reload is asynchronous: wait until the new workers serve this site.
+  local code
+  for i in {1..30}; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $SITE_DOMAIN" "http://127.0.0.1/.well-known/acme-challenge/whp-probe" || true)
+    [[ $code == 404 || $code == 301 ]] && break
+    sleep 0.2
+  done
 }
 
 # Render a template to stdout (same rules as render()).
@@ -177,13 +184,15 @@ print_site() {
     --arg aliases "$SITE_ALIASES" --arg cache "$SITE_CACHE" --arg profile "$SITE_PROFILE" \
     --arg root "$SITE_ROOT" --arg docroot "$SITE_ROOT/$SITE_DOCROOT_REL" --arg ssl "$SITE_SSL" \
     --arg created "$SITE_CREATED" --arg socket "/run/php/site-$SITE_ID.sock" \
+    --arg unit "whp-site-$SITE_ID.service" \
     --argjson quota "${SITE_QUOTA_MB:-0}" --arg qmode "$(quota_mode)" \
     --argjson res "$(site_resources)" \
     --arg cpu_limit "$SITE_CPU" --arg mem_limit "$SITE_MEM" \
     --argjson used "$(du -sm --one-file-system "$SITE_ROOT" 2>/dev/null | cut -f1 || echo 0)" \
     '{domain:$domain, user:$user, php:$php, aliases:($aliases|split(",")|map(select(length>0))),
       cache:($cache=="on"), profile:$profile, root:$root, docroot:$docroot, ssl:$ssl,
-      socket:$socket, created:$created,
+      socket:$socket, created:$created, unit:$unit,
+      cgroup:("/sys/fs/cgroup/whp.slice/whp-sites.slice/" + $unit),
       disk:{used_mb:$used, quota_mb:$quota, enforced:($qmode!="none" and $quota>0), mode:$qmode},
       resources:($res + {cpu_limit:$cpu_limit, memory_limit:$mem_limit})}'
 }

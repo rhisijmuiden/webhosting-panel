@@ -171,7 +171,7 @@ env_get() {
 # env_set <file> <key> <value>: add or replace a line, keeping file mode.
 env_set() {
   local file=$1 key=$2 value=$3 tmp
-  touch "$file"
+  [[ -e $file ]] || install -m 0600 /dev/null "$file"
   tmp=$(mktemp "$file.XXXX")
   grep -vE "^${key}=" "$file" >"$tmp" || true
   printf '%s=%s\n' "$key" "$value" >>"$tmp"

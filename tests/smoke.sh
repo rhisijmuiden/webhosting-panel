@@ -49,7 +49,7 @@ check "site runs PHP 8.3" bash -c "curl -s -H 'Host: site.test' http://127.0.0.1
 check "switch site to PHP 8.5" whp-site php site.test 8.5
 check "site runs PHP 8.5" bash -c "curl -s -H 'Host: site.test' http://127.0.0.1/ | grep -q php=8.5"
 curl -s -o /dev/null -H 'Host: site.test' http://127.0.0.1/
-check "page cache HIT on second request" bash -c "curl -sI -H 'Host: site.test' http://127.0.0.1/ | grep -qi 'x-cache: HIT'"
+check "page cache HIT on second request" bash -c "curl -s -D - -o /dev/null -H 'Host: site.test' http://127.0.0.1/ | grep -qi 'x-cache: HIT'"
 check "logged-in cookie bypasses cache" bash -c "curl -sI -H 'Host: site.test' -H 'Cookie: wordpress_logged_in_x=1' http://127.0.0.1/ | grep -qi 'x-cache: BYPASS'"
 check "cache off" whp-site cache site.test off
 check "no cache header when off" bash -c "! curl -sI -H 'Host: site.test' http://127.0.0.1/ | grep -qi 'x-cache'"
@@ -78,7 +78,7 @@ printf 'info@example.test info@example.test\n' >>/etc/postfix/whp/sender_login
 printf 'info@example.test:%s::::::\n' "$(doveadm pw -s ARGON2ID -p 'Test-1234-pass')" >/etc/dovecot/users
 postfix reload >/dev/null 2>&1
 check "smtp banner on 25" bash -c 'exec 3<>/dev/tcp/127.0.0.1/25; read -t 5 l <&3; [[ $l == 220* ]]'
-check "submission requires STARTTLS before AUTH" bash -c "printf 'EHLO t\r\nQUIT\r\n' | timeout 5 openssl s_client -quiet -starttls smtp -connect 127.0.0.1:587 2>/dev/null | grep -q AUTH"
+check "submission offers AUTH after STARTTLS" bash -c "(printf 'EHLO t\r\n'; sleep 2; printf 'QUIT\r\n') | timeout 8 openssl s_client -quiet -starttls smtp -connect 127.0.0.1:587 2>/dev/null | grep -q AUTH"
 check "smtps 465 TLS" bash -c "echo QUIT | timeout 5 openssl s_client -quiet -connect 127.0.0.1:465 2>/dev/null | grep -q 220"
 check "imaps 993 TLS" bash -c "echo 'a logout' | timeout 5 openssl s_client -quiet -connect 127.0.0.1:993 2>/dev/null | grep -q '^\* OK'"
 check "imap login over TLS" bash -c "printf 'a login info@example.test Test-1234-pass\r\nb logout\r\n' | timeout 5 openssl s_client -quiet -connect 127.0.0.1:993 2>/dev/null | grep -q '^a OK'"
