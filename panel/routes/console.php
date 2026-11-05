@@ -1,0 +1,6 @@
+<?php
+
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('whp:metrics:collect')->everyMinute()->withoutOverlapping();
+Schedule::command('whp:metrics:rollup')->hourlyAt(2)->withoutOverlapping();

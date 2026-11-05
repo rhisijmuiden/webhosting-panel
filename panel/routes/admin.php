@@ -1,0 +1,44 @@
+<?php
+
+use App\Http\Controllers\Admin;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/', Admin\DashboardController::class)->name('dashboard');
+
+Route::resource('customers', Admin\CustomerController::class);
+Route::post('customers/{customer}/users', [Admin\CustomerController::class, 'storeUser'])->name('customers.users.store');
+Route::delete('customers/{customer}/users/{user}', [Admin\CustomerController::class, 'destroyUser'])->name('customers.users.destroy');
+
+Route::resource('packages', Admin\PackageController::class)->except('show');
+
+Route::get('websites', [Admin\WebsiteController::class, 'index'])->name('websites.index');
+Route::get('websites/create', [Admin\WebsiteController::class, 'create'])->name('websites.create');
+Route::post('websites', [Admin\WebsiteController::class, 'store'])->name('websites.store');
+Route::get('websites/{website}', [Admin\WebsiteController::class, 'show'])->name('websites.show');
+Route::put('websites/{website}', [Admin\WebsiteController::class, 'update'])->name('websites.update');
+Route::post('websites/{website}/ssl', [Admin\WebsiteController::class, 'ssl'])->name('websites.ssl');
+Route::delete('websites/{website}', [Admin\WebsiteController::class, 'destroy'])->name('websites.destroy');
+
+Route::get('services', [Admin\ServiceController::class, 'index'])->name('services.index');
+Route::post('services/{service}/restart', [Admin\ServiceController::class, 'restart'])->name('services.restart');
+
+Route::get('security', [Admin\SecurityController::class, 'index'])->name('security.index');
+Route::post('security/ban', [Admin\SecurityController::class, 'ban'])->name('security.ban');
+Route::post('security/unban', [Admin\SecurityController::class, 'unban'])->name('security.unban');
+
+Route::get('firewall', [Admin\FirewallController::class, 'index'])->name('firewall.index');
+Route::post('firewall', [Admin\FirewallController::class, 'store'])->name('firewall.store');
+Route::delete('firewall/{rule}', [Admin\FirewallController::class, 'destroy'])->name('firewall.destroy');
+
+Route::get('settings/mail', [Admin\MailSettingsController::class, 'edit'])->name('settings.mail.edit');
+Route::put('settings/mail', [Admin\MailSettingsController::class, 'update'])->name('settings.mail.update');
+Route::post('settings/mail/test', [Admin\MailSettingsController::class, 'test'])->name('settings.mail.test');
+
+Route::get('system', [Admin\SystemController::class, 'index'])->name('system.index');
+Route::post('system/check', [Admin\SystemController::class, 'check'])->name('system.check');
+Route::post('system/update', [Admin\SystemController::class, 'update'])->name('system.update');
+Route::post('system/channel', [Admin\SystemController::class, 'channel'])->name('system.channel');
+Route::get('system/jobs/{job}', [Admin\SystemController::class, 'job'])->name('system.job');
+
+Route::get('activity', Admin\ActivityController::class)->name('activity.index');
+Route::get('statistics', Admin\StatisticsController::class)->name('statistics.index');
