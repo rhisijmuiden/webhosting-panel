@@ -81,7 +81,7 @@ module_panel() {
 
   # Database
   PANEL_DB_PASS=$(secret PANEL_DB_PASS 40)
-  run mysql_root -e "CREATE DATABASE IF NOT EXISTS whp_panel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+  run_secret "mysql_root: panel database and user" mysql_root -e "CREATE DATABASE IF NOT EXISTS whp_panel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
     CREATE USER IF NOT EXISTS 'whp_panel'@'localhost' IDENTIFIED BY '$PANEL_DB_PASS';
     CREATE USER IF NOT EXISTS 'whp_panel'@'127.0.0.1' IDENTIFIED BY '$PANEL_DB_PASS';
     ALTER USER 'whp_panel'@'localhost' IDENTIFIED BY '$PANEL_DB_PASS';

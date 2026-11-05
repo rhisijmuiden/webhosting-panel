@@ -18,7 +18,7 @@ module_mariadb() {
   svc_restart mariadb
 
   # Same as mariadb-secure-installation, without questions.
-  run mysql_root -e "DELETE FROM mysql.global_priv WHERE User='';
+  run_secret "mysql_root: secure installation" mysql_root -e "DELETE FROM mysql.global_priv WHERE User='';
     DELETE FROM mysql.global_priv WHERE User='root' AND Host NOT IN ('localhost','127.0.0.1','::1');
     DROP DATABASE IF EXISTS test;
     DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';

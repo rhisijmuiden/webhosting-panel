@@ -31,14 +31,21 @@ die()   { printf '%s\n' "${C_RED}✗ $*${C_RESET}" >&2; _log_file "FATAL $*"; ex
 step()  { printf '\n%s\n' "${C_BOLD}== $* ==${C_RESET}"; _log_file "STEP  $*"; }
 
 # Run a command, send its output to the install log, and show the tail on error.
-run() {
-  _log_file "RUN   $*"
+run() { _run "$*" "$@"; }
+
+# run_secret <label> <cmd...>: like run, but logs only the label, never the
+# arguments (SQL with passwords and the like stays out of install.log).
+run_secret() { local label=$1; shift; _run "$label" "$@"; }
+
+_run() {
+  local label=$1; shift
+  _log_file "RUN   $label"
   local out rc=0
   out=$("$@" 2>&1) || rc=$?
   [[ -n $out ]] && _log_file "$out"
   if ((rc != 0)); then
     printf '%s\n' "$out" | tail -n 25 >&2
-    die "$(t cmd_failed): $*"
+    die "$(t cmd_failed): $label"
   fi
 }
 
