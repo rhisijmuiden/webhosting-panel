@@ -1,0 +1,27 @@
+# Managed by the Webhosting Panel installer.
+source: file
+filenames:
+  - /var/log/nginx/*.log
+  - /var/www/vhosts/*/logs/access.log
+  - /var/www/vhosts/*/logs/error.log
+  - /var/log/webhosting-panel/nginx-*.log
+labels:
+  type: nginx
+---
+source: journalctl
+journalctl_filter:
+  - "_SYSTEMD_UNIT=ssh.service"
+labels:
+  type: syslog
+---
+source: journalctl
+journalctl_filter:
+  - "_SYSTEMD_UNIT=postfix@-.service"
+labels:
+  type: syslog
+---
+source: journalctl
+journalctl_filter:
+  - "_SYSTEMD_UNIT=dovecot.service"
+labels:
+  type: syslog

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Show the state and version of every service the installer manages.
+#   whp-status [--plain|--json]
+set -uo pipefail
+mode=${1:-}
+services=(nginx mariadb valkey-server unbound nftables postfix dovecot rspamd clamav-daemon
+          crowdsec crowdsec-firewall-bouncer whp-agent)
+for v in /etc/php/*/fpm; do
+  v=${v#/etc/php/}; v=${v%/fpm}
+  services+=("php$v-fpm")
+done
+
+json='[]'
+for s in "${services[@]}"; do
+  systemctl cat "$s.service" >/dev/null 2>&1 || continue
+  state=$(systemctl is-active "$s" 2>/dev/null || true)
+  if [[ $mode == --json ]]; then
+    json=$(jq -c --arg s "$s" --arg a "$state" '. + [{service:$s, state:$a}]' <<<"$json")
+  elif [[ $mode == --plain || ! -t 1 ]]; then
+    printf '%-28s %s\n' "$s" "$state"
+  else
+    case $state in active) c=$'\e[32m' ;; *) c=$'\e[31m' ;; esac
+    printf '%-28s %s%s\e[0m\n' "$s" "$c" "$state"
+  fi
+done
+[[ $mode == --json ]] && printf '%s\n' "$json"
+exit 0

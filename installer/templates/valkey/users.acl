@@ -1,0 +1,2 @@
+user default on #{{VALKEY_DEFAULT_SHA}} ~* &* +@all
+user whp on #{{VALKEY_WHP_SHA}} ~* &* +@all -@admin

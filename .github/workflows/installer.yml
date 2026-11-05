@@ -1,0 +1,59 @@
+name: Installer
+
+on:
+  push:
+    paths: ["installer/**", "tests/**", ".github/workflows/installer.yml", ".shellcheckrc"]
+  pull_request:
+    paths: ["installer/**", "tests/**", ".github/workflows/installer.yml", ".shellcheckrc"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        run: |
+          shellcheck --version
+          shellcheck -x installer/install.sh installer/bootstrap.sh installer/lib/*.sh \
+            installer/modules/*.sh installer/lang/*.sh installer/bin/* tests/smoke.sh
+
+  install-debian13:
+    name: Full install on Debian 13 (systemd container)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Debian 13 image with systemd
+        run: docker build -t whp-trixie tests/
+      - name: Boot container
+        run: |
+          docker run -d --name whp --privileged --cgroupns=host \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock \
+            -v "$PWD:/src:ro" --hostname panel.example.test whp-trixie
+          for i in $(seq 1 30); do
+            state=$(docker exec whp systemctl is-system-running 2>/dev/null || true)
+            [[ $state == running || $state == degraded ]] && break
+            sleep 2
+          done
+          echo "systemd: $state"
+          docker exec whp bash -c 'cp -r --no-preserve=ownership /src /root/src'
+      - name: Install
+        run: |
+          docker exec whp /root/src/installer/install.sh -y \
+            --hostname panel.example.test --email admin@example.test \
+            --relay-host smtp.example.test --relay-port 587 --relay-user relay --relay-pass secret \
+            --no-letsencrypt --clamav
+      - name: Smoke tests
+        run: docker exec whp bash /root/src/tests/smoke.sh
+      - name: Second run (idempotent)
+        run: |
+          docker exec whp /root/src/installer/install.sh -y --no-letsencrypt
+          docker exec whp bash -c 'whp-status --plain; curl -s -H "Host: site.test" http://127.0.0.1/ | grep -q php=8.5'
+      - name: Collect logs
+        if: failure()
+        run: |
+          docker exec whp bash -c 'tail -n 200 /var/log/webhosting-panel/install.log; systemctl --failed; journalctl -n 300 --no-pager' || true
