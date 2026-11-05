@@ -97,6 +97,8 @@ module_panel() {
   run "php-fpm$PANEL_PHP" -t
   svc_restart "php$PANEL_PHP-fpm"
   cert_paths "$WHP_HOSTNAME"
+  if nginx_has_http3; then PANEL_QUIC="listen 443 quic;
+    listen [::]:443 quic;"; else PANEL_QUIC="# HTTP/3 not available"; fi
   render "$TPL/nginx/panel.conf" /etc/nginx/sites-available/05-whp-panel.conf
   ln -sf ../sites-available/05-whp-panel.conf /etc/nginx/sites-enabled/05-whp-panel.conf
   run nginx -t

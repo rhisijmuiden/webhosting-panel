@@ -172,7 +172,8 @@ cache_purge() {
   names="$SITE_DOMAIN${SITE_ALIASES:+,$SITE_ALIASES}"
   re="^KEY: https?(GET|HEAD)($(sed 's/\./\\./g; s/,/|/g' <<<"$names"))/"
   [[ -d /var/cache/nginx/whp ]] || return 0
-  grep -rlZaE "$re" /var/cache/nginx/whp 2>/dev/null | xargs -0 -r rm -f
+  # No match is fine: never let grep's exit status trip pipefail or the ERR trap.
+  { grep -rlZaE "$re" /var/cache/nginx/whp 2>/dev/null || true; } | { xargs -0 -r rm -f || true; }
   return 0
 }
 
@@ -194,7 +195,7 @@ site_cert() {
     info "$(t cert_ok "$SITE_DOMAIN")"
   else
     SITE_SSL=pending
-    warn "$(t cert_fail "$SITE_DOMAIN" "$SITE_DOMAIN")"
+    warn "$(t site_cert_pending "$SITE_DOMAIN" "$SITE_DOMAIN")"
   fi
 }
 
@@ -385,7 +386,7 @@ cmd_cache() {
   cache_purge
   if [[ $state == purge ]]; then
     ok "$domain cache purged"
-    if [[ $JSON == yes ]]; then print_site "$domain"; fi
+    if [[ $JSON == yes ]]; then print_site "$domain" 3>&1 | jq '. + {purged:true}' >&3; fi
     return 0
   fi
   SITE_CACHE=$state
@@ -448,6 +449,7 @@ cmd_remove() {
   systemctl disable --now "whp-site-$SITE_ID" >/dev/null 2>&1 || true
   rm -rf "/etc/systemd/system/whp-site-$SITE_ID.service" "/etc/systemd/system/whp-site-$SITE_ID.service.d" \
     "$WHP_ETC/php-fpm/$SITE_ID.conf"
+  [[ $keep == yes ]] || rm -f "$WHP_LOG_DIR/php-fpm/$SITE_ID.log"
   systemctl daemon-reload
   pkill -u "$SITE_USER" 2>/dev/null || true
   if [[ $keep == no ]]; then

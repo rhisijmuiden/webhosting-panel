@@ -42,6 +42,7 @@ L_ssh_skip_nokeys="Geen geautoriseerde SSH-sleutels gevonden, inloggen met wacht
 L_resolver_fallback="Unbound antwoordt niet, /etc/resolv.conf blijft ongewijzigd."
 L_cert_ok="Let's Encrypt-certificaat uitgegeven voor %s"
 L_cert_fail="Nog geen Let's Encrypt-certificaat voor %s (wijst DNS al naar deze server?). Er wordt een zelfondertekend certificaat gebruikt; voer later 'whp-cert %s' uit."
+L_site_cert_pending="Nog geen Let's Encrypt-certificaat voor %s (wijst DNS al naar deze server?). De site draait alleen via HTTP tot het certificaat is uitgegeven; dit wordt elk uur opnieuw geprobeerd (of voer 'whp-site ssl %s' uit)."
 L_component_missing="%s nog niet aanwezig, overgeslagen (komt in een latere fase)."
 L_done="Installatie voltooid"
 L_summary_saved="Samenvatting opgeslagen in %s (alleen root)"

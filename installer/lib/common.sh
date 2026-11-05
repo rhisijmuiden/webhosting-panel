@@ -177,8 +177,11 @@ env_set() {
   local file=$1 key=$2 value=$3 tmp
   [[ -e $file ]] || install -m 0600 /dev/null "$file"
   tmp=$(mktemp "$file.XXXX")
-  grep -vE "^${key}=" "$file" >"$tmp" || true
-  printf '%s=%s\n' "$key" "$value" >>"$tmp"
+  # Replace the value in place (keeps the line order stable), append if new.
+  KEY=$key VAL=$value awk 'BEGIN{k=ENVIRON["KEY"]; v=ENVIRON["VAL"]}
+    index($0, k "=") == 1 { if (!done) print k "=" v; done=1; next }
+    { print }
+    END { if (!done) print k "=" v }' "$file" >"$tmp"
   chmod --reference="$file" "$tmp"
   chown --reference="$file" "$tmp"
   mv -f "$tmp" "$file"

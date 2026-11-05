@@ -36,6 +36,7 @@ check "mariadb only on localhost" bash -c '! ss -ltnH "sport = :3306" | grep -vE
 check "mariadb panel user" mariadb -h127.0.0.1 -uwhp_panel -p"$PANEL_DB_PASS" -e 'SELECT 1' whp_panel
 check "mariadb root has no TCP password login" bash -c '! mariadb -h127.0.0.1 -uroot -e "SELECT 1" 2>/dev/null'
 check "unknown host gets no answer (444)" bash -c '[[ $(curl -s -o /dev/null -w "%{http_code}" -H "Host: nope.test" http://127.0.0.1/) == 000 ]]'
+check "hostname on port 80 redirects to the panel" bash -c "curl -s -o /dev/null -w '%{redirect_url}' -H \"Host: $HOST\" http://127.0.0.1/ | grep -q ':8443/'"
 check "server_tokens off" bash -c '! curl -sI -H "Host: nope.test" http://127.0.0.1/.well-known/acme-challenge/x | grep -qi "nginx/"'
 check "imap 143 only on loopback" bash -c '! ss -ltnH "sport = :143" | grep -vE "127.0.0.1|\[::1\]"'
 check "firewall input policy drop" bash -c 'nft list chain inet whp input | grep -q "policy drop"'
@@ -51,7 +52,7 @@ check "site runs PHP 8.5" bash -c "curl -s -H 'Host: site.test' http://127.0.0.1
 curl -s -o /dev/null -H 'Host: site.test' http://127.0.0.1/
 check "page cache HIT on second request" bash -c "curl -s -D - -o /dev/null -H 'Host: site.test' http://127.0.0.1/ | grep -qi 'x-cache: HIT'"
 check "logged-in cookie bypasses cache" bash -c "curl -sI -H 'Host: site.test' -H 'Cookie: wordpress_logged_in_x=1' http://127.0.0.1/ | grep -qi 'x-cache: BYPASS'"
-check "cache purge empties the site's cache" bash -c "whp-site cache site.test purge && curl -s -D - -o /dev/null -H 'Host: site.test' http://127.0.0.1/ | grep -qi 'x-cache: MISS'"
+check "cache purge empties the site's cache" bash -c "whp-site cache site.test purge --json | jq -e .purged >/dev/null && ! curl -s -D - -o /dev/null -H 'Host: site.test' http://127.0.0.1/ | grep -qi 'x-cache: HIT'"
 check "cache off" whp-site cache site.test off
 check "no cache header when off" bash -c "! curl -sI -H 'Host: site.test' http://127.0.0.1/ | grep -qi 'x-cache'"
 echo 'SECRET=1' >/var/www/vhosts/site.test/public/.env
