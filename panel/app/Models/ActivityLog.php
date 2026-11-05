@@ -46,6 +46,13 @@ class ActivityLog extends Model
         'settings.mail_tested' => 'Test mail sent',
         'system.update_started' => 'Update started',
         'system.channel_changed' => 'Release channel changed',
+        'backup.started' => 'Backup started',
+        'backup.restored' => 'Backup restored',
+        'backup.checked' => 'Backup verified',
+        'backup.schedule_changed' => 'Backup schedule changed',
+        'backup.target_added' => 'Backup location added',
+        'backup.target_removed' => 'Backup location removed',
+        'backup.key_viewed' => 'Repository key viewed',
     ];
 
     public function label(): string

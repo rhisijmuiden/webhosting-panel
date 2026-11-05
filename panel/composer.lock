@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8edcb335431618ce1bd3c988f17631e3",
+    "content-hash": "9acd3536ad8952d43856dd1f5325108c",
     "packages": [
         {
             "name": "brick/math",
@@ -3304,6 +3304,39 @@
                 "source": "https://github.com/ramsey/uuid/tree/4.9.4"
             },
             "time": "2026-09-16T11:39:30+00:00"
+        },
+        {
+            "name": "rhis/backups",
+            "version": "dev-claude/project-thread-im3b15",
+            "dist": {
+                "type": "path",
+                "url": "../packages/backups",
+                "reference": "bc2c7f272a942311764cb117935218e2213984d0"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Backups\\BackupsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Backups\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Backup screens for the Webhosting Panel (admin and client), on top of whp-backup through the agent.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "symfony/clock",
@@ -8478,7 +8511,9 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": {
+        "rhis/backups": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
