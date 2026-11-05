@@ -45,7 +45,6 @@ check "add site on PHP 8.3" whp-site add site.test --php 8.3 --no-ssl --json
 printf '<?php echo "php=", PHP_MAJOR_VERSION, ".", PHP_MINOR_VERSION, " t=", microtime(true);\n' >/var/www/vhosts/site.test/public/index.php
 rm -f /var/www/vhosts/site.test/public/index.html
 chown s_site_test: /var/www/vhosts/site.test/public/index.php
-get() { curl -s -H "Host: $1" "http://127.0.0.1${2:-/}"; }
 check "site runs PHP 8.3" bash -c "curl -s -H 'Host: site.test' http://127.0.0.1/ | grep -q php=8.3"
 check "switch site to PHP 8.5" whp-site php site.test 8.5
 check "site runs PHP 8.5" bash -c "curl -s -H 'Host: site.test' http://127.0.0.1/ | grep -q php=8.5"

@@ -306,7 +306,7 @@ cmd_ssl() {
     # The server hostname itself, when it still runs on a self-signed certificate.
     if [[ -n $WHP_HOSTNAME && ! -e /etc/letsencrypt/live/$WHP_HOSTNAME ]] \
        && [[ $(env_get "$WHP_ETC/installer.env" WHP_LETSENCRYPT 2>/dev/null || echo yes) != no ]]; then
-      "$INSTALLER_DIR/bin/whp-cert" "$WHP_HOSTNAME" && hostname_cert_installed || true
+      if "$INSTALLER_DIR/bin/whp-cert" "$WHP_HOSTNAME"; then hostname_cert_installed; fi
     fi
   else
     list=("$target")

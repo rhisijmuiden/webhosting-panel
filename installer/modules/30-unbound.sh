@@ -3,7 +3,14 @@
 # public resolvers are rate limited by most blocklists).
 
 module_unbound() {
-  apt_install unbound
+  apt_install unbound dns-root-data
+  # DNSSEC trust anchor (normally created on first start).
+  if [[ ! -s /var/lib/unbound/root.key ]]; then
+    install -d -o unbound -g unbound /var/lib/unbound
+    if [[ -s /usr/share/dns/root.key ]]; then cp /usr/share/dns/root.key /var/lib/unbound/root.key; fi
+    unbound-anchor -a /var/lib/unbound/root.key >>"$WHP_INSTALL_LOG" 2>&1 || true
+    chown unbound:unbound /var/lib/unbound/root.key
+  fi
   render "$TPL/unbound/whp.conf" /etc/unbound/unbound.conf.d/whp.conf
   run unbound-checkconf
   svc_enable unbound

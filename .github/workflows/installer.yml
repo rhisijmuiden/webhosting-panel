@@ -56,4 +56,4 @@ jobs:
       - name: Collect logs
         if: failure()
         run: |
-          docker exec whp bash -c 'tail -n 200 /var/log/webhosting-panel/install.log; systemctl --failed; journalctl -n 300 --no-pager' || true
+          docker exec whp bash -c 'systemctl --failed; journalctl -p warning -n 150 --no-pager; echo ===== install.log; tail -n 120 /var/log/webhosting-panel/install.log' || true
