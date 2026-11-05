@@ -6,7 +6,7 @@
 #   whp-site add <domain> [--php 8.4] [--alias www.<domain>] [--profile php|wordpress|laravel]
 #                         [--docroot public] [--no-cache] [--no-ssl] [--json]
 #   whp-site php <domain> <version>
-#   whp-site cache <domain> on|off
+#   whp-site cache <domain> on|off|purge
 #   whp-site ssl <domain> | --pending
 #   whp-site quota <domain> <MB>     (0 = unlimited; hard limit when the filesystem
 #                                     has project quotas, see docs/installer.md)
@@ -163,6 +163,16 @@ nginx_reload_wait() {
     [[ -z $(comm -12 <(printf '%s\n' "$old") <(printf '%s\n' "$cur")) ]] && break
     sleep 0.1
   done
+  return 0
+}
+
+# Remove this site's pages from the Nginx page cache (all its host names).
+cache_purge() {
+  local names re
+  names="$SITE_DOMAIN${SITE_ALIASES:+,$SITE_ALIASES}"
+  re="^KEY: https?(GET|HEAD)($(sed 's/\./\\./g; s/,/|/g' <<<"$names"))/"
+  [[ -d /var/cache/nginx/whp ]] || return 0
+  grep -rlZaE "$re" /var/cache/nginx/whp 2>/dev/null | xargs -0 -r rm -f
   return 0
 }
 
@@ -363,14 +373,21 @@ cmd_php() {
   SITE_PHP=$v
   site_save
   site_apply "$old"
+  cache_purge
   ok "$(t site_php "$domain" "$v")"
   if [[ $JSON == yes ]]; then print_site "$domain"; fi
 }
 
 cmd_cache() {
   local domain=${1:-} state=${2:-}
-  [[ -n $domain && $state =~ ^(on|off)$ ]] || usage
+  [[ -n $domain && $state =~ ^(on|off|purge)$ ]] || usage
   site_load "$domain"
+  cache_purge
+  if [[ $state == purge ]]; then
+    ok "$domain cache purged"
+    if [[ $JSON == yes ]]; then print_site "$domain"; fi
+    return 0
+  fi
   SITE_CACHE=$state
   site_save
   site_apply

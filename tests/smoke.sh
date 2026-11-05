@@ -51,6 +51,7 @@ check "site runs PHP 8.5" bash -c "curl -s -H 'Host: site.test' http://127.0.0.1
 curl -s -o /dev/null -H 'Host: site.test' http://127.0.0.1/
 check "page cache HIT on second request" bash -c "curl -s -D - -o /dev/null -H 'Host: site.test' http://127.0.0.1/ | grep -qi 'x-cache: HIT'"
 check "logged-in cookie bypasses cache" bash -c "curl -sI -H 'Host: site.test' -H 'Cookie: wordpress_logged_in_x=1' http://127.0.0.1/ | grep -qi 'x-cache: BYPASS'"
+check "cache purge empties the site's cache" bash -c "whp-site cache site.test purge && curl -s -D - -o /dev/null -H 'Host: site.test' http://127.0.0.1/ | grep -qi 'x-cache: MISS'"
 check "cache off" whp-site cache site.test off
 check "no cache header when off" bash -c "! curl -sI -H 'Host: site.test' http://127.0.0.1/ | grep -qi 'x-cache'"
 echo 'SECRET=1' >/var/www/vhosts/site.test/public/.env
