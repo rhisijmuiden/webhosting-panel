@@ -88,8 +88,22 @@ send as itself plus its `send_as` addresses), creates `/var/vmail/<domain>/<user
 (vmail, 0700) before the first login, and skips addresses on domains that are
 not RHIS mail domains. A disabled mailbox still receives mail but cannot log in.
 
+## Panel screens
+
+| Where | What |
+| --- | --- |
+| Admin > Hosting > Domains & mail | All domains; add a domain without a website; per domain the tabs Mail settings, Mailboxes and DNS records. |
+| Admin > System > DNS & mail server | Cloudflare token (stored encrypted), mail host, public IPs, relay SPF includes, DMARC/TLS report addresses, Microsoft 365 order link and price. |
+| Client portal > Mail & DNS | The customer's own domains with the same three tabs (no DNS-management switch, no delete). |
+
+- Creating a website creates its mail domain, a DKIM key, updates the agent and publishes DNS straight away.
+- Saving mail settings pushes the routing to the agent and publishes to Cloudflare; records that already exist with other values show up as a conflict on the DNS tab with a "take over" preview.
+- The Microsoft 365 wizard walks through the MS= verification code, tenant, publish and DKIM in Defender, and shows the "order through RHIS" card when an order page is set.
+- Customers add and remove their own records (A, AAAA, CNAME, MX, TXT); records the panel manages are locked.
+- Mailboxes respect `max_mailboxes` of the hosting package. Passwords are hashed in the panel (`{ARGON2ID}`), the Apple profile is a download per mailbox.
+- `Rhis\DnsMail\Testing\FakeCloudflare` is an in-memory Cloudflare API for tests and local development.
+
 ## Planned next
 
 - Inbound anti-spam tuning in Rspamd (greylisting, Bayes, RBLs, fuzzy hashes), ClamAV virus scanning, and a quarantine view for customers to release false positives.
 - DANE (TLSA for the mail host, needs DNSSEC on the zone) and BIMI.
-- Panel screens: Cloudflare settings, DNS preview/apply, mail tab per domain with the SPF/DMARC generators, mail app setup card.

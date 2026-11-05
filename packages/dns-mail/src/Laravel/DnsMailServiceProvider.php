@@ -4,57 +4,72 @@ declare(strict_types=1);
 
 namespace Rhis\DnsMail\Laravel;
 
+use App\Models\Website;
+use App\Support\Menu;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
-use Rhis\DnsMail\Cloudflare\CloudflareClient;
-use Rhis\DnsMail\Dns\ZoneSync;
 use Rhis\DnsMail\Http\CurlHttpClient;
 use Rhis\DnsMail\Http\HttpClient;
-use Rhis\DnsMail\Mail\MailDnsProfile;
 use Rhis\DnsMail\Mail\MailServerSettings;
-use RuntimeException;
+use Rhis\DnsMail\Services\DnsMailConfig;
+use Rhis\DnsMail\Services\DomainProvisioner;
+use Throwable;
 
-/**
- * Wires the package into the panel (Laravel package discovery).
- * Screens and routes are added once the panel layout from phase 2 is in.
- */
+/** Wires DNS, mail and mailboxes into the panel (Laravel package discovery). */
 final class DnsMailServiceProvider extends ServiceProvider
 {
+    private const ROOT = __DIR__ . '/../..';
+
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__ . '/../../config/dns-mail.php', 'dns-mail');
-
+        $this->mergeConfigFrom(self::ROOT . '/config/dns-mail.php', 'dns-mail');
         $this->app->singleton(HttpClient::class, static fn (): HttpClient => new CurlHttpClient());
-
-        $this->app->bind(CloudflareClient::class, function ($app): CloudflareClient {
-            $token = (string) $app['config']->get('dns-mail.cloudflare_token');
-            if ($token === '') {
-                throw new RuntimeException('No Cloudflare API token configured');
-            }
-
-            return new CloudflareClient($app->make(HttpClient::class), $token);
-        });
-
-        $this->app->bind(ZoneSync::class, static fn ($app): ZoneSync => new ZoneSync($app->make(CloudflareClient::class)));
-
-        $this->app->singleton(MailServerSettings::class, static function ($app): MailServerSettings {
-            $c = $app['config']->get('dns-mail.server');
-
-            return new MailServerSettings(
-                mailHost: (string) ($c['mail_host'] ?: gethostname()),
-                ipv4: $c['ipv4'] ?: null,
-                ipv6: $c['ipv6'] ?: null,
-                relaySpfIncludes: array_values($c['relay_spf_includes'] ?? []),
-                webmailHost: $c['webmail_host'] ?: null,
-                brandName: (string) ($c['brand'] ?? 'RHIS'),
-            );
-        });
-
-        $this->app->bind(MailDnsProfile::class, static fn ($app): MailDnsProfile => new MailDnsProfile($app->make(MailServerSettings::class)));
+        $this->app->singleton(DnsMailConfig::class);
+        $this->app->bind(MailServerSettings::class, static fn ($app) => $app->make(DnsMailConfig::class)->server());
     }
 
     public function boot(): void
     {
-        $this->loadTranslationsFrom(__DIR__ . '/../../lang', 'dns-mail');
-        $this->publishes([__DIR__ . '/../../config/dns-mail.php' => config_path('dns-mail.php')], 'dns-mail-config');
+        $this->loadTranslationsFrom(self::ROOT . '/lang', 'dns-mail');
+        $this->loadJsonTranslationsFrom(self::ROOT . '/lang');
+        $this->loadViewsFrom(self::ROOT . '/resources/views', 'dns-mail');
+        $this->loadMigrationsFrom(self::ROOT . '/database/migrations');
+        $this->publishes([self::ROOT . '/config/dns-mail.php' => config_path('dns-mail.php')], 'dns-mail-config');
+
+        if (!class_exists(Menu::class)) {
+            return; // Not inside the panel (e.g. package unit tests).
+        }
+
+        $this->registerRoutes();
+        $this->registerMenus();
+
+        // New website: create its mail domain, DKIM key and DNS right away.
+        Website::created(function (Website $site): void {
+            try {
+                $this->app->make(DomainProvisioner::class)->forWebsite($site);
+            } catch (Throwable $e) {
+                report($e);
+            }
+        });
+    }
+
+    private function registerRoutes(): void
+    {
+        if ($this->app->routesAreCached()) {
+            return;
+        }
+        Route::middleware(['web', 'auth', 'can:admin'])->prefix('admin')->name('admin.')
+            ->group(self::ROOT . '/routes/admin.php');
+        Route::middleware(['web', 'auth', 'client'])->prefix('mail')->name('client.')
+            ->group(self::ROOT . '/routes/client.php');
+    }
+
+    private function registerMenus(): void
+    {
+        Menu::admin()
+            ->add('domains', 'Domains & mail', 'admin.mail.domains.index', icon: 'mail', section: 'Hosting', order: 35, activePatterns: ['admin.mail.domains.*'])
+            ->add('dns-mail-settings', 'DNS & mail server', 'admin.mail.settings.edit', icon: 'cloud', section: 'System', order: 205, activePatterns: ['admin.mail.settings.*']);
+        Menu::client()
+            ->add('mail', 'Mail & DNS', 'client.mail.domains.index', icon: 'mail', order: 20, activePatterns: ['client.mail.*']);
     }
 }
