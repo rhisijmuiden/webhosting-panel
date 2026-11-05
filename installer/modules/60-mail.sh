@@ -156,7 +156,7 @@ mail_rspamd() {
   run rspamadm configtest
   svc_enable rspamd
   svc_restart rspamd
-  ok "rspamd $(rspamd --version 2>/dev/null | grep -oE '[0-9]+\.[0-9.]+' | head -n1)"
+  ok "rspamd $(rspamd --version 2>/dev/null | grep -oE '[0-9]+\.[0-9.]+' | sed -n 1p || true)"
 }
 
 module_mail() {

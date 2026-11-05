@@ -5,7 +5,8 @@
 ssh_detect_port() {
   local p=''
   if command -v sshd >/dev/null; then
-    p=$(sshd -T 2>/dev/null | awk '$1=="port"{print $2; exit}')
+    # No early exit in the pipe: with pipefail a SIGPIPE in sshd would abort the installer.
+    p=$(sshd -T 2>/dev/null | awk '$1=="port" && !f {print $2; f=1}' || true)
   fi
   printf '%s' "${p:-22}"
 }
@@ -26,8 +27,10 @@ module_ssh() {
   done
 
   # Without keys: keep whatever the server allows now, so nobody is locked out.
-  SSH_PASSWORD_AUTH=$(sshd -T 2>/dev/null | awk '$1=="passwordauthentication"{print $2; exit}')
-  SSH_ROOT_LOGIN=$(sshd -T 2>/dev/null | awk '$1=="permitrootlogin"{print $2; exit}')
+  local sshd_cfg
+  sshd_cfg=$(sshd -T 2>/dev/null || true)
+  SSH_PASSWORD_AUTH=$(awk '$1=="passwordauthentication"{print $2}' <<<"$sshd_cfg" | tail -n1)
+  SSH_ROOT_LOGIN=$(awk '$1=="permitrootlogin"{print $2}' <<<"$sshd_cfg" | tail -n1)
   [[ -n $SSH_PASSWORD_AUTH ]] || SSH_PASSWORD_AUTH=yes
   [[ -n $SSH_ROOT_LOGIN ]] || SSH_ROOT_LOGIN=prohibit-password
   if [[ $keys == yes ]]; then

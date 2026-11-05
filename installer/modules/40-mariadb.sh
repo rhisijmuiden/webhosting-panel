@@ -23,5 +23,5 @@ module_mariadb() {
     DROP DATABASE IF EXISTS test;
     DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
     FLUSH PRIVILEGES;"
-  ok "mariadb $(mariadb --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1), buffer pool ${MARIADB_BUFFER_POOL} MB"
+  ok "mariadb $(mariadb --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sed -n 1p), buffer pool ${MARIADB_BUFFER_POOL} MB"
 }

@@ -27,9 +27,9 @@ module_valkey() {
   svc_restart valkey-server
   local i
   for i in {1..10}; do
-    REDISCLI_AUTH=$VALKEY_WHP_PASS valkey-cli --user whp ping 2>/dev/null | grep -q PONG && break
+    [[ $(REDISCLI_AUTH=$VALKEY_WHP_PASS valkey-cli --user whp ping 2>/dev/null || true) == PONG ]] && break
     sleep 1
   done
-  REDISCLI_AUTH=$VALKEY_WHP_PASS valkey-cli --user whp ping 2>/dev/null | grep -q PONG || die "valkey does not answer"
+  [[ $(REDISCLI_AUTH=$VALKEY_WHP_PASS valkey-cli --user whp ping 2>/dev/null || true) == PONG ]] || die "valkey does not answer"
   ok "valkey ${VALKEY_MAXMEM} MB, ACL users: default, whp"
 }

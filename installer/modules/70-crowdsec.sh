@@ -25,5 +25,5 @@ module_crowdsec() {
     cscli console enroll -e context "$WHP_CROWDSEC_ENROLL" --name "$WHP_HOSTNAME" >>"$WHP_INSTALL_LOG" 2>&1 \
       || warn "crowdsec console enrollment failed"
   fi
-  ok "crowdsec $(cscli version 2>&1 | awk -F': *' '/version/{print $2; exit}')"
+  ok "crowdsec $(cscli version 2>&1 | awk -F': *' '/version/ && !f {print $2; f=1}' || true)"
 }

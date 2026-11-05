@@ -131,7 +131,7 @@ apt_available() {
   done
 }
 
-pkg_installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
+pkg_installed() { [[ $(dpkg-query -W -f='${Status}' "$1" 2>/dev/null || true) == *'install ok installed'* ]]; }
 
 # Keep a single copy of the distribution file before we replace it.
 backup_once() {
@@ -140,7 +140,11 @@ backup_once() {
   return 0
 }
 
-random_secret() { head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c "${1:-32}"; }
+random_secret() {
+  local s
+  s=$(head -c 96 /dev/urandom | base64 -w0 | tr -dc 'A-Za-z0-9')
+  printf '%s' "${s:0:${1:-32}}"
+}
 
 # render <template> <destination> [mode]
 # Replaces {{NAME}} with the value of shell variable NAME. Unset variables abort.
@@ -207,7 +211,7 @@ cert_paths() {
   fi
 }
 
-nginx_has_http3() { nginx -V 2>&1 | grep -q -- '--with-http_v3_module'; }
+nginx_has_http3() { [[ $(nginx -V 2>&1 || true) == *--with-http_v3_module* ]]; }
 
 valid_domain() {
   [[ $1 =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]]
