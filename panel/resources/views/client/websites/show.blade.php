@@ -43,4 +43,5 @@
     </section>
     @include('partials.website-php', ['website' => $website, 'action' => route('client.websites.php', $website)])
     @includeIf('wordpress::partials.website-card', ['website' => $website])
+    @includeIf('git::partials.website-card', ['website' => $website])
 </x-layouts.client>

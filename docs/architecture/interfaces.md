@@ -127,6 +127,10 @@ days, days forever.
 Other phases add their own module (`dns.py`, `mail.py`, `backup.py`), for
 example `backup.run` calling `whp-backup … --json`.
 
+Mail log (`maillog.py`, see `docs/mail-log.md`): `mail.log_read` (Postfix
+events from the journal after a cursor) and `mail.spam_history` (Rspamd scan
+history).
+
 Actions added by phase 4 (`backup.py`, see `backup/README.md`):
 `backup.status`, `backup.targets`, `backup.target_add` (secrets such as
 `password`, `ssh_key`, `onedrive_token` and `repo_key` go to whp-backup as
@@ -171,6 +175,10 @@ Actions added by the Plesk migration (`migrate.py`, see `docs/migration.md`):
 server (SSL state `imported`) until Let's Encrypt succeeds. Websites own their
 databases through the core table `site_databases` (`App\Models\SiteDatabase`).
 The screens live in `packages/migration` (`Rhis\Migration\`, admin `/admin/migration`).
+
+Git deployments (`git.py`, screens in `packages/git`, `Rhis\Git\`, admin `/admin/git`, client `/git`,
+public webhook `POST /git/webhook/<uuid>`): `git.key`, `git.check`, `git.fetch`, `git.status`,
+`git.rollback`, `git.remove`, `git.tools` and the job `git.deploy`. See `docs/git.md`.
 
 ## Release channels
 

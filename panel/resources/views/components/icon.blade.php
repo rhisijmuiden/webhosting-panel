@@ -35,6 +35,8 @@ $paths = [
     'edit' => '<path d="M4 20h4L19 9l-4-4L4 16v4Z"/>',
     'check' => '<path d="m5 12 5 5 9-10"/>',
     'chart' => '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    'git' => '<circle cx="6" cy="5" r="2.5"/><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 7.5v9M18 10.5c0 4-5 3.5-10.5 6.8"/>',
+    'key' => '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M14 9l2 2"/>',
     'apps' => '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><path d="M17.5 14v7M14 17.5h7"/>',
     'dot' => '<circle cx="12" cy="12" r="3"/>',
     'chevron' => '<path d="m9 6 6 6-6 6"/>',
