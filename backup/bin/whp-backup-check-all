@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Verify every configured backup target, reading a sample of the remote data.
+set -uo pipefail
+rc=0
+while IFS= read -r t; do
+	[[ -n "$t" ]] || continue
+	/usr/local/sbin/whp-backup --quiet check --target "$t" --read-data >/dev/null || rc=1
+done < <(/usr/local/sbin/whp-backup --json target list | jq -r '.data[] | select(.enabled) | .name')
+exit $rc

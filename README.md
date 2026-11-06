@@ -1,7 +1,8 @@
 # Webhosting Panel
 
-Own hosting control panel for Debian 13: a fast, secure web and mail server with an
-admin and client panel, integrated with the RHIS CRM.
+A hosting control panel for Debian 13, built to replace Plesk: a fast, secure web
+and mail server (Nginx and PHP-FPM, MariaDB, mail, Let's Encrypt, CrowdSec), with
+an admin and client panel, backups, and an API for the RHIS CRM.
 
 *Nederlands: [README.nl.md](README.nl.md)*
 
@@ -12,6 +13,19 @@ curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/webhosting-panel/main/
 ```
 
 See [docs/installer.md](docs/installer.md).
+
+## Layout
+
+| Folder | What |
+| --- | --- |
+| `installer/` | Debian 13 install script |
+| `panel/` | Laravel admin and client panel ([README](panel/README.md)) |
+| `agent/` | `whp-agent`, the root daemon that applies changes for the panel |
+| `packages/` | Panel modules (DNS and mail, backups, CRM API) |
+| `brand/` | RHIS house style used by the panel |
+| `docs/` | Architecture and API documentation |
+
+How the parts talk to each other: [docs/architecture/interfaces.md](docs/architecture/interfaces.md).
 
 ## Branches
 

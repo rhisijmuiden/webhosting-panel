@@ -1,0 +1,235 @@
+/*
+ * RHIS theme for SnappyMail.
+ * Colours from rhisijmuiden/rhis-huisstijl: nacht #14213D, koraal #FF6B57,
+ * lucht #9CC3FF, wolk #F6F7FB. Koraal only for the main action.
+ * Archivo is installed next to this file by webmail/snappymail/install.sh;
+ * without it the system font is used.
+ */
+@font-face {
+	font-family: "Archivo";
+	src: url("fonts/Archivo.ttf") format("truetype");
+	font-weight: 100 900;
+	font-stretch: 62% 125%;
+	font-display: swap;
+}
+
+:root {
+	color-scheme: light;
+
+	--rhis-nacht: #14213D;
+	--rhis-nacht-2: #1B2B4D;
+	--rhis-koraal: #FF6B57;
+	--rhis-koraal-hover: #FF8371;
+	--rhis-lucht: #9CC3FF;
+	--rhis-wolk: #F6F7FB;
+	--rhis-raised: #FFFFFF;
+	--rhis-ink: #14213D;
+	--rhis-muted: #4F5B73;
+	--rhis-line: #DCE1EB;
+	--rhis-accent-text: #B8392A;
+
+	/* MAIN */
+	--main-color: var(--rhis-ink);
+	--main-bg-color: var(--rhis-wolk);
+	--main-bg-image: none;
+	--main-bg-size: auto;
+	--main-bg-repeat: no-repeat;
+	--main-font-size: 14px;
+	--link-color: var(--rhis-accent-text);
+	--border-color: var(--rhis-line);
+	--border-radius: 10px;
+	--hr-color: var(--rhis-line);
+
+	--panel-bg-clr: var(--rhis-raised);
+
+	--warning-clr: #8A5A00;
+	--warning-bg-clr: #FFF4DB;
+	--warning-border-clr: #F5D99A;
+
+	--error-clr: #C23434;
+	--error-bg-clr: #FCE8E8;
+	--error-border-clr: #F2BDBD;
+
+	--info-clr: var(--rhis-nacht);
+	--info-bg-clr: #E6EFFF;
+	--info-border-clr: var(--rhis-lucht);
+
+	/* LOADING */
+	--loading-color: var(--rhis-nacht);
+	--loading-text-shadow: none;
+
+	/* LOGIN */
+	--login-color: var(--rhis-ink);
+	--login-bg-color: var(--rhis-raised);
+	--login-box-shadow: 0 24px 60px rgba(20, 33, 61, .18);
+	--login-border: 1px solid var(--rhis-line);
+	--login-border-radius: 16px;
+
+	--spinner-color: var(--rhis-koraal);
+
+	/* MENU */
+	--dropdown-menu-color: var(--rhis-ink);
+	--dropdown-menu-bg-color: var(--rhis-raised);
+	--dropdown-menu-hover-bg-color: var(--rhis-wolk);
+	--dropdown-menu-hover-color: var(--rhis-ink);
+	--dropdown-menu-disabled-color: #8A93A6;
+	--dropdown-menu-border-clr: var(--rhis-line);
+
+	/* FOLDERS: the left menu on nacht, like the panel */
+	--folders-color: #E4E9F4;
+	--folders-disabled-color: #7F8BA6;
+	--folders-selected-color: #FFFFFF;
+	--folders-selected-bg-color: rgba(156, 195, 255, .18);
+	--folders-focused-color: #FFFFFF;
+	--folders-focused-bg-color: rgba(156, 195, 255, .12);
+	--folders-hover-color: #FFFFFF;
+	--folders-hover-bg-color: rgba(255, 255, 255, .08);
+	--folders-drop-color: var(--rhis-nacht);
+	--folders-drop-bg-color: var(--rhis-lucht);
+	--unread-count-color: var(--rhis-nacht);
+	--unread-count-bg-color: var(--rhis-koraal);
+
+	/* SETTINGS */
+	--settings-menu-color: #E4E9F4;
+	--settings-menu-selected-color: #FFFFFF;
+	--settings-menu-selected-bg-color: rgba(156, 195, 255, .18);
+	--settings-menu-hover-color: #FFFFFF;
+	--settings-menu-hover-bg-color: rgba(255, 255, 255, .08);
+
+	/* MESSAGES */
+	--message-list-toolbar-bg-color: var(--rhis-raised);
+	--message-header-bg-clr: var(--rhis-raised);
+
+	/* DIALOGS */
+	--dialog-clr: var(--rhis-ink);
+	--dialog-bg-clr: var(--rhis-raised);
+	--dialog-border-clr: var(--rhis-line);
+	--dialog-border-radius: 16px;
+
+	/* FORMS */
+	--btn-clr: var(--rhis-ink);
+	--btn-bg-clr: var(--rhis-raised);
+	--btn-border-clr: var(--rhis-line);
+	--btn-border-radius: 10px;
+	--btn-success-bg-clr: var(--rhis-koraal);
+	--btn-danger-bg-clr: #C23434;
+
+	--input-clr: var(--rhis-ink);
+	--input-bg-clr: var(--rhis-raised);
+	--input-border-clr: var(--rhis-line);
+	--input-border-radius: 10px;
+	--input-focus-border-clr: var(--rhis-nacht);
+
+	/* TABLES */
+	--tr-hover-bg-clr: #EEF2F9;
+	--tr-odd-bg-clr: #F9FAFC;
+
+	/* TABS */
+	--tab-active-bg-clr: var(--rhis-raised);
+	--tab-hover-border-clr: var(--rhis-line);
+
+	--smDialogShrink: 20px;
+	--smMainShadow: 0 8px 30px rgba(20, 33, 61, .08);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		color-scheme: dark;
+		--rhis-raised: #1B2B4D;
+		--rhis-ink: #EEF2F9;
+		--rhis-muted: #A9B4CC;
+		--rhis-line: #2C3D63;
+		--rhis-accent-text: #FF8371;
+
+		--main-bg-color: #0F1930;
+		--panel-bg-clr: #16223F;
+		--message-list-toolbar-bg-color: #16223F;
+		--message-header-bg-clr: #16223F;
+		--dropdown-menu-hover-bg-color: #24365C;
+		--tr-hover-bg-clr: #22335A;
+		--tr-odd-bg-clr: #182544;
+		--info-bg-clr: #1F3158;
+		--info-clr: #DCE8FF;
+		--warning-bg-clr: #3A2E12;
+		--warning-clr: #FFD88A;
+		--error-bg-clr: #3D1C22;
+		--error-clr: #FFB3B3;
+		--loading-color: #EEF2F9;
+		--input-focus-border-clr: var(--rhis-lucht);
+		--login-box-shadow: 0 24px 60px rgba(0, 0, 0, .45);
+	}
+}
+
+html, body, input, textarea, select, button {
+	font-family: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Left column (folders, settings menu) on nacht, as in the panel. */
+#rl-left {
+	background-color: var(--rhis-nacht) !important;
+}
+
+/* Headings in the wide Archivo cut. */
+h1, h2, h3, legend, .legend {
+	font-stretch: 125%;
+	font-weight: 800;
+	letter-spacing: -.01em;
+}
+
+/* Main action ("Compose", "Sign in", "Send") in koraal, text in nacht. */
+.btn.buttonCompose,
+.btn.buttonLogin,
+.btn.button-send,
+.btn-success,
+.btn-primary {
+	background: var(--rhis-koraal) !important;
+	border-color: var(--rhis-koraal) !important;
+	color: var(--rhis-nacht) !important;
+	font-weight: 700;
+	text-shadow: none !important;
+	box-shadow: none !important;
+}
+.btn.buttonCompose:hover,
+.btn.buttonLogin:hover,
+.btn.button-send:hover,
+.btn-success:hover,
+.btn-primary:hover {
+	background: var(--rhis-koraal-hover) !important;
+}
+
+.btn {
+	text-shadow: none !important;
+	background-image: none !important;
+	transition: background-color .15s, border-color .15s;
+}
+
+/* Login: white logo above the form on nacht with a soft lucht glow. */
+body:has(#V-Login:not([hidden])) {
+	background:
+		radial-gradient(1200px 600px at 80% -10%, rgba(156, 195, 255, .25), transparent 60%),
+		#14213D !important;
+}
+.LoginView .descWrapper {
+	color: #FFFFFF !important;
+	font-stretch: 125%;
+	font-weight: 800;
+	font-size: 150%;
+}
+.LoginView .descWrapper::before {
+	content: "";
+	display: block;
+	width: 160px;
+	height: 44px;
+	margin: 0 auto 18px;
+	background: url("images/rhis-logo-wit.svg") center / contain no-repeat;
+}
+
+.messageListItem.selected,
+.messageListItem.focused {
+	box-shadow: inset 3px 0 0 var(--rhis-koraal);
+}
+
+:focus-visible {
+	outline: 3px solid var(--rhis-koraal);
+	outline-offset: 2px;
+}

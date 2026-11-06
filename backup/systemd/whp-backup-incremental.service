@@ -1,0 +1,10 @@
+[Unit]
+Description=Webhosting Panel incremental backup
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/whp-backup --quiet run --incremental --prune
+Nice=10
+IOSchedulingClass=idle
