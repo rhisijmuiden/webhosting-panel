@@ -144,6 +144,7 @@ class AppServiceProvider extends ServiceProvider
                 'crm-api' => $tools,
                 'system' => $tools + ['label' => 'Updates & release channel'],
                 'activity' => $tools + ['label' => 'Activity log'],
+                'server-management' => $tools,
             ],
         );
 

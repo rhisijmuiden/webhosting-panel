@@ -211,6 +211,12 @@ Git deployments (`git.py`, screens in `packages/git`, `Rhis\Git\`, admin `/admin
 public webhook `POST /git/webhook/<uuid>`): `git.key`, `git.check`, `git.fetch`, `git.status`,
 `git.rollback`, `git.remove`, `git.tools` and the job `git.deploy`. See `docs/git.md`.
 
+Server management (`server.py`, screens in `packages/server-admin`, `Rhis\ServerAdmin\`, admin `/admin/server`):
+`server.status`, `server.updates`, `server.upgrade`, `server.apt_status`, `server.auto_updates`,
+`server.reboot`, `server.reboot_cancel`, `server.health`, `server.security_scan`, `server.db_optimize`,
+`server.cleanup`, `server.php_versions`, `server.php_install`, `server.php_remove`. No shutdown action.
+See `docs/server-management.md`.
+
 ## Release channels
 
 | Channel | Git branch |
