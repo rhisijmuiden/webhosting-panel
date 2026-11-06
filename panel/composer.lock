@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "198fff745f1a9e0db1ab43bee40388fc",
+    "content-hash": "347671406b5c330bc169b6f787a55584",
     "packages": [
         {
             "name": "brick/math",
@@ -3579,6 +3579,39 @@
                 "proprietary"
             ],
             "description": "Server migration for the Webhosting Panel: move websites, databases, mailboxes, certificates and DNS from a Plesk server.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/monitoring",
+            "version": "dev-claude/project-thread-32u16i",
+            "dist": {
+                "type": "path",
+                "url": "../packages/monitoring",
+                "reference": "051721181e7cd82d08cd63be4d2b2975fdc9c7dc"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Monitoring\\MonitoringServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Monitoring\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Monitoring and alerts for the Webhosting Panel: uptime checks per website, certificates, disks, services and load, alerts by mail and Microsoft Teams, and a status page for customers.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8997,6 +9030,7 @@
         "rhis/files": 20,
         "rhis/git": 20,
         "rhis/migration": 20,
+        "rhis/monitoring": 20,
         "rhis/reports": 20,
         "rhis/security": 20,
         "rhis/server-admin": 20,

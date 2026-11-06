@@ -132,7 +132,7 @@ class AppServiceProvider extends ServiceProvider
                 'tools' => ['section' => 'Server management', 'order' => 300],
                 'security-overview' => ['section' => 'Server management', 'order' => 310, 'label' => 'Security center'],
                 'statistics' => ['section' => 'Server management', 'order' => 320],
-                'services' => ['section' => 'Server management', 'order' => 330, 'label' => 'Monitoring'],
+                'monitoring' => ['section' => 'Server management', 'order' => 330],
                 'backups' => ['section' => 'Server management', 'order' => 340],
                 // Reached through Tools & settings; the menu marks that item active.
                 'security' => $tools + ['label' => 'Attack blocking'],
@@ -146,6 +146,7 @@ class AppServiceProvider extends ServiceProvider
                 'system' => $tools + ['label' => 'Updates & release channel'],
                 'activity' => $tools + ['label' => 'Activity log'],
                 'server-management' => $tools,
+                'services' => $tools,
             ],
         );
 
@@ -160,6 +161,7 @@ class AppServiceProvider extends ServiceProvider
                 'webapps' => ['section' => 'Websites', 'order' => 127],
                 'security-alerts' => ['section' => 'Websites', 'order' => 130, 'label' => 'Security'],
                 'protection' => ['section' => 'Websites', 'order' => 135, 'label' => 'Login protection'],
+                'status' => ['section' => 'Websites', 'order' => 140],
                 'mail' => ['section' => 'Email & domains', 'order' => 200],
                 'domain-aliases' => ['section' => 'Email & domains', 'order' => 210],
                 'files' => ['section' => 'Files & data', 'order' => 290],

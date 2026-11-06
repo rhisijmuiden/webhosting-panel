@@ -223,6 +223,11 @@ client `/webapps`): `runtime.list`, `runtime.install` (job), `runtime.remove`, `
 `whp-site proxy <domain> <port>|off` serves a whole site from an app. Git deployments call
 `webapps.prepare_deploy()` before a release goes live. See `docs/webapps.md`.
 
+Monitoring (`monitor.py`, screens in `packages/monitoring`, `Rhis\Monitoring\`, admin `/admin/monitoring`,
+client `/uptime`, public `/status`): `monitor.check` (read only) returns per website the HTTP answer and the
+certificate it serves (SNI on 127.0.0.1:443: days left, issuer, host match), real disks with inode use,
+service states, memory, load and the Postfix queue. See `docs/monitoring.md`.
+
 ## Release channels
 
 | Channel | Git branch |

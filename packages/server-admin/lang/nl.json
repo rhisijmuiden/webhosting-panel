@@ -313,5 +313,6 @@
     "Debian updates, security patches with CVE scores and a safe reboot": "Debian-updates, beveiligingspatches met CVE-scores en een veilige herstart",
     "Nightly updates, automatic reboots, critical CVEs and PHP end of life": "Nachtelijke updates, automatische herstarts, kritieke CVE's en PHP einde ondersteuning",
     "Database optimize, cleanup and health checks": "Databases optimaliseren, opruimen en controles",
-    "Support dates, moving websites and installing or removing versions": "Ondersteuningsdata, websites overzetten en versies installeren of verwijderen"
+    "Support dates, moving websites and installing or removing versions": "Ondersteuningsdata, websites overzetten en versies installeren of verwijderen",
+    "Alerts are sent by Monitoring.": "Meldingen worden verstuurd door Monitoring."
 }
