@@ -89,7 +89,7 @@ class ClientOneDriveBackupTest extends TestCase
         $res->assertRedirect(route('client.backups.locations.show', $target->id));
         $this->assertSame(['onedrive', 'b!drive123', 'business', 'jan@klant.nl', null], [$target->type, $target->drive_id, $target->drive_type, $target->account, $target->host]);
         $this->assertSame('RT2', json_decode($target->onedrive_token, true)['refresh_token'], 'the renewed token from the test is kept');
-        $this->assertStringNotContainsString('RT', (string) \DB::table('client_backup_targets')->value('onedrive_token'));
+        $this->assertStringNotContainsString('refresh_token', (string) \DB::table('client_backup_targets')->value('onedrive_token'));
 
         $call = collect($this->agent()->calls)->firstWhere('action', 'client_backup.target_test');
         $sent = $call['params']['target'];
