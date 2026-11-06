@@ -28,9 +28,9 @@ class DomainAliasesTest extends TestCase
     private function customer(array $package = []): array
     {
         $plan = HostingPackage::create(array_merge(['name' => 'Basic', 'disk_mb' => 5000, 'max_websites' => 1], $package));
-        $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@klant.nl', 'hosting_package_id' => $plan->id]);
+        $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@klant.nl']);
         $user = User::factory()->create(['customer_id' => $customer->id]);
-        $site = $customer->websites()->create(['domain' => 'klant.nl', 'status' => 'active', 'php_version' => '8.4', 'aliases' => ['www.klant.nl']]);
+        $site = $this->withPackage($customer->websites()->create(['domain' => 'klant.nl', 'status' => 'active', 'php_version' => '8.4', 'aliases' => ['www.klant.nl']]), $plan);
 
         return [$customer, $user, $site];
     }
@@ -77,7 +77,7 @@ class DomainAliasesTest extends TestCase
         }
         $this->assertSame(0, DomainAlias::count());
 
-        $customer->package->forceFill(['crm_limits' => json_encode(['domain_aliases' => 1])])->save();
+        $site->package->forceFill(['crm_limits' => json_encode(['domain_aliases' => 1])])->save();
         $this->addAlias($user, $site)->assertSessionHasNoErrors();
         $this->addAlias($user, $site, ['domain' => 'klant.de'])->assertSessionHasErrors('domain');
         $this->addAlias($user, $site, ['domain' => 'klant.be'])->assertSessionHasErrors('domain');
@@ -145,19 +145,22 @@ class DomainAliasesTest extends TestCase
         $this->actingAs($stranger)->get("/domain-aliases/{$alias->id}/convert")->assertNotFound();
     }
 
-    public function test_convert_directly_when_the_package_has_room(): void
+    public function test_only_the_admin_converts_directly_into_a_new_subscription(): void
     {
         [, $user, $site] = $this->customer(['max_websites' => 3]);
         MailDomain::where('domain', 'klant.nl')->firstOrFail()->mailboxes()->create(['local_part' => 'info', 'password_hash' => Mailbox::hashPassword('een-lang-wachtwoord')]);
         $this->addAlias($user, $site, ['www' => '0']);
         $alias = DomainAlias::sole();
 
-        $this->actingAs($user)->get("/domain-aliases/{$alias->id}/convert")->assertOk()->assertSee(__('Convert now'));
-        $this->actingAs($user)->post("/domain-aliases/{$alias->id}/convert", ['confirm' => 'wrong'])->assertSessionHasErrors('confirm');
-        $res = $this->actingAs($user)->post("/domain-aliases/{$alias->id}/convert", ['confirm' => 'klant.be']);
+        // A website of its own is a new subscription: the customer orders it, the admin converts.
+        $this->actingAs($user)->get("/domain-aliases/{$alias->id}/convert")->assertOk()->assertDontSee(__('Convert now'));
+        $this->actingAs($user)->post("/domain-aliases/{$alias->id}/convert", ['confirm' => 'klant.be'])->assertForbidden();
+        $this->actingAsAdmin();
+        $this->post("/admin/domain-aliases/{$alias->id}/convert", ['confirm' => 'wrong'])->assertSessionHasErrors('confirm');
+        $this->post("/admin/domain-aliases/{$alias->id}/convert", ['confirm' => 'klant.be'])->assertRedirect();
 
         $new = Website::where('domain', 'klant.be')->firstOrFail();
-        $res->assertRedirect(route('client.websites.show', $new));
+        $this->assertSame($site->package->id, $new->package?->id, 'same package as the website the alias came from');
         $this->assertSame(0, DomainAlias::count());
         $this->assertSame(['domain' => 'klant.nl', 'alias' => 'klant.be', 'keep_cert' => true], collect($this->agent()->calls)->firstWhere('action', 'site.alias_remove')['params']);
         $add = collect($this->agent()->calls)->where('action', 'site.add')->last()['params'];

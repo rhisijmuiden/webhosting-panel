@@ -25,7 +25,7 @@ class WebsiteController extends Controller
     public function show(Request $request, Website $website): View
     {
         $this->authorizeSite($request, $website);
-        $website->loadMissing('customer.package');
+        $website->loadMissing('customer', 'subscription.package');
         $overview = new SiteOverview($website);
 
         return view('client.websites.show', ['o' => $overview, 'tab' => $overview->tab(is_string($t = $request->query('tab')) ? $t : null)]);

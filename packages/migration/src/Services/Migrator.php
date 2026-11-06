@@ -6,6 +6,7 @@ namespace Rhis\Migration\Services;
 
 use App\Models\ActivityLog;
 use App\Models\Customer;
+use App\Models\HostingPackage;
 use App\Models\SiteDatabase;
 use App\Models\Website;
 use App\Services\Agent\AgentClient;
@@ -116,12 +117,19 @@ final class Migrator
             if ($website === null) {
                 // Before the website exists: the mail domain keeps DNS untouched until the switch.
                 $this->mailDomain($item, $customer);
-                $website = Website::create([
+                // Plesk subscriptions map 1:1: the service plan becomes the package (by name),
+                // with the setup and expiry date of the Plesk subscription.
+                $package = $this->package($item);
+                $website = new Website([
                     'customer_id' => $customer->id, 'domain' => $item->domain, 'aliases' => $plan['aliases'],
                     'profile' => $plan['profile'], 'php_version' => $plan['php'],
                     'page_cache' => $plan['profile'] !== 'laravel', 'ssl_status' => 'off', 'status' => 'provisioning',
-                    'disk_quota_mb' => $customer->package?->disk_mb,
+                    'disk_quota_mb' => $package?->disk_mb,
                 ]);
+                $website->initialPackageId = $package?->id;
+                $website->save();
+                $this->subscriptionDates($item, $website);
+                $item->log('Subscription: package :package.', ['package' => $package?->name ?? __('No package')]);
             }
             $item->website()->associate($website);
             $item->save();
@@ -163,7 +171,7 @@ final class Migrator
                 'domain' => $website->domain, 'php' => $website->php_version, 'profile' => $website->profile,
                 'aliases' => array_values(array_filter($plan['aliases'], fn ($a) => $a !== $website->domain)),
                 'no_alias' => $plan['aliases'] === [], 'docroot' => $plan['docroot'], 'cache' => $website->page_cache,
-                'ssl' => false, 'quota_mb' => $website->disk_quota_mb, 'customer_id' => $customer->id,
+                'ssl' => false, 'quota_mb' => $website->disk_quota_mb, 'subscription_id' => $website->subscription?->id,
             ], fn ($v) => $v !== null);
             try {
                 $site = $this->agent->call('site.add', $params, 840);
@@ -376,6 +384,54 @@ final class Migrator
             'status' => 'active',
             'notes' => __('Migrated from :host.', ['host' => $item->source->hostname ?: $item->source->host]),
         ]);
+    }
+
+    /**
+     * The package for the Plesk service plan of this domain's subscription: the package
+     * with the same name, or a new one with that name (unlimited until the admin sets
+     * limits). No plan (custom subscription): no package.
+     */
+    private function package(MigrationItem $item): ?HostingPackage
+    {
+        $name = trim((string) ($item->source_data['plan'] ?? ''));
+        if ($name === '') {
+            return null;
+        }
+        $package = HostingPackage::whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+        if ($package) {
+            return $package;
+        }
+        $source = $item->source?->hostname ?: $item->source?->host;
+        ActivityLog::record('package.created', $name, ['via' => 'migration', 'source' => $source]);
+
+        return HostingPackage::create([
+            'name' => $name,
+            'description' => __('Service plan :plan from :host. All limits are unlimited: set them on this package.', ['plan' => $name, 'host' => $source]),
+            'is_active' => true,
+        ]);
+    }
+
+    /** Setup date and expiry date of the Plesk subscription. */
+    private function subscriptionDates(MigrationItem $item, Website $website): void
+    {
+        $subscription = $website->subscription;
+        if (! $subscription) {
+            return;
+        }
+        $created = self::date($item->source_data['created'] ?? null);
+        $expires = self::date($item->source_data['expires'] ?? null);
+        if ($created) {
+            $subscription->created_at = $created.' 00:00:00';
+        }
+        if ($expires) {
+            $subscription->expires_on = $expires;
+        }
+        $subscription->save();
+    }
+
+    private static function date(mixed $value): ?string
+    {
+        return is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : null;
     }
 
     private function mailDomain(MigrationItem $item, Customer $customer): void

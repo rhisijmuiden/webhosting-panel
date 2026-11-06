@@ -2,7 +2,6 @@
     $hour = (int) now()->setTimezone(config('app.timezone'))->format('G');
     $greeting = $hour < 12 ? __('Good morning') : ($hour < 18 ? __('Good afternoon') : __('Good evening'));
     $firstName = \Illuminate\Support\Str::before(auth()->user()->name, ' ');
-    $pkg = $customer->package;
     $security = (class_exists(\Rhis\Vulnerabilities\Risk::class) && \Illuminate\Support\Facades\Route::has('client.vulns.index'))
         ? rescue(fn () => \Rhis\Vulnerabilities\Risk::totals($customer->id), null, false) : null;
     $open = $security['total'] ?? 0;
@@ -15,7 +14,7 @@
     <section class="hello">
         <svg class="hello-waves" viewBox="0 0 260 200" aria-hidden="true"><path d="M60 120a90 90 0 0 1 140 0M20 80a150 150 0 0 1 220 0" /></svg>
         <div class="hello-text">
-            <p class="hello-eyebrow">{{ now()->setTimezone(config('app.timezone'))->isoFormat('dddd D MMMM') }} · {{ $customer->displayName() }}@if ($pkg) · {{ __('Package :name', ['name' => $pkg->name]) }}@endif</p>
+            <p class="hello-eyebrow">{{ now()->setTimezone(config('app.timezone'))->isoFormat('dddd D MMMM') }} · {{ $customer->displayName() }}</p>
             <h1>{{ $greeting }}, {{ $firstName }}</h1>
             <p>
                 @if ($offline === 0 && $open === 0)
@@ -79,14 +78,17 @@
 
     <section class="bento">
         <div class="card span-4">
-            <div class="card-head"><h2>{{ $pkg ? __('Package :name', ['name' => $pkg->name]) : __('Package') }}</h2></div>
+            <div class="card-head"><h2>{{ __('Subscriptions') }}</h2></div>
             <div class="usage">
-                <div><span>{{ __('Websites') }}</span><strong>{{ $customer->websites->count() }}@if ($pkg) / {{ $pkg->limitLabel('max_websites') }}@endif</strong></div>
-                @if ($pkg?->max_websites)<x-ui.meter label="" :percent="$customer->websites->count() / $pkg->max_websites * 100" />@endif
-                <div><span>{{ __('Disk space') }}</span><strong>{{ \Illuminate\Support\Number::fileSize($customer->diskUsedMb() * 1024 * 1024) }}@if ($pkg?->disk_mb) / {{ $pkg->limitLabel('disk_mb') }}@endif</strong></div>
-                @if ($pkg?->disk_mb)<x-ui.meter label="" :percent="$customer->diskUsedMb() / $pkg->disk_mb * 100" />@endif
-                <div><span>{{ __('Data traffic this month') }}</span><strong>{{ \Illuminate\Support\Number::fileSize($customer->trafficBytes(), 1) }}@if ($pkg?->traffic_gb_month) / {{ $pkg->limitLabel('traffic_gb_month') }}@endif</strong></div>
-                @if ($pkg?->traffic_gb_month)<x-ui.meter label="" :percent="$customer->trafficPercent()" />@endif
+                @forelse ($customer->websites as $site)
+                    @php $sub = $site->subscription; $pkg = $sub?->package; @endphp
+                    <div><span>{{ $site->domain }} <small class="muted">{{ $pkg?->name ?? __('No package') }}</small></span>
+                        <strong>{{ \Illuminate\Support\Number::fileSize($site->disk_used_mb * 1024 * 1024) }}@if ($pkg?->disk_mb) / {{ $pkg->limitLabel('disk_mb') }}@endif</strong></div>
+                    @if ($sub?->diskPercent() !== null)<x-ui.meter label="" :percent="$sub->diskPercent()" />@endif
+                @empty
+                    <p class="small muted">{{ __('No subscriptions yet.') }}</p>
+                @endforelse
+                <div><span>{{ __('Data traffic this month') }}</span><strong>{{ \Illuminate\Support\Number::fileSize($customer->trafficBytes(), 1) }}</strong></div>
             </div>
             @if (\Illuminate\Support\Facades\Route::has('client.shop.index'))
                 <x-ui.button size="sm" :href="route('client.shop.index')" style="align-self:flex-start">{{ __('More space? Upgrade your package') }}</x-ui.button>

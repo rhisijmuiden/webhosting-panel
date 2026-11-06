@@ -35,8 +35,8 @@ class FilesTest extends TestCase
     private function client(bool $ssh = false): array
     {
         $package = HostingPackage::create(['name' => $ssh ? 'Pro' : 'Basis', 'allow_ssh' => $ssh]);
-        $customer = Customer::create(['name' => 'Klant', 'email' => 'info@klant.nl', 'hosting_package_id' => $package->id]);
-        $site = Website::create(['customer_id' => $customer->id, 'domain' => 'klant.nl', 'status' => 'active', 'system_user' => 's_klant_nl']);
+        $customer = Customer::create(['name' => 'Klant', 'email' => 'info@klant.nl']);
+        $site = $this->withPackage(Website::create(['customer_id' => $customer->id, 'domain' => 'klant.nl', 'status' => 'active', 'system_user' => 's_klant_nl']), $package);
         $user = User::factory()->create(['customer_id' => $customer->id]);
 
         return [$user, $site, $customer];
@@ -187,7 +187,7 @@ class FilesTest extends TestCase
         $this->actingAs($user)->get("/files/{$site->id}/terminal")->assertNotFound();
         $this->actingAs($user)->post("/files/{$site->id}/terminal")->assertNotFound();
 
-        $site->customer->package->update(['allow_ssh' => true]);
+        $site->package->update(['allow_ssh' => true]);
         $user = $user->fresh();
         $token = str_repeat('ab', 16);
         $this->agent()->respond('terminal.start', ['token' => $token, 'path' => "/terminal/{$token}/", 'expires_in' => 3600]);

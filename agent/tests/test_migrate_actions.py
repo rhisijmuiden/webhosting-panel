@@ -42,6 +42,9 @@ ROWS = {
     ],
     "certificates": [["10", "Lets Encrypt bakkerij.test", "cert-AbC123", "cert-CA1"]],
     "ips": [["203.0.113.5"], ["2001:db8::5"]],
+    # Plan row plus an add-on plan row (no 'domain' template: empty name); expiry 2030-01-01.
+    "subscriptions": [["10", "", "2017-04-28 10:00:00", "1893456000"], ["10", "Webhosting M", "2017-04-28 10:00:00", "1893456000"],
+                      ["12", "", "0000-00-00", "-1"]],
 }
 
 
@@ -68,6 +71,13 @@ class InventoryTest(unittest.TestCase):
         self.assertFalse(self.by["oud.test"]["active"])
         self.assertEqual([o["login"] for o in self.inv["owners"]], ["admin", "bakkerij"])
         self.assertEqual(main["aliases"], [{"name": "bakkerij-bakker.test", "web": True, "mail": False}])
+
+    def test_subscription_plan_and_dates(self):
+        main, api, old = self.by["bakkerij.test"], self.by["api.bakkerij.test"], self.by["oud.test"]
+        self.assertEqual((main["plan"], main["created"], main["expires"]), ("Webhosting M", "2017-04-28", "2030-01-01"))
+        # A domain inside the webspace has the plan and dates of its subscription.
+        self.assertEqual((api["plan"], api["created"], api["expires"]), ("Webhosting M", "2017-04-28", "2030-01-01"))
+        self.assertEqual((old["plan"], old["created"], old["expires"]), (None, None, None))
 
     def test_databases_and_mail(self):
         main = self.by["bakkerij.test"]
