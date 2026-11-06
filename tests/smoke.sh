@@ -123,6 +123,12 @@ if [[ -f /opt/webhosting-panel/panel/artisan ]]; then
   check "panel queue worker active" systemctl is-active --quiet whp-queue.service
   check "agent active" systemctl is-active --quiet whp-agent.service
 
+  echo "== security scan"
+  AC="python3 $(dirname "$0")/agent_call.py"
+  check "server posture (apt, sshd, services)" bash -c "$AC posture.get | jq -e '(.services | has(\"nftables\")) and .updates.total != null and .ssh.root_login != null'"
+  check "malware report of a site" bash -c "$AC malware.report '{\"domain\":\"site.test\"}' | jq -e '.scanned_at != null'"
+  check "vulnerability match refuses a bad slug" bash -c "! $AC vuln.match '{\"source\":\"wpvulnerability\",\"items\":[{\"type\":\"plugin\",\"slug\":\"../x\",\"version\":\"1\"}]}'"
+
   echo "== app installer"
   # One request to the agent over its socket; prints the data, fails on an error.
   agent() {
