@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Rhis\Security;
 
+use App\Auth\TrustedNetworks;
 use App\Models\Website;
 use App\Services\Agent\AgentClient;
 use App\Services\Agent\AgentException;
 use App\Services\Settings;
 use Rhis\Security\Models\SiteProtection;
+use Symfony\Component\HttpFoundation\IpUtils;
 
 /**
  * The login protection settings, and pushing them to the server.
@@ -16,8 +18,12 @@ use Rhis\Security\Models\SiteProtection;
  * Settings live in the panel (admin thresholds and allowlist in Settings,
  * per-site choices in site_protections). Every change sends the complete set
  * to the agent (security.apply), which writes the CrowdSec configuration.
+ *
+ * The admin allowlist is the list of trusted IP addresses: they are never
+ * blocked (CrowdSec and nftables) and admins logging in from them skip the
+ * two-factor code.
  */
-final class LoginProtection
+final class LoginProtection implements TrustedNetworks
 {
     public const SERVICES = ['ssh', 'mail', 'panel', 'wordpress'];
 
@@ -59,6 +65,16 @@ final class LoginProtection
     public function allowlist(): array
     {
         return array_values(json_decode((string) $this->settings->get(self::KEY_ALLOWLIST, '[]'), true) ?: []);
+    }
+
+    public function contains(string $ip): bool
+    {
+        if (! filter_var($ip, FILTER_VALIDATE_IP)) {
+            return false;
+        }
+        $networks = array_column($this->allowlist(), 'address');
+
+        return $networks !== [] && IpUtils::checkIp($ip, $networks);
     }
 
     public function saveServices(array $services, int $permanentDays): void

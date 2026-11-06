@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Auth\NoTrustedNetworks;
+use App\Auth\TrustedNetworks;
 use App\Models\User;
 use App\Services\Agent\AgentClient;
 use App\Services\Agent\FakeAgentClient;
@@ -22,6 +24,8 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(Settings::class);
+        // rhis/security binds the real list; bindIf keeps whichever comes first.
+        $this->app->bindIf(TrustedNetworks::class, NoTrustedNetworks::class);
 
         $this->app->singleton(AgentClient::class, function () {
             return config('panel.agent_driver') === 'fake'

@@ -20,6 +20,7 @@ class ActivityLog extends Model
     public const LABELS = [
         'auth.login' => 'Logged in',
         'auth.logout' => 'Logged out',
+        'auth.two_factor_skipped' => 'Two-factor code skipped (trusted IP address)',
         'profile.updated' => 'Profile updated',
         'profile.password_changed' => 'Password changed',
         'profile.two_factor_enabled' => 'Two-factor authentication turned on',

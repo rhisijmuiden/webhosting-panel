@@ -280,6 +280,10 @@ PY
   check "agent applies allowlists and per-site settings (crowdsec -t passes)" agent_call security.apply \
     '{"allowlist":[{"address":"198.51.100.0/24","comment":"ci"}],"sites":[{"domain":"site.test","allowlist":["203.0.113.52"]},{"domain":"off.test","enabled":false,"wordpress":false}]}'
   check "an invalid setting is refused" bash -c '! agent_call security.apply "{\"services\":{\"ssh\":{\"temp_after\":9,\"perm_after\":3}}}"'
+  if nft list table inet whp >/dev/null 2>&1; then
+    check "trusted addresses skip the nftables block sets" bash -c 'nft list set inet whp trusted_v4 | grep -q "198.51.100.0/24" && nft list chain inet whp input | grep -q "@trusted_v4 tcp dport @tcp_open accept"'
+    check "nftables still loads after a full reload" bash -c 'nft -c -f /etc/nftables.conf && systemctl reload nftables && [[ $(nft list chain inet whp input | grep -c trusted_v4) == 2 ]]'
+  fi
   sleep 5  # CrowdSec reloads its configuration
   for _ in 1 2 3 4 5 6; do
     printf '%s %s whp-panel[1]: auth_failed ip=203.0.113.50 user=ci@example.test\n' "$(now_iso)" "$HOST" >>"$AUTH_LOG"

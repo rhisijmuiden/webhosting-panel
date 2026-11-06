@@ -33,6 +33,7 @@ class TwoFactorChallengeController extends Controller
         }
 
         $request->session()->put('two_factor_passed', true);
+        $request->session()->forget('two_factor_via');
         $request->session()->regenerate();
 
         return redirect()->intended(route('home'));
