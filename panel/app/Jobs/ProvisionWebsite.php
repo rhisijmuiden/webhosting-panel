@@ -49,6 +49,8 @@ class ProvisionWebsite implements ShouldQueue
                 'quota_mb' => $w->disk_quota_mb,
                 'customer_id' => $customer?->id,
                 'php_workers' => $php->workers($w),
+                // A subdomain shares the disk quota of its main website.
+                'parent' => $w->parent_id ? $w->parent?->domain : null,
             ], fn ($v) => $v !== null), 840);
             $w->fillFromAgent($site);
             try {

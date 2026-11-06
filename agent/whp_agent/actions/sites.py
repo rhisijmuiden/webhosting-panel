@@ -53,6 +53,12 @@ def site_add(params):
     workers = v.integer(params, "php_workers", required=False, minimum=1, maximum=999)
     if workers:
         argv += ["--workers", str(workers)]
+    # A subdomain (test.example.com) of the site example.com: shares its disk quota.
+    parent = v.domain(params, "parent", required=False)
+    if parent:
+        if not domain.endswith("." + parent):
+            raise ActionError("invalid_params", f"{domain} is not a subdomain of {parent}")
+        argv += ["--parent", parent]
     return _site(argv, timeout=600)
 
 

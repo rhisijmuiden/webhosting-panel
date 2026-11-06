@@ -16,6 +16,7 @@ use Rhis\DnsMail\Dns\SystemResolver;
 use Rhis\DnsMail\Http\CurlHttpClient;
 use Rhis\DnsMail\Http\HttpClient;
 use Rhis\DnsMail\Mail\MailServerSettings;
+use Rhis\DnsMail\Models\MailDomain;
 use Rhis\DnsMail\Services\DnsMailConfig;
 use Rhis\DnsMail\Services\DomainProvisioner;
 use Throwable;
@@ -61,6 +62,15 @@ final class DnsMailServiceProvider extends ServiceProvider
         // New website: create its mail domain, DKIM key and DNS right away.
         Website::created(function (Website $site): void {
             try {
+                // A subdomain is no mail domain of its own: its web records go into the main domain's zone.
+                if ($site->getAttribute('parent_id')) {
+                    $main = MailDomain::where('website_id', $site->getAttribute('parent_id'))->first();
+                    if ($main !== null) {
+                        $this->app->make(DomainProvisioner::class)->afterChange($main);
+                    }
+
+                    return;
+                }
                 $this->app->make(DomainProvisioner::class)->forWebsite($site);
             } catch (Throwable $e) {
                 report($e);

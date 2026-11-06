@@ -4,7 +4,11 @@
 # The panel agent calls this tool; it can also be used by hand.
 #
 #   whp-site add <domain> [--php 8.4] [--alias www.<domain>] [--profile php|wordpress|laravel]
-#                         [--docroot public] [--no-cache] [--no-ssl] [--json]
+#                         [--docroot public] [--no-cache] [--no-ssl] [--parent <domain>] [--json]
+#                                    (--parent: a subdomain like test.example.com of the site
+#                                     example.com: own user, PHP pool, vhost and certificate,
+#                                     but it shares the disk quota of its parent site)
+#   whp-site subdomains <domain>     (the subdomain sites of a site, one per line)
 #   whp-site php <domain> <version>
 #   whp-site cache <domain> on|off|purge
 #   whp-site ssl <domain> | --pending
@@ -70,12 +74,22 @@ default_php() { local v; v=$(installed_php | grep -x 8.4 || installed_php | tail
 site_file() { printf '%s/%s.env' "$SITES_DB" "$1"; }
 site_exists() { [[ -f $(site_file "$1") ]]; }
 
+# Subdomain sites of a site (their SITE_PARENT is the site), one domain per line.
+site_children() {
+  local f
+  for f in "$SITES_DB"/*.env; do
+    [[ -e $f ]] || continue
+    [[ $(env_get "$f" SITE_PARENT || true) == "$1" ]] && env_get "$f" SITE_DOMAIN
+  done
+  return 0
+}
+
 site_load() {
   local f
   f=$(site_file "$1")
   [[ -f $f ]] || die "$(t site_missing "$1")"
   local k
-  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED SITE_OWNER SITE_PHP_INI SITE_PM_MAX; do
+  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED SITE_OWNER SITE_PHP_INI SITE_PM_MAX SITE_PARENT; do
     printf -v "$k" '%s' "$(env_get "$f" "$k" || true)"
   done
   SITE_ROOT=$WHP_VHOSTS/$SITE_DOMAIN
@@ -85,7 +99,7 @@ site_save() {
   local f k
   f=$(site_file "$SITE_DOMAIN")
   [[ -f $f ]] || install -m 0640 /dev/null "$f"
-  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED SITE_OWNER SITE_PHP_INI SITE_PM_MAX; do
+  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED SITE_OWNER SITE_PHP_INI SITE_PM_MAX SITE_PARENT; do
     env_set "$f" "$k" "${!k}"
   done
 }
@@ -539,6 +553,7 @@ print_site() {
     --argjson domain_aliases "$(print_aliases "$1")" \
     --arg owner "${SITE_OWNER:-}" --arg slice "$(site_slice)" --arg cgroup "$(site_cgroup)" \
     --arg php_ini "${SITE_PHP_INI:-}" --argjson workers "${SITE_PM_MAX:-10}" \
+    --arg parent "${SITE_PARENT:-}" --arg children "$(site_children "$1" | xargs)" \
     --argjson used "$(du -sm --one-file-system "$SITE_ROOT" 2>/dev/null | cut -f1 || echo 0)" \
     '{domain:$domain, user:$user, php:$php, aliases:($aliases|split(",")|map(select(length>0))), domain_aliases:$domain_aliases,
       cache:($cache=="on"), suspended:($suspended=="yes"), profile:$profile, root:$root, docroot:$docroot, ssl:$ssl,
@@ -546,6 +561,7 @@ print_site() {
       owner:(if $owner == "" then null else $owner end), slice:$slice, cgroup:$cgroup,
       php_ini:([$php_ini|split(";")[]|select(contains("="))|{key:(split("=")[0]), value:(split("=")[1:]|join("="))}]|from_entries),
       php_workers:$workers,
+      parent:(if $parent == "" then null else $parent end), subdomains:($children|split(" ")|map(select(length>0))),
       disk:{used_mb:$used, quota_mb:$quota, enforced:($qmode!="none" and $quota>0), mode:$qmode},
       resources:($res + {cpu_limit:$cpu_limit, memory_limit:$mem_limit})}'
 }
@@ -573,7 +589,7 @@ cmd_add() {
 
   SITE_DOMAIN=$domain SITE_PHP=$(default_php) SITE_ALIASES='' SITE_CACHE=on SITE_PROFILE=php
   SITE_DOCROOT_REL='' SITE_SSL=$WHP_LETSENCRYPT_DEFAULT SITE_QUOTA_MB=0 SITE_CPU='' SITE_MEM='' SITE_SUSPENDED=no
-  SITE_OWNER='' SITE_PHP_INI='' SITE_PM_MAX=10
+  SITE_OWNER='' SITE_PHP_INI='' SITE_PM_MAX=10 SITE_PARENT=''
   local alias_set=no
   while (($#)); do
     case $1 in
@@ -587,6 +603,7 @@ cmd_add() {
       --quota) SITE_QUOTA_MB=$2; shift ;;
       --owner) valid_owner "$2" || die "--owner: c<customer id>, e.g. c12"; SITE_OWNER=$2; shift ;;
       --workers) [[ $2 =~ ^[1-9][0-9]{0,2}$ ]] || die "--workers: 1-999"; SITE_PM_MAX=$2; shift ;;
+      --parent) SITE_PARENT=${2,,}; shift ;;
       --json) JSON=yes ;;
       *) usage ;;
     esac
@@ -594,6 +611,16 @@ cmd_add() {
   done
   [[ -x /usr/sbin/php-fpm$SITE_PHP ]] || die "$(t bad_php "$SITE_PHP" "$(installed_php | xargs)")"
   case $SITE_PROFILE in php|wordpress|laravel) ;; *) die "profile: php|wordpress|laravel" ;; esac
+  if [[ -n $SITE_PARENT ]]; then
+    # One level below the parent (test.example.com), and the parent is a main site.
+    site_exists "$SITE_PARENT" || die "$(t site_missing "$SITE_PARENT")"
+    [[ $domain == *."$SITE_PARENT" && ${domain%."$SITE_PARENT"} =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] \
+      || die "$domain is not a subdomain of $SITE_PARENT"
+    [[ -z $(env_get "$(site_file "$SITE_PARENT")" SITE_PARENT || true) ]] || die "$SITE_PARENT is itself a subdomain"
+    # The disk quota is the parent's: the subdomain's files count towards it.
+    SITE_QUOTA_MB=0
+    [[ $alias_set == no ]] && alias_set=yes
+  fi
   [[ $alias_set == no && $domain != www.* ]] && SITE_ALIASES="www.$domain"
   if [[ -z $SITE_DOCROOT_REL ]]; then
     # Laravel: the repository goes in app/, Nginx serves app/public.
@@ -639,7 +666,7 @@ cmd_add() {
     site_save
     [[ $SITE_SSL == active ]] && site_apply
   fi
-  (( SITE_QUOTA_MB > 0 )) && quota_apply
+  if [[ -n $SITE_PARENT ]]; then quota_apply; elif (( SITE_QUOTA_MB > 0 )); then quota_apply; fi
   [[ -n $SITE_OWNER ]] && user_slice_write
   trap - EXIT
   if [[ $JSON == yes ]]; then print_site "$domain"; else ok "$(t site_added "$domain" "$SITE_PHP")"; fi
@@ -835,11 +862,33 @@ cmd_phpini() {
 }
 
 # Project quota: project id = uid of the site user, applied to the site tree.
+# A subdomain site gets the project id of its parent, so its files count towards
+# the parent's limit (one quota for the domain and all its subdomains).
+quota_tag() {
+  local mode=$1 id=$2 dir=$3 mnt
+  mnt=$(findmnt -n -o TARGET --target "$dir")
+  case $mode in
+    ext4) chattr -R +P -p "$id" "$dir" ;;
+    xfs) xfs_quota -x -c "project -s -p $dir $id" "$mnt" >/dev/null ;;
+  esac
+}
+
 quota_apply() {
-  local mode id mnt
+  local mode id mnt child
   mode=$(quota_mode "$SITE_ROOT")
+  if [[ -n ${SITE_PARENT:-} ]]; then
+    [[ $mode == none ]] && return 0
+    id=$(id -u "$(env_get "$(site_file "$SITE_PARENT")" SITE_USER)")
+    quota_tag "$mode" "$id" "$SITE_ROOT"
+    return 0
+  fi
   id=$(id -u "$SITE_USER")
   mnt=$(findmnt -n -o TARGET --target "$SITE_ROOT")
+  if [[ $mode != none ]]; then
+    while read -r child; do
+      [[ -n $child && -d $WHP_VHOSTS/$child ]] && quota_tag "$mode" "$id" "$WHP_VHOSTS/$child"
+    done < <(site_children "$SITE_DOMAIN")
+  fi
   case $mode in
     ext4)
       chattr -R +P -p "$id" "$SITE_ROOT"
@@ -856,6 +905,7 @@ cmd_quota() {
   local domain=${1:-} mb=${2:-}
   [[ -n $domain && $mb =~ ^[0-9]+$ ]] || usage
   site_load "$domain"
+  [[ -z $SITE_PARENT ]] || die "$domain is a subdomain: it shares the disk quota of $SITE_PARENT"
   SITE_QUOTA_MB=$mb
   site_save
   quota_apply
@@ -985,6 +1035,13 @@ cmd_suspend() {
     fi
   fi
   if [[ $want == yes ]]; then ok "$(t site_suspended "$domain")"; else ok "$(t site_unsuspended "$domain")"; fi
+  # Subdomains follow their main site.
+  local child
+  if [[ -z ${SITE_PARENT:-} ]]; then
+    while read -r child; do
+      [[ -n $child ]] && ( JSON=no cmd_suspend "$child" "$want" ) >/dev/null 3>&1
+    done < <(site_children "$domain")
+  fi
   if [[ $JSON == yes ]]; then print_site "$domain"; fi
 }
 
@@ -1010,6 +1067,9 @@ cmd_remove() {
   [[ -n $domain ]] || usage
   [[ " $* " == *" --keep-files "* ]] && keep=yes
   site_load "$domain"
+  local children
+  children=$(site_children "$domain" | xargs)
+  [[ -z $children ]] || die "$domain still has subdomains ($children): remove those first"
   rm -f "/etc/nginx/sites-enabled/whp-$domain.conf" "/etc/nginx/sites-available/whp-$domain.conf"
   rm -rf "/etc/nginx/whp/sites/$domain"
   nginx -t >>"$WHP_INSTALL_LOG" 2>&1 && systemctl reload nginx
@@ -1069,5 +1129,6 @@ case $cmd in
   list) cmd_list "$@" ;;
   show) print_site "${1:-}" ;;
   alias) cmd_alias "$@" ;;
+  subdomains) [[ -n ${1:-} ]] || usage; site_load "$1"; site_children "$1" >&3 ;;
   *) usage ;;
 esac
