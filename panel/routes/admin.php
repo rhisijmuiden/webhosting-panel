@@ -11,10 +11,12 @@ Route::post('customers/{customer}/traffic-unsuspend', [Admin\CustomerController:
 Route::delete('customers/{customer}/users/{user}', [Admin\CustomerController::class, 'destroyUser'])->name('customers.users.destroy');
 
 Route::resource('packages', Admin\PackageController::class)->except('show');
+Route::post('packages/{package}/duplicate', [Admin\PackageController::class, 'duplicate'])->name('packages.duplicate');
 
 Route::get('websites', [Admin\WebsiteController::class, 'index'])->name('websites.index');
 Route::get('websites/create', [Admin\WebsiteController::class, 'create'])->name('websites.create');
 Route::post('websites', [Admin\WebsiteController::class, 'store'])->name('websites.store');
+Route::post('websites/bulk', Admin\WebsiteBulkController::class)->name('websites.bulk');
 Route::get('websites/{website}', [Admin\WebsiteController::class, 'show'])->name('websites.show');
 Route::put('websites/{website}', [Admin\WebsiteController::class, 'update'])->name('websites.update');
 Route::put('websites/{website}/php', [Admin\WebsiteController::class, 'php'])->name('websites.php');
@@ -52,3 +54,5 @@ Route::get('php/extensions/search', [Admin\PhpController::class, 'search'])->nam
 Route::post('php/extensions', [Admin\PhpController::class, 'install'])->name('php.extensions.install');
 Route::delete('php/extensions', [Admin\PhpController::class, 'remove'])->name('php.extensions.remove');
 Route::post('php/extensions/toggle', [Admin\PhpController::class, 'toggle'])->name('php.extensions.toggle');
+
+Route::get('tools', [Admin\ToolsController::class, 'index'])->name('tools.index');
