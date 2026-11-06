@@ -14,6 +14,7 @@
 @endphp
 <div class="app" x-data="{ nav: false }" @keydown.escape.window="nav = false">
     <aside class="sidebar" :class="{ open: nav }" id="sidebar">
+        <button type="button" class="btn icon-btn sidebar-close" @click="nav = false" aria-label="{{ __('Close menu') }}"><x-icon name="close" /></button>
         <a class="brand" href="{{ route('home') }}">
             <img src="{{ asset('brand/rhis-logo-wit.svg') }}" alt="{{ config('app.name') }}">
             <span>{{ $product }}</span>
@@ -98,8 +99,8 @@
             @if ($isAdmin)
                 <span @class(['channel-pill', 'is-test' => $channel === 'test']) title="{{ __('Release channel') }}"><span class="dot"></span>{{ $channel === 'test' ? __('Test') : __('Production') }}</span>
             @endif
-            @include('partials.locale-switch')
-            <button type="button" class="btn icon-btn" @click="$store.theme.set($store.theme.isDark() ? 'light' : 'dark')" :aria-label="$store.theme.isDark() ? @js(__('Light')) : @js(__('Dark'))">
+            <div class="topbar-desk">@include('partials.locale-switch')</div>
+            <button type="button" class="btn icon-btn topbar-desk" @click="$store.theme.set($store.theme.isDark() ? 'light' : 'dark')" :aria-label="$store.theme.isDark() ? @js(__('Light')) : @js(__('Dark'))">
                 <x-icon name="moon" x-show="!$store.theme.isDark()" /><x-icon name="sun" x-show="$store.theme.isDark()" x-cloak />
             </button>
             <div class="dropdown" x-data="{ open: false }" @click.outside="open = false">
@@ -114,6 +115,13 @@
                     <button type="button" @click="$store.theme.set('light')"><x-icon name="sun" />{{ __('Light') }}</button>
                     <button type="button" @click="$store.theme.set('dark')"><x-icon name="moon" />{{ __('Dark') }}</button>
                     <button type="button" @click="$store.theme.set('system')"><x-icon name="settings" />{{ __('Follow system') }}</button>
+                    @if (count(\App\Support\Locales::available()) > 1)
+                        <div class="sep m-only"></div>
+                        @foreach (\App\Support\Locales::available() as $code => $name)
+                            <form method="POST" action="{{ route('locale.switch') }}" class="m-only">@csrf<input type="hidden" name="locale" value="{{ $code }}">
+                                <button type="submit" @if ($code === app()->getLocale()) aria-current="true" @endif><x-icon name="language" />{{ $name }}@if ($code === app()->getLocale())<x-icon name="check" style="margin-left:auto" />@endif</button></form>
+                        @endforeach
+                    @endif
                     <div class="sep"></div>
                     <form method="POST" action="{{ route('logout') }}">@csrf<button type="submit"><x-icon name="logout" />{{ __('Log out') }}</button></form>
                 </div>
@@ -143,4 +151,5 @@
             {{ $slot }}
         </main>
     </div>
+    @include('partials.mobile-tabbar')
 </div>
