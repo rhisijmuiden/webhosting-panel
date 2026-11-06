@@ -220,13 +220,22 @@ PY
   check "Piwigo gallery answers" bash -c "curl -s -L -H 'Host: apps.test' http://127.0.0.1/photos/ | grep -qi piwigo"
   check "Piwigo database config is private and not served" bash -c "[[ \$(stat -c %a /var/www/vhosts/apps.test/public/photos/local/config/database.inc.php) == 600 && \$(code apps.test /photos/local/config/database.inc.php) == 404 ]]"
   check "install MediaWiki (nl) in /wiki" agent_job apps.install "$(app_params apps.test mediawiki wiki nl)"
-  check "MediaWiki main page answers" bash -c "curl -s -L -H 'Host: apps.test' 'http://127.0.0.1/wiki/index.php' | grep -qi 'mediawiki'"
+  # MediaWiki redirects to its main page with an absolute URL: resolve the site name to this server.
+  check "MediaWiki main page answers" bash -c "curl -s -L --resolve apps.test:80:127.0.0.1 'http://apps.test/wiki/index.php' | grep -qi 'mediawiki'"
   check "MediaWiki LocalSettings.php is private, maintenance is closed" bash -c "[[ \$(stat -c %a /var/www/vhosts/apps.test/public/wiki/LocalSettings.php) == 600 && \$(code apps.test /wiki/maintenance/run.php) == 404 ]]"
   check "install DokuWiki (nl, no database) in /docs" agent_job apps.install "$(app_params apps.test dokuwiki docs nl)"
   check "DokuWiki answers" bash -c "curl -s -L -H 'Host: apps.test' 'http://127.0.0.1/docs/doku.php' | grep -qi dokuwiki"
   check "DokuWiki data and conf are not served, install.php is gone" bash -c "[[ \$(code apps.test /docs/conf/users.auth.php) == 404 && \$(code apps.test /docs/data/pages/wiki/dokuwiki.txt) == 404 ]] && test ! -e /var/www/vhosts/apps.test/public/docs/install.php"
   check "DokuWiki admin password hash verifies" bash -c "php8.4 -r '\$l = preg_grep(\"/^smoke:/\", file(\"/var/www/vhosts/apps.test/public/docs/conf/users.auth.php\")); exit(password_verify(\"Smoke-test-pass-123\", explode(\":\", reset(\$l))[1]) ? 0 : 1);'"
   check "install phpBB in /forum" agent_job apps.install "$(app_params apps.test phpbb forum en)"
+  if ! test -e /var/www/vhosts/apps.test/public/forum/config.php; then
+    curl -s https://version.phpbb.com/phpbb/versions.json | head -c 1500; echo
+    for u in "https://download.phpbb.com/pub/release/3.3/" "https://download.phpbb.com/pub/release/3.3/3.3.19/" \
+             "https://download.phpbb.com/pub/release/3.3/3.3.19/phpBB-3.3.19.zip.sha256"; do
+      echo "$u: $(curl -s -o /dev/null -w '%{http_code}' "$u") / UA: $(curl -s -o /dev/null -w '%{http_code}' -A webhosting-panel-app-installer "$u")"
+    done
+    curl -s "https://download.phpbb.com/pub/release/3.3/3.3.19/" | grep -o 'href="[^"]*"' | head -20
+  fi
   check "phpBB board answers" bash -c "curl -s -L -H 'Host: apps.test' http://127.0.0.1/forum/ | grep -qi phpbb"
   check "phpBB installer is gone, config.php is closed" bash -c "test ! -e /var/www/vhosts/apps.test/public/forum/install && [[ \$(code apps.test /forum/config.php) == 404 ]]"
   check "install FreshRSS (nl) in /rss" agent_job apps.install "$(app_params apps.test freshrss rss nl)"
