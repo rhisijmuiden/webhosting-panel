@@ -204,6 +204,7 @@ final class MigrationController extends Controller
 
         return view('migration::admin.item', [
             'item' => $item->load('source', 'customer', 'website.databases'), 'job' => $job, 'agentErrors' => $errors,
+            'log' => $item->logView($job),
             'secrets' => $item->secrets ?? [], 'serverIp' => $this->serverIp(),
         ]);
     }
@@ -232,6 +233,7 @@ final class MigrationController extends Controller
         if ($item->website?->status === 'active' && $item->copied_at !== null) {
             $this->migrator->startTransfer($item, 'sync');
         } else {
+            $item->log('Tried again.');
             $item->update(['status' => 'queued', 'error' => null]);
             $this->migrator->tick();
         }
@@ -263,6 +265,7 @@ final class MigrationController extends Controller
         if (! in_array($item->status, ['live', 'copied'], true)) {
             return back();
         }
+        $item->log('Marked as finished.', [], 'ok');
         $item->update(['status' => 'done', 'secrets' => null]);
         ActivityLog::record('migration.finished', $item->domain, customerId: $item->customer_id);
 

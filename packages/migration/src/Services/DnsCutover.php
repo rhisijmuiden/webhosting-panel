@@ -80,6 +80,7 @@ final class DnsCutover
         } catch (Throwable) {
         }
 
+        $item->log('DNS switched to this server.', [], 'ok');
         $item->update(['status' => 'live', 'cutover_at' => now(), 'result' => ($item->result ?? []) + ['dns' => $result]]);
         ActivityLog::record('migration.dns_switched', $item->domain, ['mode' => $result['mode'], 'imported' => $result['imported']], $item->customer_id);
 

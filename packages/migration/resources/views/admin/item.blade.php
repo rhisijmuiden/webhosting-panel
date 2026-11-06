@@ -52,12 +52,16 @@
     @endif
     @foreach ($item->noteTexts() as $n)<div class="alert alert-info"><x-icon name="info" />{{ $n }}</div>@endforeach
 
-    @if ($job)
-        <x-ui.card :title="$kindLabel[$item->job_kind] ?? __('Copying')">
-            <p><x-ui.pill status="warn">{{ __('Running') }}</x-ui.pill> <span class="muted small">{{ __('This page refreshes by itself. You can close it; the copy continues on the server.') }}</span></p>
-            @if (! empty($job['log']))<div class="log">{{ implode("\n", array_slice($job['log'], -40)) }}</div>@endif
-        </x-ui.card>
-    @endif
+    @php $p = $item->progress($job); @endphp
+    <x-ui.card :title="$job ? ($kindLabel[$item->job_kind] ?? __('Copying')) : __('Progress')">
+        <div class="mig-progress">
+            <span class="mig-bar-line" role="progressbar" aria-label="{{ __('Progress') }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $p['percent'] }}"><span @class(['bad' => $item->status === 'failed', 'ok' => in_array($item->status, ['live', 'done'], true)]) style="width: {{ $p['percent'] }}%"></span></span>
+            <p class="small"><strong>{{ $p['percent'] }}%</strong> · {{ $p['step'] }}@if ($job) <span class="muted">· {{ __('This page refreshes by itself. You can close it; the copy continues on the server.') }}</span>@endif</p>
+        </div>
+        @include('migration::admin.partials.log', ['log' => $log])
+        <p class="small muted">{{ __('Lines from the server agent are shown in grey.') }} <a href="{{ route('admin.migration.status', ['item' => $item->id]) }}">{{ __('All migrations') }}</a></p>
+    </x-ui.card>
+    <script>document.querySelectorAll('[data-mig-log]').forEach(el => el.scrollTop = el.scrollHeight);</script>
 
     <section class="grid grid-2" style="align-items:start">
         <x-ui.card :title="__('What is migrated')">
