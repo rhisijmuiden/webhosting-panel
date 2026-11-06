@@ -240,4 +240,23 @@ class DnsOnboardingTest extends TestCase
         $this->get('/admin/settings/dns-mail')->assertOk()->assertSee('Account ID');
         $this->post('/admin/settings/dns-mail/test')->assertSessionHas('status')->assertSessionHas('warnings', []);
     }
+
+    public function test_token_test_explains_failures_and_accepts_account_tokens(): void
+    {
+        $this->actingAsAdmin();
+        $settings = $this->app->make(Settings::class);
+
+        $settings->set('dnsmail.cloudflare_token', 'bad', encrypted: true);
+        $this->post('/admin/settings/dns-mail/test')->assertSessionHasErrors('cloudflare_token');
+
+        // Account API token: the user endpoint says "Invalid API Token", the account endpoint accepts it.
+        $settings->set('dnsmail.cloudflare_token', 'acct', encrypted: true);
+        $this->post('/admin/settings/dns-mail/test')->assertSessionHasNoErrors()->assertSessionHas('status');
+        $settings->set('dnsmail.cloudflare_account_id', str_repeat('a', 32));
+        $this->post('/admin/settings/dns-mail/test')->assertSessionHasNoErrors()->assertSessionHas('status', fn ($s) => str_contains($s, 'account API token'));
+
+        // The Global API Key is refused when saving, with a clear message.
+        $this->put('/admin/settings/dns-mail', ['mail_host' => 'mail.rhis.nl', 'cloudflare_token' => str_repeat('a1', 18) . 'f'])
+            ->assertSessionHasErrors(['cloudflare_token' => 'This looks like the Global API Key. The panel needs an API token: Cloudflare > My Profile > API Tokens > Create Token.']);
+    }
 }

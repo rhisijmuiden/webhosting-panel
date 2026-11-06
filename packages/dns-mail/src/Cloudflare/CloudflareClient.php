@@ -26,12 +26,34 @@ final class CloudflareClient
     ) {
     }
 
-    /** @return array{id: string, status: string} */
-    public function verifyToken(): array
+    /**
+     * Check the token. User tokens (My Profile > API Tokens) are verified at
+     * /user/tokens/verify; account tokens (Manage Account > Account API
+     * Tokens) only at /accounts/{id}/tokens/verify and get "1000: Invalid
+     * API Token" from the user endpoint. With an account ID both are tried.
+     *
+     * @return array{id: string, status: string, kind: string}
+     */
+    public function verifyToken(?string $accountId = null): array
     {
-        $result = $this->call('GET', '/user/tokens/verify');
+        try {
+            $result = $this->call('GET', '/user/tokens/verify');
+            $kind = 'user';
+        } catch (CloudflareException $e) {
+            if ($accountId === null || $accountId === '' || !$e->hasCode(1000)) {
+                throw $e;
+            }
+            $result = $this->call('GET', '/accounts/' . rawurlencode($accountId) . '/tokens/verify');
+            $kind = 'account';
+        }
 
-        return ['id' => (string) ($result['id'] ?? ''), 'status' => (string) ($result['status'] ?? '')];
+        return ['id' => (string) ($result['id'] ?? ''), 'status' => (string) ($result['status'] ?? ''), 'kind' => $kind];
+    }
+
+    /** A Global API Key (37 hex characters) pasted where a token belongs. */
+    public static function looksLikeGlobalKey(string $value): bool
+    {
+        return (bool) preg_match('/^[a-f0-9]{37}$/i', trim($value));
     }
 
     /** @return list<array{id: string, name: string, status: string}> */
