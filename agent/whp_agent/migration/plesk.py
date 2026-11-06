@@ -2,8 +2,10 @@
 
 Everything is read from the psa database with the Plesk admin password in
 /etc/psa/.psa.shadow, so it works on every Plesk for Linux without the API.
-Every query is run on its own: if a column does not exist on an old Plesk,
-that part becomes a warning and the rest of the inventory still works.
+The columns that differ between Plesk versions are looked up in
+information_schema first and left out when missing. Every query is run on its
+own: if one still fails, it is retried without the optional columns, and only
+then becomes a warning, so the rest of the inventory always works.
 
 The inventory format is source independent (see docs/migration.md), so the
 panel can show and migrate a DirectAdmin or cPanel inventory the same way.
@@ -25,29 +27,69 @@ MAIL_AUTH_VIEW = "/usr/local/psa/admin/bin/mail_auth_view"
 _MYSQL = 'MYSQL_PWD="$(cat /etc/psa/.psa.shadow)" "$(command -v mysql || command -v mariadb)" -uadmin -N -B --default-character-set=utf8mb4'
 _DUMP = 'MYSQL_PWD="$(cat /etc/psa/.psa.shadow)" "$(command -v mysqldump || command -v mariadb-dump)" -uadmin'
 
+# Columns that differ between Plesk versions are written as {alias.column:default}.
+# render_query() turns them into IFNULL(alias.column, default) when the column
+# exists on the source, and into the default when it does not, so one schema
+# change on a newer or older Plesk does not break a whole part of the inventory.
 QUERIES = {
     "domains": (
-        "SELECT d.id, d.name, d.parentDomainId, d.webspace_id, d.htype, d.status, IFNULL(d.real_size,0), d.cl_id,"
-        " IFNULL(h.www_root,''), IFNULL(h.php_handler_id,''), IFNULL(su.login,''), IFNULL(d.dns_zone_id,0)"
+        "SELECT d.id, d.name, {d.parentDomainId:0}, {d.webspace_id:0}, d.htype, {d.status:0}, {d.real_size:0}, d.cl_id,"
+        " IFNULL(h.www_root,''), {h.php_handler_id:''}, IFNULL(su.login,''), {d.dns_zone_id:0}"
         " FROM domains d LEFT JOIN hosting h ON h.dom_id=d.id LEFT JOIN sys_users su ON su.id=h.sys_user_id ORDER BY d.name"
     ),
-    "clients": "SELECT id, login, type, IFNULL(pname,''), IFNULL(cname,''), IFNULL(email,''), IFNULL(phone,'') FROM clients",
-    "aliases": "SELECT dom_id, name, IFNULL(web,'true'), IFNULL(mail,'false') FROM domain_aliases",
+    "clients": (
+        "SELECT clients.id, clients.login, {clients.type:'client'}, {clients.pname:''}, {clients.cname:''},"
+        " {clients.email:''}, {clients.phone:''} FROM clients"
+    ),
+    "aliases": "SELECT domain_aliases.dom_id, domain_aliases.name, {domain_aliases.web:'true'}, {domain_aliases.mail:'false'} FROM domain_aliases",
     "databases": (
-        "SELECT db.id, db.name, db.type, db.dom_id, IFNULL(s.host,'localhost'), IFNULL(s.port,'')"
+        "SELECT db.id, db.name, {db.type:'mysql'}, db.dom_id, IFNULL(s.host,'localhost'), IFNULL(s.port,'')"
         " FROM data_bases db LEFT JOIN DatabaseServers s ON s.id=db.db_server_id"
     ),
     "db_users": "SELECT db_id, login FROM db_users",
+    # Newer Plesk dropped mail.redirect (forwards live only in mail_redir), older ones have redir_addr.
     "mail": (
-        "SELECT m.id, m.dom_id, m.mail_name, m.postbox, m.redirect, IFNULL(m.mbox_quota,-1), IFNULL(a.type,'')"
+        "SELECT m.id, m.dom_id, m.mail_name, {m.postbox:'true'}, {m.redirect:'auto'}, {m.mbox_quota:-1}, IFNULL(a.type,''), {m.redir_addr:''}"
         " FROM mail m LEFT JOIN accounts a ON a.id=m.account_id"
     ),
     "mail_redir": "SELECT mn_id, address FROM mail_redir",
     "mail_aliases": "SELECT mn_id, alias FROM mail_aliases",
-    "dns": "SELECT dns_zone_id, type, host, val, IFNULL(opt,'') FROM dns_recs",
-    "certificates": "SELECT h.dom_id, IFNULL(c.name,''), IFNULL(c.cert_file,''), IFNULL(c.ca_file,'') FROM hosting h JOIN certificates c ON c.id=h.certificate_id",
+    "dns": "SELECT dns_recs.dns_zone_id, dns_recs.type, dns_recs.host, dns_recs.val, {dns_recs.opt:''} FROM dns_recs",
+    "certificates": "SELECT h.dom_id, {c.name:''}, IFNULL(c.cert_file,''), {c.ca_file:''} FROM hosting h JOIN certificates c ON c.id=h.certificate_id",
     "ips": "SELECT ip_address FROM IP_Addresses",
 }
+
+# Table behind each alias used in QUERIES.
+ALIASES = {
+    "d": "domains", "h": "hosting", "su": "sys_users", "db": "data_bases", "s": "DatabaseServers",
+    "m": "mail", "a": "accounts", "c": "certificates",
+}
+
+_OPTIONAL = re.compile(r"\{(\w+)\.(\w+):([^}]*)\}")
+
+
+def render_query(query: str, columns: dict[str, set[str]] | None) -> str:
+    """Fill in the optional columns. Without schema information every column is assumed to exist."""
+    def sub(m: re.Match) -> str:
+        alias, column, default = m.group(1), m.group(2), m.group(3)
+        table = ALIASES.get(alias, alias).lower()
+        if columns is None or column.lower() in columns.get(table, set()):
+            return f"IFNULL({alias}.{column},{default})"
+        return default
+    return _OPTIONAL.sub(sub, query)
+
+
+def schema(conn: Connection) -> dict[str, set[str]] | None:
+    """Lower-cased columns per psa table, or None when information_schema cannot be read."""
+    try:
+        rows = sql(conn, "SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='psa'")
+    except ActionError:
+        return None
+    cols: dict[str, set[str]] = {}
+    for r in rows:
+        if len(r) >= 2:
+            cols.setdefault(r[0].lower(), set()).add(r[1].lower())
+    return cols or None
 
 DNS_TYPES = {"A", "AAAA", "CNAME", "MX", "TXT", "SRV", "CAA"}
 
@@ -228,9 +270,13 @@ def build_inventory(rows: dict[str, list[list[str]]], meta: dict, sizes: dict[st
         if len(r) < 7 or r[1] not in by_id:
             continue
         mid, dom_id, local, postbox, redirect, quota, pwtype = r[:7]
+        redir_addr = r[7].strip().lower() if len(r) > 7 else ""
         d = by_id[dom_id]
         local = local.lower()
-        fwd = redirects.get(mid, []) if redirect == "true" else []
+        # redirect is 'auto' when this Plesk has no mail.redirect column: then mail_redir alone decides.
+        fwd = list(redirects.get(mid, [])) if redirect in ("true", "auto") else []
+        if redirect in ("true", "auto") and redir_addr and redir_addr not in fwd:
+            fwd.append(redir_addr)
         if postbox == "true":
             quota_b = _int(quota, -1)
             box = {
@@ -285,9 +331,10 @@ def inventory(conn: Connection, log=lambda line: None) -> dict:
     log(f"Plesk {meta['version']} on {meta['hostname']}")
     rows: dict[str, list[list[str]]] = {}
     warnings = []
+    columns = schema(conn)
     for key, query in QUERIES.items():
         try:
-            rows[key] = sql(conn, query)
+            rows[key] = _query_with_fallback(conn, query, columns)
             log(f"{key}: {len(rows[key])} rows")
         except ActionError as exc:
             rows[key] = []
@@ -300,6 +347,16 @@ def inventory(conn: Connection, log=lambda line: None) -> dict:
     inv = build_inventory(rows, meta, sizes, apps)
     inv["warnings"] = warnings
     return inv
+
+
+def _query_with_fallback(conn: Connection, query: str, columns: dict[str, set[str]] | None) -> list[list[str]]:
+    try:
+        return sql(conn, render_query(query, columns))
+    except ActionError:
+        minimal = render_query(query, {})
+        if minimal == render_query(query, columns):
+            raise
+        return sql(conn, minimal)
 
 
 def mail_sizes(conn: Connection) -> dict[str, int]:
