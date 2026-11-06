@@ -1,0 +1,125 @@
+/* Phone layout and quick view. Kept apart from app.css so features do not collide. */
+
+/* Hidden on a desktop, shown on a phone */
+.tabbar, .sidebar-close, .m-only { display: none; }
+
+/* Quick view and shared list items (used on every screen size) */
+.quick { display: flex; flex-direction: column; gap: 18px; }
+.quick-home { display: flex; flex-direction: column; gap: 18px; }
+.quick-search { display: flex; align-items: center; gap: 10px; padding: 0 8px 0 16px; min-height: 56px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow); color: var(--ink-muted); }
+.quick-search:focus-within { border-color: var(--lucht); box-shadow: 0 0 0 3px color-mix(in srgb, var(--lucht) 35%, transparent); }
+.quick-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: 17px; }
+.quick-search input::-webkit-search-cancel-button { display: none; }
+.m-list { list-style: none; margin: 0; padding: 4px 0; }
+.m-list > li + li { border-top: 1px solid var(--line-soft); }
+.m-item { display: flex; align-items: center; gap: 12px; padding: 12px 18px; min-height: 64px; color: var(--ink); text-decoration: none; }
+.m-item:hover { background: var(--surface-sunken); text-decoration: none; }
+.m-item > .icon:last-child { width: 16px; height: 16px; color: var(--ink-muted); }
+.m-avatar { width: 40px; height: 40px; border-radius: 12px; flex: none; display: inline-flex; align-items: center; justify-content: center; background: var(--info-bg); color: var(--info-ink); font-weight: 800; font-size: 15px; }
+.m-avatar.is-website { background: var(--ok-bg); color: var(--ok-ink); }
+.m-avatar.is-bad { background: var(--bad-bg); color: var(--bad-ink); }
+.m-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.m-text strong { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-text small { color: var(--ink-muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--ink-muted); }
+.m-dot.is-active { background: var(--status-online, #2E9E6A); }
+.m-dot.is-suspended, .m-dot.is-failed { background: var(--status-offline); }
+.m-dot.is-provisioning, .m-dot.is-removing { background: var(--status-warning); }
+.m-empty { padding: 22px 18px; color: var(--ink-muted); font-size: 14px; }
+.m-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.m-stats .card { gap: 4px; padding: 14px 16px; color: inherit; text-decoration: none; }
+.m-stats .label { font-size: 12.5px; color: var(--ink-muted); }
+.m-stats strong { font-size: 26px; font-weight: 800; font-stretch: 125%; line-height: 1.1; }
+.m-stats strong.is-bad { color: var(--status-offline); }
+.m-actions, .quick-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.quick-actions form { display: contents; }
+.m-action { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer; text-align: left; }
+.m-action:hover { background: var(--surface-sunken); text-decoration: none; }
+.m-action .icon { color: var(--ink-muted); }
+.m-action.is-bad { color: var(--status-offline); }
+.m-action.is-bad .icon { color: var(--status-offline); }
+.m-action.is-ok { color: var(--ok-ink); background: var(--ok-bg); border-color: transparent; }
+.m-action.is-ok .icon { color: var(--ok-ink); }
+.login-actions { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.new-password .new-password-value { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.new-password code { font-size: 17px; letter-spacing: .06em; padding: 6px 10px; border-radius: 8px; background: var(--surface-raised); color: var(--ink); user-select: all; }
+
+/* Phone */
+@media (max-width: 760px) {
+  :root { --tabbar-h: 64px; }
+  body { -webkit-tap-highlight-color: transparent; }
+  .app { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
+
+  /* Top bar: page title, search, account. Menu, language and theme move to the tab bar and account menu. */
+  .topbar { padding: 10px 12px; padding-top: max(10px, env(safe-area-inset-top)); gap: 6px; }
+  .topbar .menu-toggle, .topbar-desk { display: none !important; }
+  .topbar-crumbs > span, .topbar-crumbs > .icon { display: none; }
+  .topbar-crumbs strong { font-size: 16px; }
+  .m-only { display: block; }
+  .dropdown-menu { position: fixed; left: 12px; right: 12px; top: auto; bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom)); max-height: 70vh; overflow-y: auto; }
+  .dropdown-menu a, .dropdown-menu button { min-height: 46px; font-size: 15px; }
+
+  /* Menu: full-height drawer with a close button */
+  .sidebar { width: min(320px, 86vw); padding-top: max(18px, env(safe-area-inset-top)); padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .sidebar-close { display: inline-flex; position: absolute; top: max(12px, env(safe-area-inset-top)); right: 10px; background: transparent; border-color: transparent; color: var(--side-muted); }
+  .sidebar-close:hover { background: rgba(255, 255, 255, .06); }
+  .nav a { min-height: 46px; font-size: 15px; }
+
+  /* Bottom tab bar */
+  .tabbar {
+    display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; position: fixed; left: 0; right: 0; bottom: 0; z-index: 35;
+    height: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding: 6px 6px env(safe-area-inset-bottom);
+    background: color-mix(in srgb, var(--surface-raised) 92%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid var(--line);
+  }
+  .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 0; background: none; color: var(--ink-muted); font: inherit; font-size: 11px; font-weight: 600; text-decoration: none; cursor: pointer; border-radius: 12px; }
+  .tab:hover { text-decoration: none; }
+  .tab-icon { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 30px; border-radius: 99px; }
+  .tab .icon { width: 22px; height: 22px; }
+  .tab.active { color: var(--ink); }
+  .tab.active .tab-icon { background: color-mix(in srgb, var(--lucht) 30%, transparent); }
+  .tab-main .tab-icon { width: 48px; height: 48px; margin-top: -20px; border-radius: 16px; background: var(--koraal); color: var(--nacht); box-shadow: 0 8px 18px -6px color-mix(in srgb, var(--koraal) 70%, transparent); }
+  .tab-main.active .tab-icon { background: var(--koraal); outline: 3px solid color-mix(in srgb, var(--koraal) 30%, transparent); }
+
+  /* Content: tighter, buttons full width where they head a page */
+  .content { padding: 16px 12px 28px; gap: 16px; }
+  h1 { font-size: 22px; }
+  .page-head { align-items: stretch; flex-direction: column; gap: 12px; }
+  .page-head > .actions { width: 100%; }
+  .page-head > .actions > .btn, .page-head > .actions > a.btn { flex: 1; }
+  .page-head > .actions > .search { flex-basis: 100%; }
+  .card { padding: 16px; border-radius: 16px; }
+  .card-flush { padding: 0; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .grid-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .grid-stats .stat .value { font-size: 22px !important; }
+  .input, .select, .textarea, .search input { font-size: 16px; } /* no zoom on focus in iOS */
+  .btn { min-height: 44px; }
+  .btn-sm { min-height: 38px; }
+  .row { flex-wrap: wrap; }
+  .kv { grid-template-columns: 1fr; gap: 2px; }
+  .kv dd { margin-bottom: 8px; }
+  dialog.modal { width: 100vw; max-width: 100vw; max-height: 92vh; margin: auto 0 0; border-radius: 20px 20px 0 0; }
+  dialog.palette { margin-top: max(12px, env(safe-area-inset-top)); }
+
+  /* Tables become a stack of cards: first cell is the title, the others "label  value" */
+  table.table:not(.table-keep) thead { display: none; }
+  table.table:not(.table-keep), table.table:not(.table-keep) tbody, table.table:not(.table-keep) tr, table.table:not(.table-keep) td { display: block; width: 100%; }
+  table.table:not(.table-keep) tr { padding: 12px 16px; border-bottom: 1px solid var(--line-soft); }
+  table.table:not(.table-keep) tr:last-child { border-bottom: 0; }
+  table.table:not(.table-keep) tbody tr:hover td { background: none; }
+  table.table:not(.table-keep) td { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 3px 0; border: 0; text-align: right; min-height: 0; }
+  table.table:not(.table-keep) td.num { text-align: right; }
+  table.table:not(.table-keep) td::before { content: attr(data-label); color: var(--ink-muted); font-size: 12.5px; font-weight: 600; text-align: left; flex: none; }
+  table.table:not(.table-keep) td:first-child { display: block; text-align: left; font-size: 15px; padding-bottom: 6px; }
+  table.table:not(.table-keep) td:first-child::before, table.table:not(.table-keep) td[data-label=""]::before { display: none; }
+  table.table:not(.table-keep) td[data-label=""] { justify-content: flex-end; }
+  table.table:not(.table-keep) td[colspan] { display: block; text-align: left; }
+  table.table:not(.table-keep) td:empty { display: none; }
+
+  .m-stats { gap: 8px; }
+  .m-stats .card { padding: 12px; }
+  .m-stats strong { font-size: 22px; }
+  .m-actions, .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .m-item { padding: 12px 14px; }
+}

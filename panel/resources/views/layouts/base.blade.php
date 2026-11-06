@@ -2,13 +2,15 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#14213D">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="robots" content="noindex, nofollow">
     <title>{{ $title ? $title.' · ' : '' }}{{ config('app.name') }}</title>
     <link rel="icon" href="{{ asset('brand/favicon.svg') }}" type="image/svg+xml">
     <link rel="alternate icon" href="{{ asset('favicon.ico') }}">
     <link rel="stylesheet" href="{{ asset('assets/app.css') }}?v={{ $assetVersion }}">
+    <link rel="stylesheet" href="{{ asset('assets/mobile.css') }}?v={{ $assetVersion }}">
     @foreach (\App\Support\PanelAssets::styles() as $style)
         <link rel="stylesheet" href="{{ $style }}">
     @endforeach
@@ -21,6 +23,7 @@
     @endphp
     <meta name="panel-i18n" content="{{ json_encode($panelI18n) }}">
     <script src="{{ asset('assets/app.js') }}?v={{ $assetVersion }}"></script>
+    <script src="{{ asset('assets/mobile.js') }}?v={{ $assetVersion }}"></script>
     <script src="{{ asset('assets/qrcode.js') }}?v={{ $assetVersion }}" defer></script>
     @foreach (\App\Support\PanelAssets::scripts() as $script)
         <script src="{{ $script }}" defer></script>
