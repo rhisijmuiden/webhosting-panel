@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ec0404704a59b8f57057b9c7ba45c851",
+    "content-hash": "ba123a18ed9de6946b6a38729c427d47",
     "packages": [
         {
             "name": "brick/math",
@@ -3307,7 +3307,7 @@
         },
         {
             "name": "rhis/apps",
-            "version": "dev-claude/project-thread-nqaa7a",
+            "version": "dev-claude/project-thread-6er7hu",
             "dist": {
                 "type": "path",
                 "url": "../packages/apps",
@@ -3340,7 +3340,7 @@
         },
         {
             "name": "rhis/backups",
-            "version": "dev-claude/project-thread-nqaa7a",
+            "version": "dev-claude/project-thread-6er7hu",
             "dist": {
                 "type": "path",
                 "url": "../packages/backups",
@@ -3373,7 +3373,7 @@
         },
         {
             "name": "rhis/crm-api",
-            "version": "dev-claude/project-thread-nqaa7a",
+            "version": "dev-claude/project-thread-6er7hu",
             "dist": {
                 "type": "path",
                 "url": "../packages/crm-api",
@@ -3406,7 +3406,7 @@
         },
         {
             "name": "rhis/dns-mail",
-            "version": "dev-claude/project-thread-nqaa7a",
+            "version": "dev-claude/project-thread-6er7hu",
             "dist": {
                 "type": "path",
                 "url": "../packages/dns-mail",
@@ -3454,7 +3454,7 @@
         },
         {
             "name": "rhis/domain-aliases",
-            "version": "dev-claude/project-thread-nqaa7a",
+            "version": "dev-claude/project-thread-6er7hu",
             "dist": {
                 "type": "path",
                 "url": "../packages/domain-aliases",
@@ -3487,7 +3487,7 @@
         },
         {
             "name": "rhis/migration",
-            "version": "dev-claude/project-thread-nqaa7a",
+            "version": "dev-claude/project-thread-6er7hu",
             "dist": {
                 "type": "path",
                 "url": "../packages/migration",
@@ -3519,8 +3519,41 @@
             }
         },
         {
+            "name": "rhis/vulnerabilities",
+            "version": "dev-claude/project-thread-6er7hu",
+            "dist": {
+                "type": "path",
+                "url": "../packages/vulnerabilities",
+                "reference": "7164b64eee34bd2b9a000a4209de7bec66dc24bb"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Vulnerabilities\\VulnerabilitiesServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Vulnerabilities\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Security alerts for the Webhosting Panel: vulnerable WordPress core, plugins and themes and malware found on customer sites, a branded mail to the customer with the fix, and the admin security overview with customer risk ranking.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "rhis/wordpress",
-            "version": "dev-claude/project-thread-nqaa7a",
+            "version": "dev-claude/project-thread-6er7hu",
             "dist": {
                 "type": "path",
                 "url": "../packages/wordpress",
@@ -8731,6 +8764,7 @@
         "rhis/dns-mail": 20,
         "rhis/domain-aliases": 20,
         "rhis/migration": 20,
+        "rhis/vulnerabilities": 20,
         "rhis/wordpress": 20
     },
     "prefer-stable": true,

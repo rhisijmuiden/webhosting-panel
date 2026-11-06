@@ -6,7 +6,7 @@ PartOf=whp-sites.target
 
 [Service]
 Type=notify
-Slice=whp-sites.slice
+Slice={{SITE_SLICE}}
 ExecStart=/usr/sbin/php-fpm{{SITE_PHP}} --nodaemonize --fpm-config /etc/webhosting-panel/php-fpm/{{SITE_ID}}.conf -d opcache.memory_consumption={{SITE_OPCACHE_MB}} -d opcache.jit_buffer_size=32M
 ExecReload=/bin/kill -USR2 $MAINPID
 Restart=on-failure

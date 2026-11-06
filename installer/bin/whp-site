@@ -14,7 +14,16 @@
 #   whp-site quota <domain> <MB>     (0 = unlimited; hard limit when the filesystem
 #                                     has project quotas, see docs/installer.md)
 #   whp-site limits <domain> [--cpu 200%] [--memory 1G]   (empty value removes the cap)
+#   whp-site owner <domain> <c12|->  (run the site in the customer's slice whp-sites-c12.slice)
+#   whp-site slice <c12> [--cpu 200%] [--memory 2048] [--io 50] [--tasks 512]
+#                                    (resource jail for all sites of one customer: CPU,
+#                                     memory in MB, disk IO in MB/s, processes; empty = no cap)
+#   whp-site phpini <domain> [--set memory_limit=256M]... [--reset] [--workers 10]
+#                                    (per-site php.ini values as php_admin_value, matching
+#                                     Nginx upload size and timeouts, PHP-FPM workers)
 #   whp-site suspend <domain> | unsuspend <domain>   (503 page, PHP stopped, SFTP/SSH login locked)
+#   whp-site refresh <domain>|--all  (write pool, unit and vhost again from the saved state,
+#                                     e.g. after an update of the templates)
 #   whp-site remove <domain> [--keep-files]
 #   whp-site list [--json]
 #   whp-site show <domain>
@@ -66,7 +75,7 @@ site_load() {
   f=$(site_file "$1")
   [[ -f $f ]] || die "$(t site_missing "$1")"
   local k
-  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED; do
+  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED SITE_OWNER SITE_PHP_INI SITE_PM_MAX; do
     printf -v "$k" '%s' "$(env_get "$f" "$k" || true)"
   done
   SITE_ROOT=$WHP_VHOSTS/$SITE_DOMAIN
@@ -76,7 +85,7 @@ site_save() {
   local f k
   f=$(site_file "$SITE_DOMAIN")
   [[ -f $f ]] || install -m 0640 /dev/null "$f"
-  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED; do
+  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED SITE_OWNER SITE_PHP_INI SITE_PM_MAX; do
     env_set "$f" "$k" "${!k}"
   done
 }
@@ -99,6 +108,72 @@ disable_functions_for() {
   esac
 }
 
+# Customer owner id (c<number>) of a site: its PHP runs in that customer's slice.
+valid_owner() { [[ $1 =~ ^c[0-9]{1,9}$ ]]; }
+site_slice() {
+  if [[ -n ${SITE_OWNER:-} ]]; then printf 'whp-sites-%s.slice' "$SITE_OWNER"; else printf 'whp-sites.slice'; fi
+}
+site_cgroup() {
+  local p=/sys/fs/cgroup/whp.slice/whp-sites.slice
+  [[ -n ${SITE_OWNER:-} ]] && p+="/whp-sites-$SITE_OWNER.slice"
+  printf '%s/whp-site-%s.service' "$p" "$SITE_ID"
+}
+
+# php.ini keys a site may set. They become php_admin_value, so a script cannot
+# raise them again with ini_set(). The panel keeps values below the server maximums.
+php_ini_valid() {
+  local k=$1 v=$2
+  case $k in
+    memory_limit|post_max_size|upload_max_filesize) [[ $v =~ ^[1-9][0-9]{0,5}M$ ]] ;;
+    max_execution_time|max_input_time) [[ $v =~ ^[0-9]{1,5}$ ]] ;;
+    max_input_vars) [[ $v =~ ^[1-9][0-9]{1,6}$ ]] ;;
+    display_errors) [[ $v =~ ^(on|off)$ ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+# Value of one key in SITE_PHP_INI ("key=value;key=value"), empty when not set.
+php_ini_get() {
+  local pairs=() pair
+  IFS=';' read -r -a pairs <<<"${SITE_PHP_INI:-}"
+  for pair in "${pairs[@]}"; do
+    if [[ ${pair%%=*} == "$1" ]]; then printf '%s' "${pair#*=}"; return 0; fi
+  done
+  return 0
+}
+
+# Pool lines, FPM timeout and the matching Nginx limits for the site's PHP settings.
+php_ini_render() {
+  local pairs=() pair k v
+  SITE_PHP_INI_LINES='; Per-site PHP settings (panel: PHP settings)'
+  IFS=';' read -r -a pairs <<<"${SITE_PHP_INI:-}"
+  for pair in "${pairs[@]}"; do
+    k=${pair%%=*}; v=${pair#*=}
+    php_ini_valid "$k" "$v" || continue
+    if [[ $k == display_errors ]]; then SITE_PHP_INI_LINES+=$'\n'"php_admin_flag[$k] = $v"
+    else SITE_PHP_INI_LINES+=$'\n'"php_admin_value[$k] = $v"; fi
+  done
+  local f=/etc/nginx/whp/sites/$SITE_DOMAIN/10-php-limits.conf
+  if [[ -z ${SITE_PHP_INI:-} ]]; then
+    SITE_TERMINATE_TIMEOUT=300s
+    rm -f "$f"
+    return 0
+  fi
+  local exec input t post up body
+  exec=$(php_ini_get max_execution_time); input=$(php_ini_get max_input_time)
+  exec=${exec:-120}; input=${input:-120}
+  t=$(( exec > input ? exec : input ))
+  # 0 means no PHP time limit: FPM still ends a hanging worker after an hour.
+  (( t == 0 )) && t=3600
+  SITE_TERMINATE_TIMEOUT="$(( t + 30 ))s"
+  post=$(php_ini_get post_max_size); up=$(php_ini_get upload_max_filesize)
+  post=${post%M}; up=${up%M}; post=${post:-128}; up=${up:-128}
+  body=$(( post > up ? post : up ))
+  install -d -m 0755 "/etc/nginx/whp/sites/$SITE_DOMAIN"
+  printf '# Managed by whp-site: follows the PHP settings of %s.\nclient_max_body_size %sm;\nfastcgi_read_timeout %ss;\n' \
+    "$SITE_DOMAIN" "$body" "$(( t + 30 ))" >"$f"
+}
+
 # Write the pool and vhost from the saved state and reload services.
 site_apply() {
   local old_php=${1:-}
@@ -108,6 +183,8 @@ site_apply() {
   SITE_PM_MAX=${SITE_PM_MAX:-10}
   SITE_OPCACHE_MB=${SITE_OPCACHE_MB:-128}
   SITE_DISABLE_FUNCTIONS=$(disable_functions_for "$SITE_PROFILE")
+  SITE_SLICE=$(site_slice)
+  php_ini_render
   SITE_SENDER="noreply@$SITE_DOMAIN"
   if [[ $SITE_CACHE == on ]]; then SITE_PHP_INCLUDE=php-cache.conf; else SITE_PHP_INCLUDE=php-nocache.conf; fi
 
@@ -459,11 +536,15 @@ print_site() {
     --arg cpu_limit "$SITE_CPU" --arg mem_limit "$SITE_MEM" \
     --arg suspended "${SITE_SUSPENDED:-no}" \
     --argjson domain_aliases "$(print_aliases "$1")" \
+    --arg owner "${SITE_OWNER:-}" --arg slice "$(site_slice)" --arg cgroup "$(site_cgroup)" \
+    --arg php_ini "${SITE_PHP_INI:-}" --argjson workers "${SITE_PM_MAX:-10}" \
     --argjson used "$(du -sm --one-file-system "$SITE_ROOT" 2>/dev/null | cut -f1 || echo 0)" \
     '{domain:$domain, user:$user, php:$php, aliases:($aliases|split(",")|map(select(length>0))), domain_aliases:$domain_aliases,
       cache:($cache=="on"), suspended:($suspended=="yes"), profile:$profile, root:$root, docroot:$docroot, ssl:$ssl,
       socket:$socket, created:$created, unit:$unit,
-      cgroup:("/sys/fs/cgroup/whp.slice/whp-sites.slice/" + $unit),
+      owner:(if $owner == "" then null else $owner end), slice:$slice, cgroup:$cgroup,
+      php_ini:([$php_ini|split(";")[]|select(contains("="))|{key:(split("=")[0]), value:(split("=")[1:]|join("="))}]|from_entries),
+      php_workers:$workers,
       disk:{used_mb:$used, quota_mb:$quota, enforced:($qmode!="none" and $quota>0), mode:$qmode},
       resources:($res + {cpu_limit:$cpu_limit, memory_limit:$mem_limit})}'
 }
@@ -479,6 +560,7 @@ cmd_add() {
 
   SITE_DOMAIN=$domain SITE_PHP=$(default_php) SITE_ALIASES='' SITE_CACHE=on SITE_PROFILE=php
   SITE_DOCROOT_REL='' SITE_SSL=$WHP_LETSENCRYPT_DEFAULT SITE_QUOTA_MB=0 SITE_CPU='' SITE_MEM='' SITE_SUSPENDED=no
+  SITE_OWNER='' SITE_PHP_INI='' SITE_PM_MAX=10
   local alias_set=no
   while (($#)); do
     case $1 in
@@ -490,6 +572,8 @@ cmd_add() {
       --no-cache) SITE_CACHE=off ;;
       --no-ssl) SITE_SSL=off ;;
       --quota) SITE_QUOTA_MB=$2; shift ;;
+      --owner) valid_owner "$2" || die "--owner: c<customer id>, e.g. c12"; SITE_OWNER=$2; shift ;;
+      --workers) [[ $2 =~ ^[1-9][0-9]{0,2}$ ]] || die "--workers: 1-999"; SITE_PM_MAX=$2; shift ;;
       --json) JSON=yes ;;
       *) usage ;;
     esac
@@ -539,6 +623,7 @@ cmd_add() {
     [[ $SITE_SSL == active ]] && site_apply
   fi
   (( SITE_QUOTA_MB > 0 )) && quota_apply
+  [[ -n $SITE_OWNER ]] && user_slice_write
   if [[ $JSON == yes ]]; then print_site "$domain"; else ok "$(t site_added "$domain" "$SITE_PHP")"; fi
 }
 
@@ -586,6 +671,148 @@ cmd_limits() {
   systemctl daemon-reload
   systemctl try-restart "whp-site-$SITE_ID"
   ok "$domain cpu ${SITE_CPU:-unlimited} memory ${SITE_MEM:-unlimited}"
+  if [[ $JSON == yes ]]; then print_site "$domain"; fi
+}
+
+# ---- Customer resource jail ------------------------------------------------
+# All websites of one customer run in whp-sites-<owner>.slice. Without caps the
+# slices share the server fairly (equal CPU and IO weight); with caps a customer
+# can never use more than its package allows, whatever its sites do.
+SLICES_DB=$WHP_STATE/slices
+
+slice_load() {
+  local f=$SLICES_DB/$1.env k
+  for k in SLICE_CPU SLICE_MEM SLICE_IO SLICE_TASKS; do
+    printf -v "$k" '%s' "$(env_get "$f" "$k" 2>/dev/null || true)"
+  done
+}
+
+# [Slice]/[Service] resource lines for the current SLICE_* values.
+slice_properties() {
+  echo "CPUWeight=100"
+  echo "IOWeight=100"
+  [[ -n $SLICE_CPU ]] && echo "CPUQuota=$SLICE_CPU"
+  if [[ -n $SLICE_MEM ]]; then
+    # Reclaim and slow down at 90 %, hard stop at 100 %.
+    echo "MemoryHigh=$(( SLICE_MEM * 9 / 10 ))M"
+    echo "MemoryMax=${SLICE_MEM}M"
+  fi
+  if [[ -n $SLICE_IO ]]; then
+    echo "IOReadBandwidthMax=$WHP_VHOSTS ${SLICE_IO}M"
+    echo "IOWriteBandwidthMax=$WHP_VHOSTS ${SLICE_IO}M"
+  fi
+  [[ -n $SLICE_TASKS ]] && echo "TasksMax=$SLICE_TASKS"
+  return 0
+}
+
+# SSH/SFTP sessions of a site user run in user-<uid>.slice (logind): give it the same caps.
+user_slice_write() {
+  local uid d
+  uid=$(id -u "$SITE_USER" 2>/dev/null) || return 0
+  d=/etc/systemd/system/user-$uid.slice.d
+  if [[ -z ${SITE_OWNER:-} ]]; then rm -rf "$d"; return 0; fi
+  slice_load "$SITE_OWNER"
+  install -d -m 0755 "$d"
+  { echo "# Managed by whp-site: same limits as customer $SITE_OWNER ($SITE_DOMAIN)"; echo "[Slice]"; slice_properties; } >"$d/50-whp.conf"
+}
+
+cmd_slice() {
+  local owner=${1:-}; shift || true
+  valid_owner "$owner" || usage
+  slice_load "$owner"
+  while (($#)); do
+    case $1 in
+      --cpu) [[ $2 =~ ^([1-9][0-9]{0,4}%)?$ ]] || die "--cpu: e.g. 200% (2 cores) or empty"; SLICE_CPU=$2; shift ;;
+      --memory) [[ $2 =~ ^([1-9][0-9]{1,7})?$ ]] || die "--memory: MB, e.g. 2048, or empty"; SLICE_MEM=$2; shift ;;
+      --io) [[ $2 =~ ^([1-9][0-9]{0,5})?$ ]] || die "--io: MB/s, e.g. 50, or empty"; SLICE_IO=$2; shift ;;
+      --tasks) [[ $2 =~ ^([1-9][0-9]{1,5})?$ ]] || die "--tasks: e.g. 512, or empty"; SLICE_TASKS=$2; shift ;;
+      --json) ;;
+      *) usage ;;
+    esac
+    shift
+  done
+  install -d -m 0750 "$SLICES_DB"
+  local f=$SLICES_DB/$owner.env k
+  for k in SLICE_CPU SLICE_MEM SLICE_IO SLICE_TASKS; do env_set "$f" "$k" "${!k}"; done
+  {
+    echo "# Managed by whp-site: resource limits for customer $owner (all its websites)."
+    echo "[Unit]"
+    echo "Description=Webhosting Panel customer $owner"
+    echo
+    echo "[Slice]"
+    slice_properties
+  } >"/etc/systemd/system/whp-sites-$owner.slice"
+  # Same caps for the SSH/SFTP sessions of the customer's site users.
+  local sf
+  for sf in "$SITES_DB"/*.env; do
+    [[ -e $sf ]] || continue
+    [[ $(env_get "$sf" SITE_OWNER || true) == "$owner" ]] || continue
+    ( site_load "$(env_get "$sf" SITE_DOMAIN)"; user_slice_write )
+  done
+  systemctl daemon-reload
+  # Apply to the running slice right away (an empty value removes the cap).
+  local props=(CPUQuota="$SLICE_CPU" TasksMax="${SLICE_TASKS:-infinity}")
+  if [[ -n $SLICE_MEM ]]; then props+=(MemoryHigh="$(( SLICE_MEM * 9 / 10 ))M" MemoryMax="${SLICE_MEM}M")
+  else props+=(MemoryHigh=infinity MemoryMax=infinity); fi
+  if [[ -n $SLICE_IO ]]; then props+=("IOReadBandwidthMax=$WHP_VHOSTS ${SLICE_IO}M" "IOWriteBandwidthMax=$WHP_VHOSTS ${SLICE_IO}M")
+  else props+=(IOReadBandwidthMax= IOWriteBandwidthMax=); fi
+  if systemctl is-active --quiet "whp-sites-$owner.slice"; then
+    systemctl set-property --runtime "whp-sites-$owner.slice" "${props[@]}" >>"$WHP_INSTALL_LOG" 2>&1 \
+      || warn "could not apply the limits of $owner to the running slice; they apply after the next restart"
+  fi
+  ok "$owner cpu ${SLICE_CPU:-unlimited}, memory ${SLICE_MEM:-unlimited} MB, io ${SLICE_IO:-unlimited} MB/s, tasks ${SLICE_TASKS:-unlimited}"
+  if [[ $JSON == yes ]]; then
+    jq -n >&3 --arg owner "$owner" --arg cpu "$SLICE_CPU" --arg mem "$SLICE_MEM" --arg io "$SLICE_IO" --arg tasks "$SLICE_TASKS" \
+      '{owner:$owner, slice:("whp-sites-" + $owner + ".slice"),
+        cpu:(if $cpu == "" then null else $cpu end), memory_mb:($mem|tonumber? // null),
+        io_mbps:($io|tonumber? // null), tasks:($tasks|tonumber? // null)}'
+  fi
+}
+
+cmd_owner() {
+  local domain=${1:-} owner=${2:-}
+  [[ -n $domain && -n $owner ]] || usage
+  [[ $owner == - ]] && owner=''
+  [[ -z $owner ]] || valid_owner "$owner" || die "owner: c<customer id>, e.g. c12, or -"
+  site_load "$domain"
+  if [[ ${SITE_OWNER:-} != "$owner" ]]; then
+    SITE_OWNER=$owner
+    site_save
+    # Moving a unit to another slice needs a restart (a few seconds, the socket stays).
+    SITE_RESTART=yes site_apply
+    user_slice_write
+  fi
+  ok "$domain runs in $(site_slice)"
+  if [[ $JSON == yes ]]; then print_site "$domain"; fi
+}
+
+cmd_phpini() {
+  local domain=${1:-}; shift || true
+  [[ -n $domain ]] || usage
+  site_load "$domain"
+  local reset=no sets=() kv
+  while (($#)); do
+    case $1 in
+      --set) kv=${2:-}; php_ini_valid "${kv%%=*}" "${kv#*=}" || die "invalid PHP setting: $kv"; sets+=("$kv"); shift ;;
+      --reset) reset=yes ;;
+      --workers) [[ $2 =~ ^[1-9][0-9]{0,2}$ ]] || die "--workers: 1-999"; SITE_PM_MAX=$2; shift ;;
+      --json) ;;
+      *) usage ;;
+    esac
+    shift
+  done
+  [[ $reset == yes ]] && SITE_PHP_INI=''
+  local k pairs=() pair out=''
+  for kv in "${sets[@]}"; do
+    k=${kv%%=*}
+    IFS=';' read -r -a pairs <<<"${SITE_PHP_INI:-}"
+    out=''
+    for pair in "${pairs[@]}"; do [[ -n $pair && ${pair%%=*} != "$k" ]] && out+="${out:+;}$pair"; done
+    SITE_PHP_INI="$out${out:+;}$kv"
+  done
+  site_save
+  site_apply
+  ok "$domain PHP settings: ${SITE_PHP_INI:-server defaults}, ${SITE_PM_MAX:-10} workers"
   if [[ $JSON == yes ]]; then print_site "$domain"; fi
 }
 
@@ -743,6 +970,23 @@ cmd_suspend() {
   if [[ $JSON == yes ]]; then print_site "$domain"; fi
 }
 
+cmd_refresh() {
+  local target=${1:-} list=() f d
+  [[ -n $target ]] || usage
+  if [[ $target == --all ]]; then
+    for f in "$SITES_DB"/*.env; do [[ -e $f ]] && list+=("$(env_get "$f" SITE_DOMAIN)"); done
+  else
+    list=("$target")
+  fi
+  for d in "${list[@]}"; do
+    site_load "$d"
+    site_apply
+    user_slice_write
+  done
+  ok "${#list[@]} site(s) refreshed"
+  return 0
+}
+
 cmd_remove() {
   local domain=${1:-} keep=no
   [[ -n $domain ]] || usage
@@ -757,6 +1001,7 @@ cmd_remove() {
   [[ $keep == yes ]] || rm -f "$WHP_LOG_DIR/php-fpm/$SITE_ID.log"
   systemctl daemon-reload
   pkill -u "$SITE_USER" 2>/dev/null || true
+  SITE_OWNER='' user_slice_write
   if [[ $keep == no ]]; then
     rm -rf --one-file-system "${SITE_ROOT:?}"
     certbot delete --non-interactive --cert-name "$domain" >>"$WHP_INSTALL_LOG" 2>&1 || true
@@ -796,9 +1041,13 @@ case $cmd in
   ssl) cmd_ssl "$@" ;;
   quota) cmd_quota "$@" ;;
   limits) cmd_limits "$@" ;;
+  owner) cmd_owner "$@" ;;
+  slice) cmd_slice "$@" ;;
+  phpini) cmd_phpini "$@" ;;
   suspend) cmd_suspend "${1:-}" yes ;;
   unsuspend) cmd_suspend "${1:-}" no ;;
   remove) cmd_remove "$@" ;;
+  refresh) cmd_refresh "$@" ;;
   list) cmd_list "$@" ;;
   show) print_site "${1:-}" ;;
   alias) cmd_alias "$@" ;;
