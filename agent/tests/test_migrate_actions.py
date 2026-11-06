@@ -98,6 +98,53 @@ class InventoryTest(unittest.TestCase):
         self.assertEqual(inv["domains"], [])
 
 
+class SchemaTest(unittest.TestCase):
+    def test_missing_column_becomes_default(self):
+        cols = {"mail": {"id", "dom_id", "mail_name", "postbox", "mbox_quota"}, "accounts": {"id", "type"}}
+        sql = plesk.render_query(plesk.QUERIES["mail"], cols)
+        self.assertNotIn("redirect", sql)
+        self.assertNotIn("redir_addr", sql)
+        self.assertIn("'auto'", sql)
+        self.assertIn("IFNULL(m.mbox_quota,-1)", sql)
+        self.assertNotIn("{", plesk.render_query(plesk.QUERIES["domains"], {}))
+
+    def test_without_schema_every_column_is_used(self):
+        self.assertIn("IFNULL(m.redirect,'auto')", plesk.render_query(plesk.QUERIES["mail"], None))
+
+    def test_forwards_without_redirect_column(self):
+        rows = {
+            "domains": [["10", "a.test", "0", "0", "vrt_hst", "0", "0", "3", f"{V}/a.test/httpdocs", "", "a", "0"]],
+            "mail": [["1", "10", "info", "true", "auto", "-1", "plain", ""],
+                     ["2", "10", "sales", "false", "auto", "-1", "", ""],
+                     ["3", "10", "old", "false", "true", "-1", "", "Old@b.test"]],
+            "mail_redir": [["2", "boss@b.test"]],
+        }
+        d = plesk.build_inventory(rows, {}, {}, {})["domains"][0]
+        self.assertEqual(d["mailboxes"][0]["forward"], [])
+        self.assertEqual(d["forwarders"], [{"local": "sales", "targets": ["boss@b.test"]}, {"local": "old", "targets": ["old@b.test"]}])
+
+    def test_inventory_retries_without_optional_columns(self):
+        class Conn:
+            def __init__(self):
+                self.queries = []
+
+            def run(self, command, timeout=0, check=True, first_contact=False):
+                import types
+                self.queries.append(command)
+                if "/usr/local/psa/version" in command:
+                    return types.SimpleNamespace(stdout="18.0.70 Debian 12\n|\nplesk.test\n|\nrsync\n")
+                if "information_schema" in command:
+                    raise ActionError("failed", "denied")
+                if "m.redirect" in command:
+                    raise ActionError("failed", "ERROR 1054 (42S22) at line 1: Unknown column 'm.redirect' in 'SELECT'")
+                return types.SimpleNamespace(stdout="")
+
+        conn = Conn()
+        inv = plesk.inventory(conn)
+        self.assertEqual(inv["warnings"], [])
+        self.assertTrue(any("FROM mail m" in c and "'auto'" in c for c in conn.queries))
+
+
 class HelpersTest(unittest.TestCase):
     def test_php_version(self):
         self.assertEqual(plesk.php_version("plesk-php74-fastcgi"), "7.4")
