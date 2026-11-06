@@ -102,6 +102,11 @@ class FakeAgentClient implements AgentClient
             'backup.target_remove' => ['removed' => $params['target'] ?? '', 'remote_data_kept' => true],
             'backup.target_export_key' => ['target' => $params['target'] ?? '', 'repository_key' => 'fake-repository-key'],
             'backup.run', 'backup.restore', 'backup.check', 'backup.prune' => ['job' => (string) Str::uuid()],
+            'mail.set_routing' => ['changed' => [], 'local_domains' => collect($params['domains'] ?? [])->where('provider', 'rhis')->pluck('domain')->all()],
+            'mail.mailboxes_sync' => ['changed' => [], 'created_homes' => [], 'mailboxes' => count($params['mailboxes'] ?? []), 'aliases' => count($params['aliases'] ?? []), 'skipped_not_local' => []],
+            'mail.dkim_generate', 'mail.dkim_get' => ['domain' => $params['domain'] ?? '', 'selector' => 'whp', 'algorithm' => 'rsa',
+                'public_key' => 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA'.substr(base64_encode(hash('sha256', (string) ($params['domain'] ?? ''), true)), 0, 40)],
+            'mail.mailbox_usage' => ['usage' => []],
             default => throw new AgentException('unknown_action', "Unknown action: {$action}"),
         };
     }

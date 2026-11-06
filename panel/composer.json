@@ -13,7 +13,8 @@
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
         "rhis/backups": "@dev",
-        "rhis/crm-api": "@dev"
+        "rhis/crm-api": "@dev",
+        "rhis/dns-mail": "@dev"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
