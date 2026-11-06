@@ -125,4 +125,12 @@ class CustomerController extends Controller
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
     }
+
+    public function liftTrafficSuspension(Customer $customer, \App\Services\Traffic $traffic): RedirectResponse
+    {
+        // Keep the alert month: the websites stay online for the rest of this month.
+        $count = $traffic->unsuspend($customer);
+
+        return back()->with('status', trans_choice(':count website is online again.|:count websites are online again.', $count));
+    }
 }

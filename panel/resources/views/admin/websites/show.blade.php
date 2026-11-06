@@ -47,10 +47,13 @@
                 <dt>{{ __('System user') }}</dt><dd class="mono">{{ $website->system_user ?? '–' }}</dd>
                 <dt>{{ __('Web root') }}</dt><dd class="mono">{{ $website->document_root ?? '–' }}</dd>
                 <dt>{{ __('Disk') }}</dt><dd>{{ $website->disk_used_mb }} MB @if ($website->disk_quota_mb) / {{ $website->disk_quota_mb }} MB @endif</dd>
+                <dt>{{ __('Data traffic this month') }}</dt><dd>{{ \Illuminate\Support\Number::fileSize($website->trafficBytes(), 1) }}</dd>
+                <dt>{{ __('Resource jail') }}</dt><dd class="mono small">whp-sites-c{{ $website->customer_id }}.slice</dd>
                 <dt>{{ __('Created') }}</dt><dd>{{ $website->created_at->isoFormat('LLL') }}</dd>
             </dl>
         </x-ui.card>
     </section>
+    @include('partials.website-php', ['website' => $website, 'action' => route('admin.websites.php', $website)])
 
     @if ($website->databases->isNotEmpty())
         <x-ui.card :title="__('Databases')" flush>

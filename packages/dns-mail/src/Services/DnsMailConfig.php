@@ -12,7 +12,7 @@ final class DnsMailConfig
 {
     public const KEYS = [
         'mail_host', 'ipv4', 'ipv6', 'relay_spf_includes', 'webmail_host', 'dmarc_rua', 'tlsrpt_rua',
-        'm365_order_url', 'm365_price', 'default_quarantine_score', 'dane',
+        'm365_order_url', 'm365_price', 'default_quarantine_score', 'dane', 'cloudflare_account_id',
     ];
 
     public function __construct(private readonly Settings $settings)
@@ -30,6 +30,7 @@ final class DnsMailConfig
             'relay_spf_includes' => implode(',', (array) config('dns-mail.server.relay_spf_includes', [])),
             'dmarc_rua' => config('dns-mail.defaults.dmarc_rua'),
             'tlsrpt_rua' => config('dns-mail.defaults.tls_rpt'),
+            'cloudflare_account_id' => config('dns-mail.cloudflare_account_id'),
             default => null,
         };
 

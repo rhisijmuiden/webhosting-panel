@@ -29,4 +29,15 @@ final class CloudflareException extends RuntimeException
             $errors,
         );
     }
+
+    public function hasCode(int $code): bool
+    {
+        foreach ($this->errors as $e) {
+            if (is_array($e) && (int) ($e['code'] ?? 0) === $code) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

@@ -18,8 +18,12 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $start = HostingPackage::create(['name' => 'Start', 'disk_mb' => 5120, 'max_websites' => 1, 'max_mailboxes' => 5, 'max_databases' => 2, 'max_cronjobs' => 2]);
-        $business = HostingPackage::create(['name' => 'Business', 'disk_mb' => 10240, 'max_websites' => 3, 'max_mailboxes' => 10, 'max_databases' => 5, 'max_cronjobs' => 10]);
+        $business = HostingPackage::create(['name' => 'Business', 'disk_mb' => 10240, 'traffic_gb_month' => 100, 'max_websites' => 3, 'max_mailboxes' => 10, 'max_databases' => 5, 'max_cronjobs' => 10,
+            'cpu_percent' => 200, 'memory_mb' => 2048, 'io_mbps' => 100, 'php_workers' => 10]);
         $pro = HostingPackage::create(['name' => 'Pro', 'disk_mb' => 25600, 'max_websites' => 10, 'max_mailboxes' => 50, 'max_databases' => 20, 'max_cronjobs' => 25, 'allow_ssh' => true]);
+
+        // Reinder's default: everything unlimited, customers share the server fairly.
+        HostingPackage::create(['name' => 'Unlimited', 'description' => 'No limits, fair share of the server.', 'allow_ssh' => true]);
 
         $customers = [
             ['Bakkerij de Vries', 'Jan de Vries', 'jan@bakkerijdevries.example', $business, 'nl', [['bakkerijdevries.example', 'wordpress', '8.4', 3100]]],

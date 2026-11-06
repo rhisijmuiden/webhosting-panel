@@ -63,6 +63,14 @@ check "site has its own systemd unit in whp-sites.slice" bash -c "systemctl is-a
 check "per-site memory accounting" bash -c "whp-site show site.test | jq -e '.resources.memory_bytes > 0'"
 check "per-site limits" bash -c "whp-site limits site.test --cpu 150% --memory 512M && [[ \$(systemctl show -p CPUQuotaPerSecUSec --value whp-site-site_test) == 1.500000s ]]"
 check "site still answers after limits" bash -c "curl -s -H 'Host: site.test' http://127.0.0.1/ | grep -q php="
+check "customer slice with caps" bash -c "whp-site slice c7 --cpu 200% --memory 1024 --tasks 256 --json | jq -e '.memory_mb == 1024' >/dev/null"
+check "site moves into the customer slice" bash -c "whp-site owner site.test c7 --json | jq -e '.slice == \"whp-sites-c7.slice\"' >/dev/null && [[ \$(systemctl show -p Slice --value whp-site-site_test) == whp-sites-c7.slice ]] && curl -s -H 'Host: site.test' http://127.0.0.1/ | grep -q php="
+check "customer slice memory cap active" bash -c "[[ \$(systemctl show -p MemoryMax --value whp-sites-c7.slice) == \$((1024*1024*1024)) ]]"
+check "per-site PHP settings as php_admin_value" bash -c "whp-site phpini site.test --set memory_limit=200M --set upload_max_filesize=300M --set max_execution_time=90 --workers 4 --json | jq -e '.php_ini.memory_limit == \"200M\" and .php_workers == 4' >/dev/null && printf '<?php ini_set(\"memory_limit\",\"1G\"); echo ini_get(\"memory_limit\"),\"/\",ini_get(\"upload_max_filesize\");' >/var/www/vhosts/site.test/public/ini.php && curl -s -H 'Host: site.test' http://127.0.0.1/ini.php | grep -q '200M/300M'"
+check "nginx upload size follows PHP" bash -c "grep -q 'client_max_body_size 300m' /etc/nginx/whp/sites/site.test/10-php-limits.conf"
+check "invalid PHP setting refused" bash -c "! whp-site phpini site.test --set disable_functions=x"
+check "traffic is logged per site" bash -c "sleep 1; nginx -s reopen; sleep 1; grep -q '^site.test ' /var/log/nginx/whp-traffic.log || (sleep 65; grep -q '^site.test ' /var/log/nginx/whp-traffic.log)"
+check "site back to the shared slice" bash -c "whp-site phpini site.test --reset --json >/dev/null && whp-site owner site.test - --json | jq -e '.slice == \"whp-sites.slice\"' >/dev/null"
 check "suspend shows the 503 page" bash -c "whp-site suspend site.test --json | jq -e .suspended >/dev/null && [[ \$(curl -s -o /tmp/s.html -w %{http_code} -H 'Host: site.test' http://127.0.0.1/x.php) == 503 ]] && grep -q 'temporarily unavailable' /tmp/s.html"
 check "suspend stops PHP and locks login" bash -c "! systemctl is-active --quiet whp-site-site_test && [[ \$(chage -l s_site_test | grep -i 'account expires') != *never* ]]"
 check "suspend is idempotent" bash -c "whp-site suspend site.test --json | jq -e .suspended >/dev/null"
@@ -123,6 +131,12 @@ if [[ -f /opt/webhosting-panel/panel/artisan ]]; then
   check "panel queue worker active" systemctl is-active --quiet whp-queue.service
   check "agent active" systemctl is-active --quiet whp-agent.service
 
+  echo "== security scan"
+  AC="python3 $(dirname "$0")/agent_call.py"
+  check "server posture (apt, sshd, services)" bash -c "$AC posture.get | jq -e '(.services | has(\"nftables\")) and .updates.total != null and .ssh.root_login != null'"
+  check "malware report of a site" bash -c "$AC malware.report '{\"domain\":\"site.test\"}' | jq -e '.scanned_at != null'"
+  check "vulnerability match refuses a bad slug" bash -c "! $AC vuln.match '{\"source\":\"wpvulnerability\",\"items\":[{\"type\":\"plugin\",\"slug\":\"../x\",\"version\":\"1\"}]}'"
+
   echo "== app installer"
   # One request to the agent over its socket; prints the data, fails on an error.
   agent() {
@@ -158,20 +172,20 @@ PY
 
   export -f agent app_params
   check "app catalog" bash -c 'agent apps.catalog | jq -e "[.apps[].id] == [\"wordpress\",\"joomla\",\"nextcloud\"]"'
-  whp-site add wp.test --php 8.4 --no-ssl --json >/dev/null
-  check "install WordPress (nl) through the agent" agent_job apps.install "$(app_params wp.test wordpress '' nl)"
+  check "add a site for the app installer" whp-site add appwp.test --php 8.4 --no-ssl --json
+  check "install WordPress (nl) through the agent" agent_job apps.install "$(app_params appwp.test wordpress '' nl)"
   WP_ID=$(jq -r .result.id /tmp/app-job.json); WP_DB=$(jq -r .result.database /tmp/app-job.json)
-  check "WordPress home page answers" bash -c "curl -s -H 'Host: wp.test' http://127.0.0.1/ | grep -q 'wp-content'"
-  check "WordPress is in Dutch" bash -c "curl -s -H 'Host: wp.test' http://127.0.0.1/ | grep -q 'lang=\"nl-NL\"'"
-  check "WordPress login page" bash -c "[[ \$(curl -s -o /dev/null -w %{http_code} -H 'Host: wp.test' http://127.0.0.1/wp-login.php) == 200 ]]"
-  check "WordPress files belong to the site user and nginx can read them" bash -c "[[ \$(stat -c %U /var/www/vhosts/wp.test/public/wp-includes/version.php) == s_wp_test && \$(stat -c %a /var/www/vhosts/wp.test/public/wp-includes/css) == 755 ]]"
-  check "wp-config.php is private" bash -c "[[ \$(stat -c %a /var/www/vhosts/wp.test/public/wp-config.php) == 600 ]]"
+  check "WordPress home page answers" bash -c "curl -s -H 'Host: appwp.test' http://127.0.0.1/ | grep -q 'wp-content'"
+  check "WordPress is in Dutch" bash -c "curl -s -H 'Host: appwp.test' http://127.0.0.1/ | grep -q 'lang=\"nl-NL\"'"
+  check "WordPress login page" bash -c "[[ \$(curl -s -o /dev/null -w %{http_code} -H 'Host: appwp.test' http://127.0.0.1/wp-login.php) == 200 ]]"
+  check "WordPress files belong to the site user and nginx can read them" bash -c "[[ \$(stat -c %U /var/www/vhosts/appwp.test/public/wp-includes/version.php) == s_appwp_test && \$(stat -c %a /var/www/vhosts/appwp.test/public/wp-includes/css) == 755 ]]"
+  check "wp-config.php is private" bash -c "[[ \$(stat -c %a /var/www/vhosts/appwp.test/public/wp-config.php) == 600 ]]"
   check "WordPress database and user exist" bash -c "mariadb -N -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$WP_DB'\" | grep -qv '^0$'"
   check "admin password is not in the job file" bash -c "! grep -rq 'Smoke-test-pass-123' /var/lib/webhosting-panel/jobs /var/lib/webhosting-panel/apps"
-  check "second install in a used folder is refused" bash -c '! agent apps.install "$(app_params wp.test joomla portal en)"'
-  check "remove WordPress" agent_job apps.remove "{\"domain\":\"wp.test\",\"id\":\"$WP_ID\"}"
-  check "after removal: placeholder back, database gone" bash -c "[[ \$(ls /var/www/vhosts/wp.test/public) == index.html ]] && ! mariadb -e 'USE \`$WP_DB\`' 2>/dev/null"
-  whp-site add joomla.test --php 8.4 --no-ssl --json >/dev/null
+  check "second install in a used folder is refused" bash -c '! agent apps.install "$(app_params appwp.test joomla portal en)"'
+  check "remove WordPress" agent_job apps.remove "{\"domain\":\"appwp.test\",\"id\":\"$WP_ID\"}"
+  check "after removal: placeholder back, database gone" bash -c "[[ \$(ls /var/www/vhosts/appwp.test/public) == index.html ]] && ! mariadb -e 'USE \`$WP_DB\`' 2>/dev/null"
+  check "add a site for Joomla" whp-site add joomla.test --php 8.4 --no-ssl --json
   check "install Joomla in a subfolder" agent_job apps.install "$(app_params joomla.test joomla portal en)"
   check "Joomla answers in /portal/" bash -c "curl -s -L -H 'Host: joomla.test' http://127.0.0.1/portal/ | grep -qi 'joomla'"
   check "Joomla administrator login" bash -c "[[ \$(curl -s -o /dev/null -w %{http_code} -H 'Host: joomla.test' http://127.0.0.1/portal/administrator/) == 200 ]]"
