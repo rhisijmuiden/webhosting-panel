@@ -64,7 +64,7 @@ class VerifyJobTest(unittest.TestCase):
         (root / "www/klant.nl/index.php").write_text("<?php echo 'hi';\n")
         (root / "etc/backup/backup.conf").write_text(
             f'SITES_ROOT="{root}/www"\nMAIL_ROOT="{root}/vmail"\nSYSTEM_PATHS="{root}/www"\nDATABASES="no"\n'
-            f'VERIFY_DIR="{root}/verify"\n')
+            f'VERIFY_DIR="{root}/verify"\nVERIFY_MIN_FREE_PERCENT="0"\n')
         wrapper = root / "whp-backup"
         wrapper.write_text(
             "#!/bin/sh\n"

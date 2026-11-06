@@ -120,7 +120,7 @@ run_suite() {
 			test "$(mariadb -N -e "SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = 'whp_restore_test'")" = "0"
 		# A dump that was cut off while it was made must be caught.
 		printf 'CREATE TABLE t (id INT);\nINSERT INTO t VALUES (1);\n' | restic -q -r "$T/remote1" \
-			--password-file "$WHP_ETC/backup/targets/$tgt/repo.key" backup --stdin --stdin-filename databases/whp_cut.sql \
+			--password-file "$WHP_ETC/backup/targets/$tgt/repo.key" backup --stdin --stdin-filename whp_cut.sql \
 			--tag whp --tag kind:full --tag scope:db:whp_cut --host "$(hostname -f 2>/dev/null || hostname)" >/dev/null 2>&1 || true
 		if [[ "$tgt" == local1 ]]; then
 			out="$(wb verify --target "$tgt" --scope db:whp_cut)" || true

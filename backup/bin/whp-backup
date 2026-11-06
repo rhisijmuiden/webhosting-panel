@@ -524,12 +524,12 @@ backup_item() {
 			mapfile -t dump < <(mariadb_cmd mariadb-dump --single-transaction --quick --routines \
 				--triggers --events --hex-blob --default-character-set=utf8mb4 -- "$db")
 			if restic_supports_stdin_command; then
-				out="$(r backup --json "${tags[@]}" --stdin-filename "databases/$db.sql" \
+				out="$(r backup --json "${tags[@]}" --stdin-filename "$db.sql" \
 					--stdin-from-command -- "${dump[@]}" 2>>"$STATE_DIR/restic.err")" || rc=$?
 			else
 				local -a st
 				out="$("${dump[@]}" 2>>"$STATE_DIR/restic.err" | r backup --json "${tags[@]}" \
-					--stdin --stdin-filename "databases/$db.sql" 2>>"$STATE_DIR/restic.err"; \
+					--stdin --stdin-filename "$db.sql" 2>>"$STATE_DIR/restic.err"; \
 					printf '\n#PIPE %s %s' "${PIPESTATUS[0]}" "${PIPESTATUS[1]}")" || true
 				read -r -a st <<<"$(grep -o '#PIPE [0-9]* [0-9]*$' <<<"$out" | cut -d' ' -f2-)"
 				out="$(sed '$d' <<<"$out")"
@@ -729,12 +729,22 @@ cmd_restore() {
 	emit "$(jq -c --argjson meta "$meta" '{snapshot:$meta} + .' <<<"$result")"
 }
 
+# Path of the dump inside a db snapshot: "/<db>.sql" (restic 0.18.0, as on
+# Debian 13, cannot store a stdin file in a sub folder), or "/databases/<db>.sql"
+# in snapshots made with an older whp-backup.
+db_dump_path() {
+	local id="$1" db="$2" p
+	p="$(r ls --json "$id" 2>/dev/null | jq -r --arg a "/$db.sql" --arg b "/databases/$db.sql" \
+		'select(.struct_type == "node" and .type == "file" and (.path == $a or .path == $b)) | .path' | head -n1)" || true
+	printf '%s\n' "${p:-/$db.sql}"
+}
+
 restore_db() {
 	local id="$1" orig="$2" database="$3" to="$4" in_place="$5"
 	local name="${database:-$orig}"
 	if [[ -n "$to" ]]; then
 		mkdir -p "$to"
-		r dump "$id" "/databases/$orig.sql" >"$to/$orig.sql" || die restore_failed "could not read the dump"
+		r dump "$id" "$(db_dump_path "$id" "$orig")" >"$to/$orig.sql" || die restore_failed "could not read the dump"
 		jq -cn --arg f "$to/$orig.sql" '{restored:"file", path:$f}'
 		return
 	fi
@@ -748,8 +758,10 @@ restore_db() {
 	fi
 	"${cli[@]}" -e "CREATE DATABASE IF NOT EXISTS \`$name\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" \
 		|| die restore_failed "could not create database $name"
+	local src
+	src="$(db_dump_path "$id" "$orig")"
 	set +e
-	r dump "$id" "/databases/$orig.sql" | "${cli[@]}" "$name"
+	r dump "$id" "$src" | "${cli[@]}" "$name"
 	local -a st=("${PIPESTATUS[@]}")
 	set -e
 	[[ "${st[0]}" == "0" && "${st[1]}" == "0" ]] || die restore_failed "database import failed (restic ${st[0]}, mariadb ${st[1]})"
@@ -1015,7 +1027,7 @@ verify_database() {
 	mkdir -p "$dir"
 	chmod 700 "$dir"
 	local dumpfile="$dir/$db.sql"
-	if ! r dump "$id" "/databases/$db.sql" >"$dumpfile" 2>>"$STATE_DIR/restic.err"; then
+	if ! r dump "$id" "$(db_dump_path "$id" "$db")" >"$dumpfile" 2>>"$STATE_DIR/restic.err"; then
 		checks+=("$(verify_check restore false "could not read the dump: $(tail -n1 "$STATE_DIR/restic.err")")")
 		rm -rf "$dir"
 		printf '%s\n' "${checks[@]}" | jq -cs '{checks:., bytes:null, tables:null}'
