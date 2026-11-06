@@ -1,0 +1,24 @@
+{
+    "name": "rhis/reports",
+    "description": "Monthly hosting report for the Webhosting Panel: one RHIS branded mail per customer with visitors, uptime, backups, security, mail and updates of the past month, a web version in the client panel, opt-out per customer and an admin preview.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rhis\\Reports\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rhis\\Reports\\ReportsServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
