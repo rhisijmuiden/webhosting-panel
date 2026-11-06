@@ -51,3 +51,4 @@
 </section>
 @include('partials.website-php', ['website' => $site, 'action' => route('client.websites.php', $site)])
 @includeIf('domain-aliases::partials.website-card', ['website' => $site])
+@includeIf('subdomains::partials.website-card', ['website' => $site])

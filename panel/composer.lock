@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "53bd6726f4c15fd62113064da1c4cb7e",
+    "content-hash": "ae39724805c9328fea187d3f6478b618",
     "packages": [
         {
             "name": "brick/math",
@@ -3612,6 +3612,39 @@
                 "proprietary"
             ],
             "description": "Login protection for the Webhosting Panel: brute-force thresholds, per-site protection and allowlists, on top of CrowdSec through the agent.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/subdomains",
+            "version": "dev-claude/project-thread-0lz2y1",
+            "dist": {
+                "type": "path",
+                "url": "../packages/subdomains",
+                "reference": "02614ae6938af8b35020cd77aaba4a85d5b9419a"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Subdomains\\SubdomainsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Subdomains\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Subdomains and site cloning for the Webhosting Panel: customers add subdomains under their domain's subscription and clone a website (WordPress, Joomla or plain files) to a test subdomain or another website.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8866,6 +8899,7 @@
         "rhis/git": 20,
         "rhis/migration": 20,
         "rhis/security": 20,
+        "rhis/subdomains": 20,
         "rhis/vulnerabilities": 20,
         "rhis/wordpress": 20
     },

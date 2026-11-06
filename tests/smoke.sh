@@ -106,6 +106,14 @@ mariadb -e "CREATE DATABASE IF NOT EXISTS wp_smoke; CREATE USER IF NOT EXISTS 'w
 rm -f /var/www/vhosts/wp.test/public/index.html
 check "toolkit end to end (detect, status, cron, password, login link, update)" python3 "$(dirname "$0")/wp_smoke.py" wp.test
 
+echo "== subdomains and cloning"
+check "add subdomain test.wp.test of wp.test" whp-site add test.wp.test --parent wp.test --no-ssl --json
+check "subdomain knows its parent, parent lists it" bash -c "whp-site show test.wp.test --json | jq -e '.parent == \"wp.test\"' && whp-site show wp.test --json | jq -e '.subdomains == [\"test.wp.test\"]'"
+check "a subdomain of another domain is refused" bash -c "! whp-site add test.site.test --parent wp.test --no-ssl"
+check "a subdomain has no quota of its own" bash -c "! whp-site quota test.wp.test 100"
+check "the main site cannot be removed while it has subdomains" bash -c "! whp-site remove wp.test"
+check "clone WordPress into the subdomain (files, database, addresses)" python3 "$(dirname "$0")/clone_smoke.py" wp.test test.wp.test
+
 echo "== git deployments"
 check "git, ssh-keygen and npm installed" bash -c "command -v git && command -v ssh-keygen && command -v npm"
 check "deploy, zero downtime switch, failed build, rollback, remove" python3 "$(dirname "$0")/git_smoke.py" site.test
