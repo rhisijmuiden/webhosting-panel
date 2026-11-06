@@ -188,6 +188,16 @@ name (`up-`, `wr-`, `rd-`, `dl-` + 32 hex), never the data. `terminal.status`,
 `terminal.start` (ttyd + bubblewrap as the site user, socket in
 `/run/whp-terminal/<token>/`), `terminal.stop`.
 
+Domain aliases (`domain_aliases.py`, screens and CRM API in `packages/domain-aliases`,
+`Rhis\DomainAliases\`, admin `/admin/domain-aliases`, client `/domain-aliases`):
+`site.alias_list`, `site.alias_add` `{domain, alias, mode: serve|redirect, www, ssl}`,
+`site.alias_mode`, `site.alias_ssl`, `site.alias_remove` `{keep_cert}` through
+`whp-site alias …`. State per site in `/var/lib/webhosting-panel/sites/<site>.aliases`
+(`<alias> <mode> <www> <ssl>`); every alias has its own server block in the site's
+vhost and its own certificate (cert name = alias). `whp-site show` returns
+`domain_aliases`. Mail: `mail_domains.alias_of_id` (dns-mail) makes `MailPusher` add
+`user@alias -> user@main` for every mailbox and alias. See `packages/domain-aliases/README.md`.
+
 Git deployments (`git.py`, screens in `packages/git`, `Rhis\Git\`, admin `/admin/git`, client `/git`,
 public webhook `POST /git/webhook/<uuid>`): `git.key`, `git.check`, `git.fetch`, `git.status`,
 `git.rollback`, `git.remove`, `git.tools` and the job `git.deploy`. See `docs/git.md`.

@@ -60,6 +60,23 @@ tags:
     description: |
       Order requests made by customers in the panel. They reach the CRM as an
       `order.requested` webhook; the CRM answers with the status.
+  - name: Domain aliases
+    description: |
+      Extra domains on a subscription's website. An alias serves the same
+      website (`mode: serve`) or 301-redirects to it (`mode: redirect`), gets
+      its own Let's Encrypt certificate, its DNS records in Cloudflare (when the
+      panel manages the zone) and, with `mail: true`, delivers user@alias to
+      user@primary-domain. The plan limit `domain_aliases` caps how many a
+      customer may add in the panel (`null` = unlimited).
+
+      **Converting into a website of its own.** When the customer's plan has
+      room for another website (`domains` limit) the customer converts in the
+      panel. Otherwise the panel offers the catalog products of kind
+      `alias_upgrade`; ordering one sends `order.requested` (the order's
+      `domain` is the website, its `note` starts with `domain_alias:<alias>`).
+      Setting that order to `accepted` or `completed` converts the alias and
+      sends `domain_alias.converted` (with `order_id`). The CRM can also convert
+      directly with `POST /domain-aliases/{id}/convert`.
 
 paths:
   /ping:
@@ -670,6 +687,161 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
+  /subscriptions/{id}/domain-aliases:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Subscription id or `ext:<external_id>`.
+        schema: { type: string }
+    post:
+      tags: [Domain aliases]
+      operationId: addDomainAlias
+      summary: Add a domain alias to the subscription's website.
+      description: Runs in the background; `status` goes from `provisioning` to `active` (or `failed`) and `domain_alias.added` is sent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain]
+              properties:
+                domain: { type: string, examples: [example.be] }
+                mode: { type: string, enum: [serve, redirect], default: serve }
+                www: { type: boolean, default: true, description: Also serve www.<domain>. }
+                mail: { type: boolean, default: true, description: Deliver mail for the alias to the primary domain's mailboxes. }
+                ssl: { type: boolean, default: true }
+                enforce_limit: { type: boolean, default: false, description: Refuse when the plan's `domain_aliases` limit is reached. }
+      responses:
+        "202":
+          description: Accepted, being set up.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DomainAlias" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /domain-aliases:
+    get:
+      tags: [Domain aliases]
+      operationId: listDomainAliases
+      summary: List domain aliases.
+      parameters:
+        - name: subscription_id
+          in: query
+          schema: { type: string }
+        - name: domain
+          in: query
+          schema: { type: string }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A page of domain aliases.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, next_cursor]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/DomainAlias" } }
+                  next_cursor: { type: [string, "null"] }
+
+  /domain-aliases/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Alias id or `domain:<alias domain>`.
+        schema: { type: string }
+    get:
+      tags: [Domain aliases]
+      operationId: getDomainAlias
+      summary: Get a domain alias.
+      responses:
+        "200":
+          description: The alias.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DomainAlias" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Domain aliases]
+      operationId: updateDomainAlias
+      summary: Change the behaviour or mail forwarding.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode: { type: string, enum: [serve, redirect] }
+                mail: { type: boolean }
+      responses:
+        "200":
+          description: The changed alias.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DomainAlias" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Domain aliases]
+      operationId: removeDomainAlias
+      summary: Remove the alias (web, certificate and its mail domain). DNS records in Cloudflare are left alone.
+      responses:
+        "204": { description: Removed. }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /domain-aliases/{id}/convert:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Domain aliases]
+      operationId: convertDomainAlias
+      summary: Turn the alias into a website of its own.
+      description: |
+        Without a body the new website belongs to the same customer and plan.
+        With `plan_id` + `external_id` it gets a subscription of its own
+        (like `POST /subscriptions`). Mail for the alias keeps reaching the
+        primary domain's mailboxes through ordinary mail aliases, which the
+        customer can change later. The certificate is kept.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plan_id: { type: string }
+                external_id: { type: string, maxLength: 64 }
+                php_version: { type: string, enum: ["8.3", "8.4", "8.5"] }
+      responses:
+        "202":
+          description: The website is being created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [website, subscription_id]
+                properties:
+                  website:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      domain: { type: string }
+                      status: { type: string }
+                  subscription_id: { type: [string, "null"] }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
 webhooks:
   event:
     post:
@@ -784,6 +956,7 @@ components:
         disk_mb: { type: [integer, "null"], minimum: 0, examples: [10240] }
         traffic_gb_month: { type: [integer, "null"], minimum: 0 }
         domains: { type: [integer, "null"], minimum: 0, description: Domains incl. the primary domain. }
+        domain_aliases: { type: [integer, "null"], minimum: 0, description: Domain aliases per website a customer may add in the panel. }
         subdomains: { type: [integer, "null"], minimum: 0 }
         mailboxes: { type: [integer, "null"], minimum: 0 }
         mailbox_quota_mb: { type: [integer, "null"], minimum: 0 }
@@ -1024,6 +1197,9 @@ components:
         - customer.updated
         - order.requested
         - order.cancelled
+        - domain_alias.added
+        - domain_alias.removed
+        - domain_alias.converted
 
     Money:
       type: object
@@ -1041,8 +1217,8 @@ components:
         code: { type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,63}$", examples: [m365-business-basic] }
         kind:
           type: string
-          enum: [m365, plan_upgrade, domain, ssl, addon, other]
-          description: "`m365` products are offered in the Microsoft 365 wizard, `plan_upgrade` on the plan page (with `plan_code`)."
+          enum: [m365, plan_upgrade, alias_upgrade, domain, ssl, addon, other]
+          description: "`m365` products are offered in the Microsoft 365 wizard, `plan_upgrade` on the plan page (with `plan_code`), `alias_upgrade` when a customer converts a domain alias into a website of its own."
         name:
           type: object
           required: [en]
@@ -1089,6 +1265,32 @@ components:
         note: { type: [string, "null"], maxLength: 1000, description: Free text from the customer. }
         message: { type: [string, "null"] }
         checkout_url: { type: [string, "null"], format: uri }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    DomainAlias:
+      type: object
+      required: [id, domain, names, website, mode, www, mail, ssl, status]
+      properties:
+        id: { type: string }
+        domain: { type: string, examples: [example.be] }
+        names: { type: array, items: { type: string }, examples: [[example.be, www.example.be]] }
+        website:
+          type: object
+          properties:
+            id: { type: string }
+            domain: { type: string, examples: [example.nl] }
+        subscription_id: { type: [string, "null"] }
+        subscription_external_id: { type: [string, "null"] }
+        customer_id: { type: [string, "null"] }
+        mode: { type: string, enum: [serve, redirect] }
+        www: { type: boolean }
+        mail: { type: boolean }
+        ssl: { type: string, enum: [active, pending, "off"] }
+        status: { type: string, enum: [provisioning, active, failed, removing] }
+        error: { type: [string, "null"] }
+        upgrade_order_id: { type: [string, "null"] }
+        created_by: { type: string, enum: [panel, client, crm] }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -1139,7 +1341,10 @@ components:
             `backup.failed`: `{subscription_id, scope, target, message}`;
             `customer.updated`: `{customer: Customer}` (when the customer changes
             their own details in the panel);
-            `order.requested` / `order.cancelled`: `{order: Order}`.
+            `order.requested` / `order.cancelled`: `{order: Order}`;
+            `domain_alias.added` / `domain_alias.removed`: `{domain_alias: DomainAlias}`;
+            `domain_alias.converted`: `{domain_alias: DomainAlias, website: {id, domain},
+            subscription_id, order_id}`.
           additionalProperties: true
       examples:
         - id: 01JC7Z3V9Q0K8Z6WQ9T2M4N5PB

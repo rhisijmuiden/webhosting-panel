@@ -15,6 +15,7 @@ final class Webhooks
         'ping', 'subscription.provisioned', 'subscription.failed', 'subscription.changed', 'subscription.suspended',
         'subscription.unsuspended', 'subscription.terminated', 'usage.limit_reached', 'backup.failed',
         'customer.updated', 'order.requested', 'order.cancelled',
+        'domain_alias.added', 'domain_alias.removed', 'domain_alias.converted',
     ];
 
     /** Queue the event for every endpoint that subscribed to it. */

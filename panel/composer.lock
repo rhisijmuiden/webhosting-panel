@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9464e86d6ea99a602afae74f3504b61d",
+    "content-hash": "53bd6726f4c15fd62113064da1c4cb7e",
     "packages": [
         {
             "name": "brick/math",
@@ -3447,6 +3447,39 @@
                 "proprietary"
             ],
             "description": "Cloudflare DNS sync, per-domain mail routing (RHIS mail or Microsoft 365) and SnappyMail webmail config for the Webhosting Panel.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/domain-aliases",
+            "version": "dev-claude/project-thread-0lz2y1",
+            "dist": {
+                "type": "path",
+                "url": "../packages/domain-aliases",
+                "reference": "eafc7fe129fbc3ae60fe0b2d4ca3c89c60009615"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\DomainAliases\\DomainAliasesServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\DomainAliases\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Domain aliases for the Webhosting Panel: extra domains on a hosting package (web, SSL, DNS, mail), convertible into a website of their own via the RHIS CRM.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8828,6 +8861,7 @@
         "rhis/backups": 20,
         "rhis/crm-api": 20,
         "rhis/dns-mail": 20,
+        "rhis/domain-aliases": 20,
         "rhis/files": 20,
         "rhis/git": 20,
         "rhis/migration": 20,

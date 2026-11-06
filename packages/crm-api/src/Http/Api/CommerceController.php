@@ -27,7 +27,7 @@ final class CommerceController
             'shop_url' => ['sometimes', 'nullable', 'url:https', 'max:500'],
             'products' => ['present', 'array', 'max:500'],
             'products.*.code' => ['required', 'distinct', 'regex:/^[a-z0-9][a-z0-9_-]{0,63}$/'],
-            'products.*.kind' => ['required', Rule::in(['m365', 'plan_upgrade', 'domain', 'ssl', 'addon', 'other'])],
+            'products.*.kind' => ['required', Rule::in(['m365', 'plan_upgrade', 'alias_upgrade', 'domain', 'ssl', 'addon', 'other'])],
             'products.*.name' => ['required', 'array'],
             'products.*.name.en' => ['required', 'string', 'max:150'],
             'products.*.name.nl' => ['sometimes', 'string', 'max:150'],
