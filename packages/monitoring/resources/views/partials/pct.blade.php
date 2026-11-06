@@ -1,0 +1,1 @@
+@if ($value === null)<span class="muted">–</span>@else<span class="mo-pct {{ $value < 99 ? 'low' : ($value < 99.9 ? 'mid' : '') }}">{{ rtrim(rtrim(number_format($value, 2), '0'), '.') }}%</span>@endif

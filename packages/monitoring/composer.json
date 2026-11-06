@@ -1,0 +1,24 @@
+{
+    "name": "rhis/monitoring",
+    "description": "Monitoring and alerts for the Webhosting Panel: uptime checks per website, certificates, disks, services and load, alerts by mail and Microsoft Teams, and a status page for customers.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rhis\\Monitoring\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rhis\\Monitoring\\MonitoringServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
