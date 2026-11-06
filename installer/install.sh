@@ -62,7 +62,7 @@ WHP_RELAY_USER=${WHP_RELAY_USER-__ask__}
 WHP_RELAY_PASS=${WHP_RELAY_PASS:-}
 WHP_PHP=${WHP_PHP:-}
 WHP_TZ=${WHP_TZ:-}
-WHP_CHANNEL=${WHP_CHANNEL:-production}
+WHP_CHANNEL=${WHP_CHANNEL:-}
 WHP_SSH_PORT=${WHP_SSH_PORT:-}
 WHP_SSH_HARDEN=${WHP_SSH_HARDEN:-}
 WHP_FIREWALL=${WHP_FIREWALL:-yes}
@@ -125,13 +125,24 @@ fi
 
 # Previous answers are reused on a re-run.
 if [[ -r $WHP_ETC/installer.env ]]; then
-  for k in HOSTNAME EMAIL RELAY_HOST RELAY_PORT RELAY_USER PHP TZ CHANNEL SSH_PORT SSH_HARDEN; do
+  for k in HOSTNAME EMAIL RELAY_HOST RELAY_PORT RELAY_USER PHP TZ SSH_PORT SSH_HARDEN; do
     v="WHP_$k"
     if [[ -z ${!v:-} || ${!v} == __ask__ ]] && prev=$(env_get "$WHP_ETC/installer.env" "$v"); then
       printf -v "$v" '%s' "$prev"
     fi
   done
 fi
+# The release channel belongs to the panel (Info > Switch channel writes it to
+# panel.env). An upgrade must keep that choice, or every update from the panel
+# would silently put the server back on production. Order: --channel, panel.env,
+# installer.env, production.
+if [[ -z $WHP_CHANNEL ]] && prev=$(env_get "$WHP_ETC/panel.env" WHP_CHANNEL) && [[ -n $prev ]]; then
+  WHP_CHANNEL=$prev
+fi
+if [[ -z $WHP_CHANNEL ]] && prev=$(env_get "$WHP_ETC/installer.env" WHP_CHANNEL) && [[ -n $prev ]]; then
+  WHP_CHANNEL=$prev
+fi
+WHP_CHANNEL=${WHP_CHANNEL:-production}
 if [[ -z $WHP_RELAY_PASS ]] && prev=$(env_get "$WHP_ETC/secrets.env" RELAY_PASS 2>/dev/null); then
   WHP_RELAY_PASS=$prev
 fi
