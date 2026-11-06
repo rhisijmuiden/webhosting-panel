@@ -17,6 +17,7 @@
         "rhis/crm-api": "@dev",
         "rhis/dns-mail": "@dev",
         "rhis/migration": "@dev",
+        "rhis/vulnerabilities": "@dev",
         "rhis/wordpress": "@dev"
     },
     "require-dev": {
