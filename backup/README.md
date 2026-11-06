@@ -147,3 +147,61 @@ sudo WHP_TEST_SFTP=user@host:22 WHP_TEST_SFTP_KEY=~/.ssh/id_ed25519 backup/tests
 # with a real FTPS server:
 sudo WHP_TEST_FTPS=user@host:21 WHP_TEST_FTPS_PASSWORD_FILE=pw backup/tests/run.sh
 ```
+
+## Customer backups (own locations)
+
+Separate from the server backups above, customers can back up their own
+websites to their own FTP, FTPS or SFTP/SCP server from the client panel
+(Backups → Add backup location). This is done by the agent
+(`agent/whp_agent/actions/client_backup.py`), not by restic: the result is one
+plain zip per backup that the customer can download, keep and upload again,
+also on another server.
+
+```
+<domain>-20261106-030000-full.zip
+<domain>-20261107-030000-incr-20261106-030000.zip   changes since that full backup
+```
+
+| In the zip | Content |
+| --- | --- |
+| `files/` | the website folder (`/var/www/vhosts/<domain>`, without `tmp/`, `sessions/`, `logs/`, caches) |
+| `mail/` | `/var/vmail/<domain>` |
+| `databases/<name>.sql` | dump of every database of the website |
+| `whp-backup.json` | manifest: domain, kind, date, base backup, file list |
+
+- **Full and incremental**: an incremental backup holds the files changed
+  since the last full backup to the same location, all databases, and the
+  list of files at that moment. Restoring it needs only that full backup,
+  never a chain. Schedules: daily (full on one weekday, changes the other
+  days) or weekly (full), run by `php artisan backups:client-tick` (every 5
+  minutes from the panel scheduler). Retention: the newest N full backups
+  and the incrementals on top of them stay on the location.
+- **Restore** from the location, or from an uploaded zip (the browser uploads
+  it in 8 MB chunks to `/var/lib/webhosting-panel/uploads`). Files are
+  mirrored (files that are not in the backup are removed); mail is only
+  added (new mail stays, messages already there are not doubled); databases
+  get the tables of the dump, newer tables are removed. Optionally a full
+  backup of the current state is made first.
+- **Security**: files are read and written as the website's own Linux user
+  (mail as `vmail`) by `agent/whp_agent/site_worker.py`, never as root.
+  A dump is imported as the database's own MariaDB user (its password is
+  changed for the import and put back afterwards), with `DEFINER` clauses
+  removed, so a crafted `.sql` cannot reach other databases. Uploaded zips
+  are checked before anything is extracted (paths, sizes, compression ratio,
+  manifest). Host names of locations may not point to private or local
+  addresses (set `CLIENT_BACKUP_ALLOW_PRIVATE=yes` in
+  `/etc/webhosting-panel/client-backup.conf` to allow them); SSH host keys
+  are pinned on the first test. Passwords are stored encrypted in the panel
+  database and handed to the agent per call.
+- Zips are not encrypted at rest: use SFTP or FTPS so they are encrypted
+  on the way, and keep the backup server private.
+
+## Admin backup browser
+
+Backups → Browse by date shows every restore point of a location per day.
+Pick a day, then select single items, a whole customer (websites, their
+databases and mail are grouped by customer) or everything, and restore them
+in place or as a copy to `/root/restore/<date>`. It runs as one agent job
+(`backup.restore_many`): server configuration first, then websites, mail and
+databases; a failed item does not stop the others. Backups → Customer
+backups lists the locations and the history of all customer backups.

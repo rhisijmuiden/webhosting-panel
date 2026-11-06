@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Rhis\Backups\Http\AdminBackupController as C;
+use Rhis\Backups\Http\AdminBrowserController as B;
 
 Route::get('/', [C::class, 'index'])->name('index');
 Route::post('/run', [C::class, 'run'])->name('run');
@@ -13,3 +14,7 @@ Route::post('/targets/{target}/check', [C::class, 'checkTarget'])->name('targets
 Route::post('/targets/{target}/key', [C::class, 'exportKey'])->name('targets.key');
 Route::delete('/targets/{target}', [C::class, 'destroyTarget'])->name('targets.destroy');
 Route::get('/jobs/{job}', [C::class, 'job'])->name('jobs.show');
+
+Route::get('/browse', [B::class, 'index'])->name('browse');
+Route::post('/browse/restore', [B::class, 'restore'])->name('browse.restore');
+Route::get('/customers', [B::class, 'customers'])->name('customers');
