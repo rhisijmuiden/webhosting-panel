@@ -113,8 +113,57 @@ class FakeAgentClient implements AgentClient
             'mail.quarantine_delete' => ['user' => $params['user'] ?? '', 'deleted' => count($params['uids'] ?? []), 'learned' => 0],
             'mail.tlsa' => ['usage' => 3, 'selector' => 1, 'matching_type' => 1, 'certificate' => hash('sha256', 'fake-mail-key'),
                 'cert_file' => '/etc/letsencrypt/live/mail.example.test/fullchain.pem', 'not_after' => 'Feb  3 12:00:00 2027 GMT', 'reuse_key' => true],
+            'site.show' => ['domain' => $params['domain'] ?? '', 'ssl' => 'imported', 'disk' => ['used_mb' => 412]],
+            'migrate.key' => ['public_key' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeKeyForDevelopmentOnly webhosting-panel-migration@web01', 'fingerprint' => 'SHA256:fakefingerprint'],
+            'migrate.connect' => ['type' => 'plesk', 'version' => '18.0.74', 'hostname' => 'plesk.example.test', 'rsync' => true, 'host_key' => 'ED25519 SHA256:fakehostkey'],
+            'migrate.forget_host' => ['host' => $params['host'] ?? '', 'forgotten' => true],
+            'migrate.inventory', 'migrate.transfer' => ['job' => (string) Str::uuid()],
+            'migrate.credentials' => ['domain' => $params['domain'] ?? '', 'mailboxes' => [
+                ['local' => 'info', 'scheme' => 'plain', 'secret' => 'Geheim-123'],
+                ['local' => 'jan', 'scheme' => 'crypt', 'secret' => '$6$abcdefgh$'.str_repeat('A', 86)],
+            ]],
             default => throw new AgentException('unknown_action', "Unknown action: {$action}"),
         };
+    }
+
+    /** A small Plesk server, the shape migrate.inventory returns (docs/migration.md). */
+    public static function pleskInventory(): array
+    {
+        $site = fn (string $name, string $sub, array $extra = []) => array_merge([
+            'name' => $name, 'kind' => 'site', 'is_subdomain' => false, 'parent' => null, 'subscription' => $name, 'owner_id' => '3',
+            'active' => true, 'size_mb' => 412, 'php' => '8.2',
+            'web' => ['root' => "/var/www/vhosts/{$name}/httpdocs", 'vhost' => $name, 'base' => "/var/www/vhosts/{$name}/httpdocs", 'sub' => $sub, 'system_user' => 'klant', 'app' => 'wordpress'],
+            'aliases' => [], 'databases' => [], 'mailboxes' => [], 'forwarders' => [], 'dns' => [], 'ssl' => null, 'notes' => [],
+        ], $extra);
+
+        return [
+            'source' => ['type' => 'plesk', 'version' => '18.0.74', 'hostname' => 'plesk.example.test'],
+            'server_ips' => ['203.0.113.5'],
+            'owners' => [['id' => '3', 'login' => 'bakkerij', 'kind' => 'client', 'name' => 'Piet Bakker', 'company' => 'Bakkerij Bakker', 'email' => 'piet@bakkerij.test', 'phone' => '']],
+            'domains' => [
+                $site('bakkerij.test', '', [
+                    'aliases' => [['name' => 'bakkerij-bakker.test', 'web' => true, 'mail' => false]],
+                    'databases' => [['name' => 'wp_bakkerij', 'type' => 'mysql', 'server' => 'local', 'users' => ['wp_bakkerij']]],
+                    'mailboxes' => [
+                        ['local' => 'info', 'quota_mb' => 1024, 'size_mb' => 230, 'password' => 'plain', 'aliases' => ['bestellingen'], 'forward' => []],
+                        ['local' => 'jan', 'quota_mb' => 0, 'size_mb' => 12, 'password' => 'hash', 'aliases' => [], 'forward' => []],
+                    ],
+                    'forwarders' => [['local' => 'factuur', 'targets' => ['boekhouder@example.org']]],
+                    'dns' => [
+                        ['type' => 'A', 'name' => 'bakkerij.test', 'content' => '203.0.113.5'],
+                        ['type' => 'MX', 'name' => 'bakkerij.test', 'content' => 'mail.bakkerij.test', 'priority' => 10],
+                        ['type' => 'TXT', 'name' => 'bakkerij.test', 'content' => 'v=spf1 +a +mx -all'],
+                        ['type' => 'TXT', 'name' => 'bakkerij.test', 'content' => 'google-site-verification=abc123'],
+                        ['type' => 'CNAME', 'name' => 'shop.bakkerij.test', 'content' => 'shops.myshopify.com'],
+                    ],
+                    'ssl' => ['name' => 'Lets Encrypt bakkerij.test', 'lets_encrypt' => true],
+                ]),
+                $site('api.bakkerij.test', 'public', ['is_subdomain' => true, 'parent' => 'bakkerij.test', 'subscription' => 'bakkerij.test', 'php' => '8.4',
+                    'web' => ['root' => '/var/www/vhosts/bakkerij.test/api.bakkerij.test/public', 'vhost' => 'bakkerij.test', 'base' => '/var/www/vhosts/bakkerij.test/api.bakkerij.test', 'sub' => 'public', 'system_user' => 'klant', 'app' => 'laravel']]),
+            ],
+            'totals' => ['domains' => 2, 'sites' => 2, 'databases' => 1, 'mailboxes' => 2, 'size_mb' => 824],
+            'warnings' => [],
+        ];
     }
 
     private function quarantine(string $domain): array

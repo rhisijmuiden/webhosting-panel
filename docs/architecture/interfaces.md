@@ -114,6 +114,15 @@ temporary files), `backup.target_test`, `backup.target_remove`,
 `backup.check`, `backup.prune`. The screens live in `packages/backups`
 (`Rhis\Backups\`, admin `/admin/backups`, client `/backups`).
 
+Actions added by the Plesk migration (`migrate.py`, see `docs/migration.md`):
+`migrate.key`, `migrate.connect`, `migrate.forget_host`, `migrate.credentials`
+(mailbox passwords, returned only over the socket) and the jobs
+`migrate.inventory` and `migrate.transfer`. `whp-site ssl <domain>
+--import-cert <pem> --import-key <pem>` serves a certificate from another
+server (SSL state `imported`) until Let's Encrypt succeeds. Websites own their
+databases through the core table `site_databases` (`App\Models\SiteDatabase`).
+The screens live in `packages/migration` (`Rhis\Migration\`, admin `/admin/migration`).
+
 ## Release channels
 
 | Channel | Git branch |
