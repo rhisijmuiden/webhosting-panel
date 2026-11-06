@@ -9,6 +9,7 @@ use App\Models\Website;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Rhis\DnsMail\Mail\MailProvider;
 
 /**
@@ -32,14 +33,14 @@ class MailDomain extends Model
         'customer_id', 'website_id', 'domain', 'provider', 'dns_managed', 'proxied', 'cloudflare_zone_id',
         'dkim_public_key', 'server_sends', 'spf_extra', 'spf_all', 'dmarc_policy', 'dmarc_rua', 'mta_sts_mode',
         'm365_tenant', 'm365_mx_host', 'm365_verification', 'm365_dkim_selector1', 'm365_dkim_selector2', 'm365_intune',
-        'dns_status', 'dns_error', 'dns_checked_at', 'spam_quarantine_score', 'spam_junk', 'bimi_logo_url', 'bimi_vmc_url',
+        'dns_status', 'dns_error', 'dns_checked_at', 'dns_check', 'spam_quarantine_score', 'spam_junk', 'bimi_logo_url', 'bimi_vmc_url',
     ];
 
     protected function casts(): array
     {
         return [
             'dns_managed' => 'boolean', 'proxied' => 'boolean', 'server_sends' => 'boolean', 'm365_intune' => 'boolean',
-            'spam_junk' => 'boolean', 'spam_quarantine_score' => 'integer', 'dns_checked_at' => 'datetime',
+            'spam_junk' => 'boolean', 'spam_quarantine_score' => 'integer', 'dns_checked_at' => 'datetime', 'dns_check' => 'array',
         ];
     }
 
@@ -63,6 +64,17 @@ class MailDomain extends Model
         return $this->hasMany(MailAlias::class)->orderBy('local_part');
     }
 
+    public function onboarding(): HasOne
+    {
+        return $this->hasOne(DnsOnboarding::class);
+    }
+
+    /** DNS can be moved to the RHIS Cloudflare account with the wizard. */
+    public function canOnboard(): bool
+    {
+        return !$this->cloudflare_zone_id || $this->dns_status === 'no_zone' || !$this->dns_managed;
+    }
+
     public function senderRules(): HasMany
     {
         return $this->hasMany(MailSenderRule::class)->orderBy('type')->orderBy('value');
@@ -83,7 +95,7 @@ class MailDomain extends Model
     {
         return match ($this->dns_status) {
             'in_sync' => 'ok',
-            'changes' => 'warn',
+            'changes', 'missing' => 'warn',
             'conflict', 'error', 'no_zone' => 'bad',
             default => 'neutral',
         };

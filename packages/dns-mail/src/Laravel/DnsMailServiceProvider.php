@@ -10,6 +10,9 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Rhis\DnsMail\Console\DaneCommand;
+use Rhis\DnsMail\Console\DnsCheckCommand;
+use Rhis\DnsMail\Dns\Resolver;
+use Rhis\DnsMail\Dns\SystemResolver;
 use Rhis\DnsMail\Http\CurlHttpClient;
 use Rhis\DnsMail\Http\HttpClient;
 use Rhis\DnsMail\Mail\MailServerSettings;
@@ -27,6 +30,7 @@ final class DnsMailServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(self::ROOT . '/config/dns-mail.php', 'dns-mail');
         $this->app->singleton(HttpClient::class, static fn (): HttpClient => new CurlHttpClient());
         $this->app->singleton(DnsMailConfig::class);
+        $this->app->singleton(Resolver::class, static fn (): Resolver => new SystemResolver());
         $this->app->bind(MailServerSettings::class, static fn ($app) => $app->make(DnsMailConfig::class)->server());
     }
 
@@ -39,10 +43,11 @@ final class DnsMailServiceProvider extends ServiceProvider
         $this->publishes([self::ROOT . '/config/dns-mail.php' => config_path('dns-mail.php')], 'dns-mail-config');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([DaneCommand::class]);
+            $this->commands([DaneCommand::class, DnsCheckCommand::class]);
         }
         $this->callAfterResolving(Schedule::class, static function (Schedule $schedule): void {
             $schedule->command('dns-mail:dane')->dailyAt('04:20')->withoutOverlapping();
+            $schedule->command('dns-mail:check')->everyFiveMinutes()->withoutOverlapping();
         });
 
         if (!class_exists(Menu::class)) {
