@@ -187,6 +187,12 @@ PY
   app_params() { printf '{"domain":"%s","app":"%s","path":"%s","title":"Smoke","admin_user":"smoke","admin_email":"smoke@example.test","admin_password":"Smoke-test-pass-123","locale":"%s"}' "$@"; }
 
   export -f agent app_params
+  check "server: status with kernel, never a shutdown" bash -c 'agent server.status | jq -e "(.kernel | length > 0) and .can_shutdown == false and (.reboot_reasons | type == \"array\")"'
+  check "server: list of pending updates" bash -c 'agent server.updates | jq -e ".packages | type == \"array\""'
+  check "server: health check answers for services and sites" bash -c 'agent server.health "{\"sites\":[{\"domain\":\"example.test\",\"ssl\":false}]}" | jq -e "(.services | length > 0) and (.sites | length == 1)"'
+  check "server: cleanup (dry run)" agent_job server.cleanup '{"dry_run":true}'
+  check "server: database optimize" agent_job server.db_optimize '{"min_free_mb":1}'
+  check "server: PHP versions" bash -c 'agent server.php_versions | jq -e ".panel == \"8.4\" and (.installed | index(\"8.4\") != null)"'
   check "mail log: smoke message is in the journal, delivered locally" bash -c 'agent mail.log_read "{\"since_hours\":1}" | jq -e "[.events[] | select(.kind == \"delivery\" and .to == \"info@example.test\" and .status == \"sent\" and .local)] | length > 0"'
   check "mail log: long queue ids and a cursor" bash -c 'agent mail.log_read "{\"since_hours\":1}" | jq -e "(.cursor | length > 0) and ([.events[] | select(.kind == \"pickup\") | .qid | length > 12] | length > 0)"'
   check "mail log: rspamd history has the scan" bash -c 'agent mail.spam_history | jq -e ".rows | length > 0"'

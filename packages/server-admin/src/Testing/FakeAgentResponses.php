@@ -10,8 +10,16 @@ use Illuminate\Support\Str;
 /** Answers of the fake agent (local development and tests) for the server management actions. */
 final class FakeAgentResponses
 {
+    private static ?\WeakMap $done = null;
+
     public static function register(FakeAgentClient $agent): void
     {
+        // afterResolving runs on every resolve: register once, so a test can override an answer.
+        self::$done ??= new \WeakMap;
+        if (isset(self::$done[$agent])) {
+            return;
+        }
+        self::$done[$agent] = true;
         $agent->respond('server.status', fn () => [
             'os' => 'Debian GNU/Linux 13 (trixie)', 'kernel' => '6.12.41+deb13-amd64', 'kernel_newest' => '6.12.48+deb13-amd64',
             'kernels_installed' => ['6.12.41+deb13-amd64', '6.12.48+deb13-amd64'],

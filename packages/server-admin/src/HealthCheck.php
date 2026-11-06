@@ -46,7 +46,7 @@ final class HealthCheck
 
     public static function line(array $health): string
     {
-        $sites = count($health['sites'] ?? []);
+        $sites = is_array($health['sites'] ?? null) ? count($health['sites']) : (int) ($health['sites'] ?? 0);
         $down = count($health['sites_down'] ?? []);
         $svc = count($health['services_down'] ?? []);
 
@@ -78,7 +78,7 @@ final class HealthCheck
             }
         }
         $this->options->setState('health_alerted', $down);
-        $this->options->setState('last_health', ['at' => time()] + $health);
+        $this->options->setState('last_health', ['at' => now()->getTimestamp()] + $health);
 
         return [$down['sites'] || $down['services'] ? 'failed' : 'succeeded', self::line($health), ['sites_down' => $down['sites'], 'services_down' => $down['services']]];
     }

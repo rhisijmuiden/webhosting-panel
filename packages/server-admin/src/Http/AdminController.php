@@ -208,8 +208,11 @@ class AdminController extends Controller
         ActivityLog::record('server.maintenance_saved');
 
         try {
-            $this->agent->call('server.auto_updates', ['mode' => $this->options->get('window_enabled') ? 'window' : 'daily'], 30);
+            $mode = $this->options->get('window_enabled') ? 'window' : 'daily';
+            $this->agent->call('server.auto_updates', ['mode' => $mode], 30);
+            $this->options->setState('auto_updates', $mode);
         } catch (AgentException $e) {
+            $this->options->setState('auto_updates', null); // the scheduler tries again
             return back()->with('warning', __('Saved, but the server could not be told yet: :error', ['error' => $e->getMessage()]));
         }
 

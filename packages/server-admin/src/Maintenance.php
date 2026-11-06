@@ -42,6 +42,7 @@ final class Maintenance
     public function tick(?Carbon $now = null): void
     {
         $now ??= $this->options->now();
+        $this->syncAutoUpdates();
         if ($session = $this->current()) {
             $this->advance($session);
 
@@ -59,6 +60,21 @@ final class Maintenance
         // Started late (panel was down)? Only when there is still room in the window.
         if ($now->diffInMinutes($window[1], false) >= 15) {
             $this->advance($this->start('window'));
+        }
+    }
+
+    /** Tell the server once who installs updates: the panel's window, or Debian's own daily run. */
+    private function syncAutoUpdates(): void
+    {
+        $mode = $this->options->get('window_enabled') ? 'window' : 'daily';
+        if ($this->options->state('auto_updates') === $mode) {
+            return;
+        }
+        try {
+            $this->agent->call('server.auto_updates', ['mode' => $mode], 30);
+            $this->options->setState('auto_updates', $mode);
+        } catch (AgentException) {
+            // next minute
         }
     }
 
@@ -181,7 +197,7 @@ final class Maintenance
                     break;
                 }
                 $this->agent->call('server.reboot', ['delay' => $delay, 'reason' => $source], 30);
-                $s['requested_at'] = time();
+                $s['requested_at'] = now()->getTimestamp();
                 $s['reboot_delay'] = $delay;
                 $s['phase'] = 'rebooting';
                 $run->appendLog(__('Rebooting in :n seconds', ['n' => $delay]));
@@ -199,7 +215,7 @@ final class Maintenance
                 $run->appendLog(__('Before: :line', ['line' => HealthCheck::line($pre)]));
                 $s['pre'] = $this->compact($pre);
                 $this->agent->call('server.reboot', ['delay' => 10, 'reason' => 'manual'], 30);
-                $s['requested_at'] = time();
+                $s['requested_at'] = now()->getTimestamp();
                 $s['reboot_delay'] = 10;
                 $s['phase'] = 'rebooting';
                 $run->appendLog(__('Rebooting in :n seconds', ['n' => 10]));
@@ -209,7 +225,7 @@ final class Maintenance
                 $status = $this->agent->call('server.status', [], 15);
                 $boot = (int) ($status['boot_time'] ?? 0);
                 if ($boot > (int) $s['requested_at']) {
-                    if (time() - $boot < self::SETTLE_SECONDS) {
+                    if (now()->getTimestamp() - $boot < self::SETTLE_SECONDS) {
                         return false;
                     }
                     $s['rebooted'] = true;
@@ -218,7 +234,7 @@ final class Maintenance
                     $s['phase'] = 'postcheck';
                     break;
                 }
-                if (time() - (int) $s['requested_at'] > 1800 + (int) ($s['reboot_delay'] ?? 0)) {
+                if (now()->getTimestamp() - (int) $s['requested_at'] > 1800 + (int) ($s['reboot_delay'] ?? 0)) {
                     $s['reboot_failed'] = true;
                     $run->appendLog(__('The server did not reboot'));
                     $s['phase'] = 'postcheck';
@@ -229,7 +245,7 @@ final class Maintenance
 
             case 'postcheck':
             case 'postcheck_retry':
-                if ($s['phase'] === 'postcheck_retry' && time() < (int) ($s['retry_at'] ?? 0)) {
+                if ($s['phase'] === 'postcheck_retry' && now()->getTimestamp() < (int) ($s['retry_at'] ?? 0)) {
                     return false;
                 }
                 $post = $this->health->run();
@@ -246,7 +262,7 @@ final class Maintenance
                         }
                     }
                     $s['phase'] = 'postcheck_retry';
-                    $s['retry_at'] = time() + 60;
+                    $s['retry_at'] = now()->getTimestamp() + 60;
                     $run->result = $s;
                     $run->save();
 
@@ -332,7 +348,7 @@ final class Maintenance
         }
         $r = $run->result ?? [];
         $this->options->setState('last_scan', [
-            'at' => time(), 'max_score' => $r['max_score'] ?? null, 'critical' => (bool) ($r['critical'] ?? false),
+            'at' => now()->getTimestamp(), 'max_score' => $r['max_score'] ?? null, 'critical' => (bool) ($r['critical'] ?? false),
             'packages' => array_slice($r['packages'] ?? [], 0, 200),
         ]);
         if (empty($r['critical']) || ! $this->options->get('critical_enabled') || $this->current()) {
@@ -377,7 +393,7 @@ final class Maintenance
             'sites' => count($health['sites'] ?? []),
             'sites_down' => array_values($health['sites_down'] ?? []),
             'services_down' => array_values($health['services_down'] ?? []),
-            'checked_at' => $health['checked_at'] ?? time(),
+            'checked_at' => $health['checked_at'] ?? now()->getTimestamp(),
         ];
     }
 

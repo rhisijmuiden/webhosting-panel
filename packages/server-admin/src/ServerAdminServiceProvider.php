@@ -7,6 +7,7 @@ namespace Rhis\ServerAdmin;
 use App\Services\Agent\AgentClient;
 use App\Services\Agent\FakeAgentClient;
 use App\Support\Menu;
+use App\Support\ToolsCatalog;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -39,8 +40,12 @@ final class ServerAdminServiceProvider extends ServiceProvider
             'Content-Type' => 'application/javascript; charset=utf-8', 'Cache-Control' => 'public, max-age=3600',
         ]))->name('server-admin.assets.js');
 
-        // Settings > Server management. The settings overview places it; until then it sits under System.
-        Menu::admin()->add('server-management', 'Server management', 'admin.server.index', icon: 'server', section: 'System', order: 525);
+        // Reached through Tools & settings (AppServiceProvider places it under 'tools').
+        Menu::admin()->add('server-management', 'Server management', 'admin.server.index', icon: 'server', section: 'Server management', order: 350);
+        ToolsCatalog::add('server', 'OS updates & reboot', 'admin.server.index', 'Debian updates, security patches with CVE scores and a safe reboot');
+        ToolsCatalog::add('server', 'Maintenance window', 'admin.server.maintenance', 'Nightly updates, automatic reboots, critical CVEs and PHP end of life');
+        ToolsCatalog::add('server', 'Scheduled tasks', 'admin.server.tasks', 'Database optimize, cleanup and health checks');
+        ToolsCatalog::add('server', 'PHP versions', 'admin.server.php', 'Support dates, moving websites and installing or removing versions');
 
         if ($this->app->runningInConsole()) {
             $this->commands([TickCommand::class]);

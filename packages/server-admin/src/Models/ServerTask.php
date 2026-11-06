@@ -37,7 +37,10 @@ class ServerTask extends Model
             }
         }
 
-        return $existing->only(array_keys((array) config('server-admin.tasks')))->sortBy(fn ($t) => array_search($t->key, array_keys(config('server-admin.tasks'))));
+        // A plain collection: Eloquent's only() filters on primary keys, not on array keys.
+        $order = array_keys((array) config('server-admin.tasks'));
+
+        return collect($existing->all())->only($order)->sortBy(fn ($t) => array_search($t->key, $order, true));
     }
 
     public function option(string $key, mixed $default = null): mixed
