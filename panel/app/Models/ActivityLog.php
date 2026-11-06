@@ -20,6 +20,7 @@ class ActivityLog extends Model
     public const LABELS = [
         'auth.login' => 'Logged in',
         'auth.logout' => 'Logged out',
+        'auth.two_factor_skipped' => 'Two-factor code skipped (trusted IP address)',
         'profile.updated' => 'Profile updated',
         'profile.password_changed' => 'Password changed',
         'profile.two_factor_enabled' => 'Two-factor authentication turned on',
@@ -55,9 +56,23 @@ class ActivityLog extends Model
         'backup.key_viewed' => 'Repository key viewed',
     ];
 
+    /** Labels added by features: an English string, or a closure that describes the entry. */
+    private static array $extraLabels = [];
+
+    /** @param  array<string, string|\Closure(self): string>  $labels */
+    public static function labels(array $labels): void
+    {
+        self::$extraLabels = array_merge(self::$extraLabels, $labels);
+    }
+
     public function label(): string
     {
-        return __(self::LABELS[$this->action] ?? $this->action);
+        $extra = self::$extraLabels[$this->action] ?? null;
+        if ($extra instanceof \Closure) {
+            return $extra($this);
+        }
+
+        return __($extra ?? self::LABELS[$this->action] ?? $this->action);
     }
 
     public function user(): BelongsTo

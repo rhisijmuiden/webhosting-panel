@@ -7,15 +7,19 @@ Route::get('/', Admin\DashboardController::class)->name('dashboard');
 
 Route::resource('customers', Admin\CustomerController::class);
 Route::post('customers/{customer}/users', [Admin\CustomerController::class, 'storeUser'])->name('customers.users.store');
+Route::post('customers/{customer}/traffic-unsuspend', [Admin\CustomerController::class, 'liftTrafficSuspension'])->name('customers.traffic-unsuspend');
 Route::delete('customers/{customer}/users/{user}', [Admin\CustomerController::class, 'destroyUser'])->name('customers.users.destroy');
 
 Route::resource('packages', Admin\PackageController::class)->except('show');
+Route::post('packages/{package}/duplicate', [Admin\PackageController::class, 'duplicate'])->name('packages.duplicate');
 
 Route::get('websites', [Admin\WebsiteController::class, 'index'])->name('websites.index');
 Route::get('websites/create', [Admin\WebsiteController::class, 'create'])->name('websites.create');
 Route::post('websites', [Admin\WebsiteController::class, 'store'])->name('websites.store');
+Route::post('websites/bulk', Admin\WebsiteBulkController::class)->name('websites.bulk');
 Route::get('websites/{website}', [Admin\WebsiteController::class, 'show'])->name('websites.show');
 Route::put('websites/{website}', [Admin\WebsiteController::class, 'update'])->name('websites.update');
+Route::put('websites/{website}/php', [Admin\WebsiteController::class, 'php'])->name('websites.php');
 Route::post('websites/{website}/ssl', [Admin\WebsiteController::class, 'ssl'])->name('websites.ssl');
 Route::delete('websites/{website}', [Admin\WebsiteController::class, 'destroy'])->name('websites.destroy');
 
@@ -41,4 +45,20 @@ Route::post('system/channel', [Admin\SystemController::class, 'channel'])->name(
 Route::get('system/jobs/{job}', [Admin\SystemController::class, 'job'])->name('system.job');
 
 Route::get('activity', Admin\ActivityController::class)->name('activity.index');
-Route::get('statistics', Admin\StatisticsController::class)->name('statistics.index');
+Route::get('statistics', [Admin\StatisticsController::class, 'index'])->name('statistics.index');
+Route::get('statistics/data', [Admin\StatisticsController::class, 'data'])->name('statistics.data');
+
+Route::get('php', [Admin\PhpController::class, 'index'])->name('php.index');
+Route::put('php', [Admin\PhpController::class, 'update'])->name('php.update');
+Route::get('php/extensions/search', [Admin\PhpController::class, 'search'])->name('php.extensions.search');
+Route::post('php/extensions', [Admin\PhpController::class, 'install'])->name('php.extensions.install');
+Route::delete('php/extensions', [Admin\PhpController::class, 'remove'])->name('php.extensions.remove');
+Route::post('php/extensions/toggle', [Admin\PhpController::class, 'toggle'])->name('php.extensions.toggle');
+
+Route::get('tools', [Admin\ToolsController::class, 'index'])->name('tools.index');
+
+// Subscriptions: one website on one hosting package (Plesk-style).
+Route::get('subscriptions', [Admin\SubscriptionController::class, 'index'])->name('subscriptions.index');
+Route::post('subscriptions/bulk', [Admin\SubscriptionController::class, 'bulk'])->name('subscriptions.bulk');
+Route::get('subscriptions/{subscription}/edit', [Admin\SubscriptionController::class, 'edit'])->name('subscriptions.edit');
+Route::put('subscriptions/{subscription}', [Admin\SubscriptionController::class, 'update'])->name('subscriptions.update');

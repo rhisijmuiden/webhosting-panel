@@ -1,0 +1,11 @@
+# Managed by the Webhosting Panel installer: all customer PHP processes.
+# Per-site units live below this slice, so the panel can show the heaviest sites.
+[Unit]
+Description=Webhosting Panel customer sites
+
+[Slice]
+CPUWeight=100
+IOWeight=100
+# Customer sites together never take the last 10 % of memory from MariaDB, mail and the panel.
+MemoryHigh=90%
+# Customers with a package get their own slice below this one (whp-sites-c<id>.slice, see whp-site slice).

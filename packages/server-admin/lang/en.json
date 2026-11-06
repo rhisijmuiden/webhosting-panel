@@ -1,0 +1,13 @@
+{
+    "server.reboot_requested": "Server reboot requested",
+    "server.upgrade_started": "Server updates started",
+    "server.maintenance_saved": "Maintenance settings saved",
+    "server.maintenance_cancelled": "Maintenance cancelled",
+    "server.critical_patch": "Critical CVE patched automatically",
+    "server.task_saved": "Scheduled task changed",
+    "server.task_run": "Scheduled task started by hand",
+    "server.php_install": "PHP version install started",
+    "server.php_remove": "PHP version removal started",
+    "server.php_migrate": "Websites moved to a newer PHP version",
+    "server.php_migration_failed": "Moving to a newer PHP version failed"
+}

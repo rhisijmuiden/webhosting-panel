@@ -1,0 +1,76 @@
+/* Client domain page (client.websites.show): own file so app.css stays untouched. */
+.site-page { display: grid; gap: 18px; align-items: start; grid-template-columns: 290px minmax(0, 1fr) 270px; grid-template-areas: "side main rail"; }
+.site-side { grid-area: side; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.site-main { grid-area: main; padding: 0; gap: 0; min-width: 0; }
+.site-rail { grid-area: rail; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (max-width: 1320px) {
+  .site-page { grid-template-columns: 280px minmax(0, 1fr); grid-template-rows: auto 1fr; grid-template-areas: "side main" "rail main"; }
+  .site-rail { grid-row: 2; }
+}
+@media (max-width: 900px) {
+  .site-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "main" "side" "rail"; }
+  .site-rail { grid-row: auto; }
+}
+
+.site-side .site-preview { height: 168px; }
+.site-preview-open { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; background: rgba(10, 17, 32, .7); color: #fff; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity .15s; }
+.site-preview-open .icon { width: 14px; height: 14px; }
+.site-preview:hover .site-preview-open, .site-preview:focus-visible .site-preview-open { opacity: 1; }
+.site-side .site-body { padding: 14px 18px 16px; }
+
+.site-tabs { display: flex; gap: 4px; padding: 10px 14px 0; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.site-tabs a { position: relative; flex: none; padding: 12px 12px 13px; color: var(--ink-muted); font-weight: 600; font-size: 14.5px; text-decoration: none; white-space: nowrap; }
+.site-tabs a:hover { color: var(--ink); text-decoration: none; }
+.site-tabs a.is-active { color: var(--ink); }
+.site-tabs a.is-active::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 3px; border-radius: 3px 3px 0 0; background: var(--koraal); }
+.site-tab { padding: 22px 24px 24px; display: flex; flex-direction: column; gap: 22px; min-height: 360px; }
+.site-tab .lead { font-size: 18px; font-weight: 600; margin: 0; }
+.site-foot { display: flex; flex-wrap: wrap; gap: 6px 22px; padding: 12px 24px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--ink-muted); }
+.site-foot code { color: var(--ink); font-size: 12.5px; }
+
+.tool-group { display: flex; flex-direction: column; gap: 10px; }
+.tool-group h2 { font-size: 15px; font-weight: 700; margin: 0; }
+.tool-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
+.tool-tile { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; min-width: 0; transition: border-color .15s, background .15s; }
+.tool-tile:hover { text-decoration: none; border-color: var(--ink-muted); background: var(--surface-sunken); }
+.tool-tile:focus-visible { outline: 2px solid var(--lucht); outline-offset: 2px; }
+.tool-icon { flex: none; width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; background: var(--surface-sunken); color: var(--ink); }
+.tool-icon .icon { width: 19px; height: 19px; }
+.tool-icon.tone-ok { background: var(--ok-bg); color: var(--ok-ink); }
+.tool-icon.tone-warn { background: var(--warn-bg); color: var(--warn-ink); }
+.tool-icon.tone-bad { background: var(--bad-bg); color: var(--bad-ink); }
+.tool-text { display: flex; flex-direction: column; min-width: 0; }
+.tool-text strong { font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.tool-text strong .icon { width: 13px; height: 13px; color: var(--ink-muted); }
+.tool-text small { font-size: 12.5px; color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-text small.is-warn, .site-tab .is-warn { color: var(--warn-ink); font-weight: 600; }
+.tool-text small.is-bad { color: var(--bad-ink); font-weight: 600; }
+.tool-text small.is-ok { color: var(--ok-ink); }
+
+.site-tab .grid > .card, .site-tab > .card { box-shadow: none; }
+.wp-block { display: flex; flex-direction: column; gap: 16px; }
+.wp-block + .wp-block { padding-top: 22px; border-top: 1px solid var(--line); }
+.wp-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.wp-head h2 { font-size: 22px; font-weight: 800; font-stretch: 112%; margin: 0; }
+.wp-links { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.wp-links a { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; }
+.wp-links .icon { width: 16px; height: 16px; }
+.wp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 22px 32px; }
+.wp-grid > div { display: flex; flex-direction: column; gap: 12px; }
+.wp-grid h3 { font-size: 17px; font-weight: 700; margin: 0; }
+.wp-grid form { margin: 0; }
+.site-rail .kv-tight dd .pill { margin-left: auto; }
+.site-rail .btn { max-width: 100%; white-space: normal; text-align: left; }
+
+/* Admin side of the domain page: the admin sidebar is wider, so drop to two columns sooner,
+   let the extra Administration tab wrap instead of hiding it, and break long paths. */
+.site-page.is-admin .site-tabs { flex-wrap: wrap; }
+.site-page .kv dd.mono { overflow-wrap: anywhere; }
+@media (max-width: 1560px) {
+  .site-page.is-admin { grid-template-columns: 280px minmax(0, 1fr); grid-template-rows: auto 1fr; grid-template-areas: "side main" "rail main"; }
+  .site-page.is-admin .site-rail { grid-row: 2; }
+}
+@media (max-width: 900px) {
+  .site-page.is-admin { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "main" "side" "rail"; }
+  .site-page.is-admin .site-rail { grid-row: auto; }
+}

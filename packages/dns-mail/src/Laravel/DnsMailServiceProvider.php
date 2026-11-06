@@ -10,9 +10,13 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Rhis\DnsMail\Console\DaneCommand;
+use Rhis\DnsMail\Console\DnsCheckCommand;
+use Rhis\DnsMail\Dns\Resolver;
+use Rhis\DnsMail\Dns\SystemResolver;
 use Rhis\DnsMail\Http\CurlHttpClient;
 use Rhis\DnsMail\Http\HttpClient;
 use Rhis\DnsMail\Mail\MailServerSettings;
+use Rhis\DnsMail\Models\MailDomain;
 use Rhis\DnsMail\Services\DnsMailConfig;
 use Rhis\DnsMail\Services\DomainProvisioner;
 use Throwable;
@@ -27,7 +31,10 @@ final class DnsMailServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(self::ROOT . '/config/dns-mail.php', 'dns-mail');
         $this->app->singleton(HttpClient::class, static fn (): HttpClient => new CurlHttpClient());
         $this->app->singleton(DnsMailConfig::class);
+        $this->app->singleton(Resolver::class, static fn (): Resolver => new SystemResolver());
         $this->app->bind(MailServerSettings::class, static fn ($app) => $app->make(DnsMailConfig::class)->server());
+        $this->app->register(MailLogServiceProvider::class);
+        $this->app->register(MailExtrasServiceProvider::class);
     }
 
     public function boot(): void
@@ -39,10 +46,11 @@ final class DnsMailServiceProvider extends ServiceProvider
         $this->publishes([self::ROOT . '/config/dns-mail.php' => config_path('dns-mail.php')], 'dns-mail-config');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([DaneCommand::class]);
+            $this->commands([DaneCommand::class, DnsCheckCommand::class]);
         }
         $this->callAfterResolving(Schedule::class, static function (Schedule $schedule): void {
             $schedule->command('dns-mail:dane')->dailyAt('04:20')->withoutOverlapping();
+            $schedule->command('dns-mail:check')->everyFiveMinutes()->withoutOverlapping();
         });
 
         if (!class_exists(Menu::class)) {
@@ -55,6 +63,15 @@ final class DnsMailServiceProvider extends ServiceProvider
         // New website: create its mail domain, DKIM key and DNS right away.
         Website::created(function (Website $site): void {
             try {
+                // A subdomain is no mail domain of its own: its web records go into the main domain's zone.
+                if ($site->getAttribute('parent_id')) {
+                    $main = MailDomain::where('website_id', $site->getAttribute('parent_id'))->first();
+                    if ($main !== null) {
+                        $this->app->make(DomainProvisioner::class)->afterChange($main);
+                    }
+
+                    return;
+                }
                 $this->app->make(DomainProvisioner::class)->forWebsite($site);
             } catch (Throwable $e) {
                 report($e);

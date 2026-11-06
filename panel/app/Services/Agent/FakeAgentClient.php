@@ -65,6 +65,13 @@ class FakeAgentClient implements AgentClient
             ]],
             'crowdsec.metrics' => ['alerts_24h' => 312],
             'crowdsec.ban', 'crowdsec.unban' => ['address' => $params['address'] ?? ''],
+            'security.apply' => ['changed' => [], 'warning' => null],
+            'security.site_activity' => ['domain' => $params['domain'] ?? '', 'days' => $params['days'] ?? 7, 'alerts' => [
+                ['address' => '203.0.113.7', 'country' => 'NL', 'scenario' => 'whp/wordpress-bf', 'events' => 5, 'at' => now()->subHours(2)->toIso8601String(), 'blocked_for' => '58m'],
+                ['address' => '198.51.100.23', 'country' => 'US', 'scenario' => 'crowdsecurity/http-wordpress-scan', 'events' => 12, 'at' => now()->subDay()->toIso8601String(), 'blocked_for' => null],
+            ]],
+            'security.site_release' => ['address' => $params['address'] ?? '', 'released' => 0],
+            'security.check_ip' => ['address' => $params['address'] ?? '', 'blocked' => false, 'decisions' => []],
             'panel.version' => ['version' => trim((string) @file_get_contents(base_path('../VERSION'))) ?: '0.0.0', 'channel' => config('panel.channel'), 'branch' => 'main', 'commit' => 'dev', 'commit_date' => null],
             'panel.check_update' => [
                 'channel' => $params['channel'] ?? config('panel.channel'), 'branch' => 'main',
@@ -84,7 +91,25 @@ class FakeAgentClient implements AgentClient
             'site.ssl' => ['domain' => $params['domain'], 'ssl' => 'active'],
             'site.remove', 'site.quota' => ['domain' => $params['domain'] ?? ''],
             'site.list' => ['sites' => []],
+            'site.suspend', 'site.unsuspend' => ['domain' => $params['domain'], 'suspended' => $action === 'site.suspend'],
+            'site.owner' => ['domain' => $params['domain'], 'owner' => isset($params['subscription_id']) ? 's'.$params['subscription_id'] : (isset($params['customer_id']) ? 'c'.$params['customer_id'] : null)],
+            'site.php_settings' => ['domain' => $params['domain'], 'php_ini' => $params['settings'] ?? [], 'php_workers' => $params['php_workers'] ?? 10],
+            'customer.limits', 'subscription.limits' => ['owner' => isset($params['subscription_id']) ? 's'.$params['subscription_id'] : 'c'.($params['customer_id'] ?? 0), 'cpu' => isset($params['cpu_percent']) ? $params['cpu_percent'].'%' : null,
+                'memory_mb' => $params['memory_mb'] ?? null, 'io_mbps' => $params['io_mbps'] ?? null, 'tasks' => $params['max_processes'] ?? null],
+            'db.limits' => ['domain' => $params['domain'], 'max_connections' => $params['max_connections'] ?? null, 'users' => []],
+            'traffic.report' => ['month' => now()->utc()->format('Y-m'), 'sites' => Website::pluck('domain')
+                ->mapWithKeys(fn ($d) => [$d => abs(crc32($d)) % (40 * 1024 ** 3)])->all()],
+            'php.extensions.list' => $this->phpExtensions($params['php'] ?? '8.4'),
+            'php.extensions.search_pecl' => ['results' => collect([
+                ['name' => 'swoole', 'version' => '6.0.2', 'summary' => 'Event-driven asynchronous and concurrent networking engine'],
+                ['name' => 'mailparse', 'version' => '3.1.8', 'summary' => 'Email message manipulation'],
+                ['name' => 'xdebug', 'version' => '3.4.2', 'summary' => 'Xdebug - debugger and profiler for PHP'],
+                ['name' => 'ssh2', 'version' => '1.4.1', 'summary' => 'Bindings for the libssh2 library'],
+            ])->filter(fn ($r) => str_contains($r['name'].' '.strtolower($r['summary']), strtolower($params['q'] ?? '')))->values()->all()],
+            'php.extensions.install', 'php.extensions.remove' => ['job' => (string) Str::uuid()],
+            'php.extensions.toggle' => ['php' => $params['php'], 'name' => $params['name'], 'enabled' => (bool) $params['enabled']],
             'stats.sample' => $this->statsSample(),
+            'traffic.history' => $this->trafficHistory((int) ($params['since'] ?? 0)),
             'backup.status' => [
                 'version' => 'fake', 'running' => false,
                 'targets' => [['name' => 'nas', 'type' => 'sftp', 'host' => 'nas.example.test', 'port' => '22', 'user' => 'backup', 'path' => 'whp/web01', 'enabled' => true, 'created' => '2026-11-01T10:00:00Z']],
@@ -108,13 +133,123 @@ class FakeAgentClient implements AgentClient
                 'public_key' => 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA'.substr(base64_encode(hash('sha256', (string) ($params['domain'] ?? ''), true)), 0, 40)],
             'mail.mailbox_usage' => ['usage' => []],
             'mail.spam_policy_sync' => ['changed' => false, 'domains' => count($params['domains'] ?? [])],
+            'mail.autoreply_sync' => ['autoreplies' => count($params['autoreplies'] ?? []), 'written' => [], 'removed' => [], 'missing_home' => []],
+            'mail.imap_import_available' => ['available' => true, 'max_running' => 3],
+            'mail.imap_import_test' => ['ok' => true, 'host' => $params['host'] ?? '', 'messages' => 1284, 'folders' => [
+                ['name' => 'INBOX', 'messages' => 1032], ['name' => 'Sent', 'messages' => 241], ['name' => 'Archive', 'messages' => 11],
+            ]],
+            'mail.imap_import_start' => ['id' => $params['id'] ?? 0, 'state' => 'running'],
+            'mail.imap_import_status' => ['id' => $params['id'] ?? 0, 'state' => 'running', 'exit_code' => null, 'error_lines' => [],
+                'progress' => ['total' => 1284, 'left' => 497, 'done' => 787, 'percent' => 61, 'transferred' => null, 'skipped' => null, 'errors' => null, 'bytes' => null, 'finished_stats' => false],
+                'log' => ['++++ Looping on each one of 3 folders to sync', 'Folder    1/3 [INBOX] -> [INBOX]', 'msg INBOX/787 {48211} copied to INBOX/787   4.10 msgs/s  ETA: 121 s  497/1284 msgs left']],
+            'mail.imap_import_stop' => ['id' => $params['id'] ?? 0, 'state' => 'stopped'],
+            'mail.imap_import_forget' => ['id' => $params['id'] ?? 0, 'removed' => true],
             'mail.quarantine_list' => $this->quarantine($params['domain'] ?? ''),
             'mail.quarantine_release' => ['user' => $params['user'] ?? '', 'uid' => $params['uid'] ?? 0, 'learned' => true],
             'mail.quarantine_delete' => ['user' => $params['user'] ?? '', 'deleted' => count($params['uids'] ?? []), 'learned' => 0],
             'mail.tlsa' => ['usage' => 3, 'selector' => 1, 'matching_type' => 1, 'certificate' => hash('sha256', 'fake-mail-key'),
                 'cert_file' => '/etc/letsencrypt/live/mail.example.test/fullchain.pem', 'not_after' => 'Feb  3 12:00:00 2027 GMT', 'reuse_key' => true],
+            'apps.catalog' => ['max_age_days' => $params['max_age_days'] ?? 365, 'apps' => array_map(
+                fn (array $a) => $a + ['subdir' => true, 'locales' => ['en', 'nl'], 'database' => true, 'maintained' => true,
+                    'latest_version' => '1.0.0', 'released_at' => time() - 86400 * 20, 'end_of_life' => false,
+                    'admin_user_pattern' => '[A-Za-z0-9][A-Za-z0-9._@-]{2,59}'],
+                [
+                    ['id' => 'wordpress', 'name' => 'WordPress', 'latest_version' => '6.9'],
+                    ['id' => 'woocommerce', 'name' => 'WooCommerce'],
+                    ['id' => 'joomla', 'name' => 'Joomla', 'locales' => ['en']],
+                    ['id' => 'nextcloud', 'name' => 'Nextcloud', 'subdir' => false],
+                    ['id' => 'piwigo', 'name' => 'Piwigo'],
+                    ['id' => 'mediawiki', 'name' => 'MediaWiki', 'admin_user_pattern' => '[A-Za-z0-9][A-Za-z0-9._-]{2,59}'],
+                    ['id' => 'dokuwiki', 'name' => 'DokuWiki', 'database' => false, 'admin_user_pattern' => '[a-z0-9][a-z0-9._-]{2,59}'],
+                    ['id' => 'phpbb', 'name' => 'phpBB', 'locales' => ['en'], 'admin_user_pattern' => '[A-Za-z0-9][A-Za-z0-9._-]{2,19}'],
+                    ['id' => 'freshrss', 'name' => 'FreshRSS', 'admin_user_pattern' => '[A-Za-z0-9][A-Za-z0-9_]{2,15}'],
+                ])],
+            'apps.list' => ['apps' => []],
+            'apps.install', 'apps.remove' => ['job' => (string) Str::uuid()],
+            'db.list' => ['databases' => []],
+            'site.show' => ['domain' => $params['domain'] ?? '', 'ssl' => 'imported', 'disk' => ['used_mb' => 412]],
+            'migrate.key' => ['public_key' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeKeyForDevelopmentOnly webhosting-panel-migration@web01', 'fingerprint' => 'SHA256:fakefingerprint'],
+            'migrate.connect' => ['type' => 'plesk', 'version' => '18.0.74', 'hostname' => 'plesk.example.test', 'rsync' => true, 'host_key' => 'ED25519 SHA256:fakehostkey'],
+            'migrate.forget_host' => ['host' => $params['host'] ?? '', 'forgotten' => true],
+            'migrate.inventory', 'migrate.transfer' => ['job' => (string) Str::uuid()],
+            'migrate.credentials' => ['domain' => $params['domain'] ?? '', 'mailboxes' => [
+                ['local' => 'info', 'scheme' => 'plain', 'secret' => 'Geheim-123'],
+                ['local' => 'jan', 'scheme' => 'crypt', 'secret' => '$6$abcdefgh$'.str_repeat('A', 86)],
+            ]],
+            'wp.detect' => ['domain' => $params['domain'] ?? '', 'installs' => Website::where('domain', $params['domain'] ?? '')->where('profile', 'wordpress')->exists()
+                ? [['path' => '', 'version' => '6.6.2']] : []],
+            'wp.status' => $this->wordpressStatus($params),
+            'wp.update', 'wp.update_many', 'wp.restore' => ['job' => (string) Str::uuid()],
+            'wp.cron_get', 'wp.cron_set' => ['mode' => $params['mode'] ?? 'wordpress', 'interval' => ($params['mode'] ?? 'wordpress') === 'system' ? ($params['interval'] ?? 5) : null,
+                'timer' => 'whp-wpcron-fake.timer', 'timer_active' => ($params['mode'] ?? '') === 'system', 'last_run' => null, 'last_result' => null],
+            'wp.users' => ['users' => [['id' => 1, 'login' => 'beheerder', 'email' => 'info@'.($params['domain'] ?? 'example.test'), 'name' => 'Beheerder']]],
+            'wp.set_password' => ['user' => ['id' => $params['user_id'] ?? 1, 'login' => 'beheerder', 'email' => '', 'name' => '']]
+                + (isset($params['password']) ? [] : ['password' => 'Fake-Generated-Pass-2026']),
+            'wp.login_link' => ['url' => 'https://'.($params['domain'] ?? 'example.test').'/wp-login.php?whp_sso='.Str::random(43), 'user' => ['id' => 1, 'login' => 'beheerder'], 'expires_in' => 120],
+            'wp.snapshots' => ['snapshots' => [['id' => now()->subDay()->format('Ymd-His'), 'size' => 48 * 1024 * 1024]]],
             default => throw new AgentException('unknown_action', "Unknown action: {$action}"),
         };
+    }
+
+    /** A small Plesk server, the shape migrate.inventory returns (docs/migration.md). */
+    public static function pleskInventory(): array
+    {
+        $site = fn (string $name, string $sub, array $extra = []) => array_merge([
+            'name' => $name, 'kind' => 'site', 'is_subdomain' => false, 'parent' => null, 'subscription' => $name, 'owner_id' => '3',
+            'active' => true, 'size_mb' => 412, 'php' => '8.2',
+            'web' => ['root' => "/var/www/vhosts/{$name}/httpdocs", 'vhost' => $name, 'base' => "/var/www/vhosts/{$name}/httpdocs", 'sub' => $sub, 'system_user' => 'klant', 'app' => 'wordpress'],
+            'aliases' => [], 'databases' => [], 'mailboxes' => [], 'forwarders' => [], 'dns' => [], 'ssl' => null, 'notes' => [],
+        ], $extra);
+
+        return [
+            'source' => ['type' => 'plesk', 'version' => '18.0.74', 'hostname' => 'plesk.example.test'],
+            'server_ips' => ['203.0.113.5'],
+            'owners' => [['id' => '3', 'login' => 'bakkerij', 'kind' => 'client', 'name' => 'Piet Bakker', 'company' => 'Bakkerij Bakker', 'email' => 'piet@bakkerij.test', 'phone' => '']],
+            'domains' => [
+                $site('bakkerij.test', '', [
+                    'aliases' => [['name' => 'bakkerij-bakker.test', 'web' => true, 'mail' => false]],
+                    'databases' => [['name' => 'wp_bakkerij', 'type' => 'mysql', 'server' => 'local', 'users' => ['wp_bakkerij']]],
+                    'mailboxes' => [
+                        ['local' => 'info', 'quota_mb' => 1024, 'size_mb' => 230, 'password' => 'plain', 'aliases' => ['bestellingen'], 'forward' => []],
+                        ['local' => 'jan', 'quota_mb' => 0, 'size_mb' => 12, 'password' => 'hash', 'aliases' => [], 'forward' => []],
+                    ],
+                    'forwarders' => [['local' => 'factuur', 'targets' => ['boekhouder@example.org']]],
+                    'dns' => [
+                        ['type' => 'A', 'name' => 'bakkerij.test', 'content' => '203.0.113.5'],
+                        ['type' => 'MX', 'name' => 'bakkerij.test', 'content' => 'mail.bakkerij.test', 'priority' => 10],
+                        ['type' => 'TXT', 'name' => 'bakkerij.test', 'content' => 'v=spf1 +a +mx -all'],
+                        ['type' => 'TXT', 'name' => 'bakkerij.test', 'content' => 'google-site-verification=abc123'],
+                        ['type' => 'CNAME', 'name' => 'shop.bakkerij.test', 'content' => 'shops.myshopify.com'],
+                    ],
+                    'ssl' => ['name' => 'Lets Encrypt bakkerij.test', 'lets_encrypt' => true],
+                ]),
+                $site('api.bakkerij.test', 'public', ['is_subdomain' => true, 'parent' => 'bakkerij.test', 'subscription' => 'bakkerij.test', 'php' => '8.4',
+                    'web' => ['root' => '/var/www/vhosts/bakkerij.test/api.bakkerij.test/public', 'vhost' => 'bakkerij.test', 'base' => '/var/www/vhosts/bakkerij.test/api.bakkerij.test', 'sub' => 'public', 'system_user' => 'klant', 'app' => 'laravel']]),
+            ],
+            'totals' => ['domains' => 2, 'sites' => 2, 'databases' => 1, 'mailboxes' => 2, 'size_mb' => 824],
+            'warnings' => [],
+        ];
+    }
+
+    private function wordpressStatus(array $params): array
+    {
+        $plugins = [
+            ['name' => 'woocommerce', 'title' => 'WooCommerce', 'status' => 'active', 'version' => '9.1.2', 'update' => true, 'update_version' => '9.4.1', 'auto_update' => false],
+            ['name' => 'contact-form-7', 'title' => 'Contact Form 7', 'status' => 'active', 'version' => '5.9.8', 'update' => true, 'update_version' => '6.0.1', 'auto_update' => false],
+            ['name' => 'wordfence', 'title' => 'Wordfence Security', 'status' => 'active', 'version' => '8.0.1', 'update' => false, 'update_version' => null, 'auto_update' => true],
+            ['name' => 'hello-dolly', 'title' => 'Hello Dolly', 'status' => 'inactive', 'version' => '1.7.2', 'update' => false, 'update_version' => null, 'auto_update' => false],
+        ];
+        $themes = [
+            ['name' => 'astra', 'title' => 'Astra', 'status' => 'active', 'version' => '4.7.0', 'update' => true, 'update_version' => '4.8.3', 'auto_update' => false],
+            ['name' => 'twentytwentyfour', 'title' => 'Twenty Twenty-Four', 'status' => 'inactive', 'version' => '1.2', 'update' => false, 'update_version' => null, 'auto_update' => false],
+        ];
+
+        return [
+            'domain' => $params['domain'] ?? '', 'path' => $params['path'] ?? '', 'version' => '6.6.2',
+            'core_update' => ['version' => '6.7.1', 'type' => 'major'], 'plugins' => $plugins, 'themes' => $themes,
+            'outdated' => ['core' => true, 'plugins' => 2, 'themes' => 1],
+            'cron' => ['mode' => 'wordpress', 'interval' => null], 'checked_at' => time(), 'errors' => [],
+        ];
     }
 
     private function quarantine(string $domain): array
@@ -149,6 +284,34 @@ class FakeAgentClient implements AgentClient
         ];
     }
 
+    /** Visitors per site per hour/day, shaped like whp_agent/visits.py history(). */
+    private function trafficHistory(int $since): array
+    {
+        $domains = Website::pluck('domain')->values();
+        $make = function (int $start, float $scale) use ($domains) {
+            $sites = [];
+            $total = ['requests' => 0, 'pageviews' => 0, 'bots' => 0, 'bytes' => 0, 'visitors' => 0];
+            foreach ($domains as $i => $d) {
+                $v = (int) round(120 / ($i + 1) * $scale);
+                $row = ['visitors' => $v, 'pageviews' => $v * 3, 'requests' => $v * 40, 'bots' => $v * 6, 'bytes' => $v * 2_500_000];
+                $sites[$d] = $row;
+                foreach ($row as $k => $n) {
+                    $total[$k] += $n;
+                }
+            }
+            $total['visitors'] = (int) round($total['visitors'] * 0.9);
+
+            return ['start' => $start, 'sites' => $sites + ['*' => $total]];
+        };
+        $hours = [];
+        for ($h = max($since, time() - 3 * 3600); $h <= time(); $h += 3600) {
+            $hours[] = $make(intdiv($h, 3600) * 3600, 1);
+        }
+        $day = now()->startOfDay()->getTimestamp();
+
+        return ['hours' => $hours, 'days' => [['day' => now()->format('Y-m-d')] + $make($day, 10)]];
+    }
+
     private function firewallAdd(array $params): array
     {
         $rules = Cache::get('fake-agent.firewall', []);
@@ -165,5 +328,25 @@ class FakeAgentClient implements AgentClient
         Cache::forever('fake-agent.firewall', $rules);
 
         return ['deleted' => $params['id']];
+    }
+
+    private function phpExtensions(string $php): array
+    {
+        $installed = ['bcmath', 'curl', 'gd', 'gmp', 'igbinary', 'imagick', 'intl', 'mbstring', 'mysql', 'redis', 'soap', 'sqlite3', 'xml', 'zip', 'apcu', 'exif'];
+        $available = ['amqp' => 'AMQP extension', 'apcu' => 'APC User Cache', 'bcmath' => 'Bcmath module', 'curl' => 'CURL module',
+            'decimal' => 'Arbitrary precision decimals', 'gd' => 'GD module', 'gmp' => 'GMP module', 'igbinary' => 'igbinary serializer',
+            'imagick' => 'ImageMagick module', 'intl' => 'Internationalisation module', 'ldap' => 'LDAP module', 'mailparse' => 'Email message manipulation',
+            'mbstring' => 'MBSTRING module', 'memcached' => 'memcached extension module', 'mongodb' => 'MongoDB driver', 'mysql' => 'MySQL module',
+            'pgsql' => 'PostgreSQL module', 'redis' => 'PHP extension for interfacing with Redis', 'soap' => 'SOAP module', 'sqlite3' => 'SQLite3 module',
+            'ssh2' => 'Bindings for the libssh2 library', 'swoole' => 'Swoole networking engine', 'tidy' => 'tidy module', 'xdebug' => 'Xdebug Module',
+            'xml' => 'DOM, SimpleXML, XML, and XSL module', 'yaml' => 'YAML-1.1 parser and emitter', 'zip' => 'Zip module', 'exif' => 'EXIF module'];
+        $extra = Cache::get("fake-agent.phpext.$php", []);
+        $rows = collect($available)->map(fn ($desc, $name) => [
+            'name' => $name, 'package' => "php$php-$name", 'description' => $desc, 'source' => 'apt',
+            'installed' => in_array($name, $installed, true) || in_array($name, $extra, true),
+            'loaded' => in_array($name, $installed, true) || in_array($name, $extra, true), 'core' => false,
+        ])->values()->all();
+
+        return ['php' => $php, 'extensions' => $rows, 'loaded' => $installed];
     }
 }

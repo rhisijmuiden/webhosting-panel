@@ -12,6 +12,11 @@
                     @foreach ($customers as $c)<option value="{{ $c->id }}" @selected(old('customer_id', $selectedCustomer) == $c->id)>{{ $c->displayName() }}</option>@endforeach
                 </x-ui.field>
                 <x-ui.field name="domain" :label="__('Domain name')" placeholder="example.com" required autocomplete="off" spellcheck="false" />
+                <x-ui.field name="hosting_package_id" type="select" :label="__('Package')" :help="__('Every website is a subscription with its own package.')">
+                    <option value="">{{ __('No package (unlimited)') }}</option>
+                    @foreach ($packages as $p)<option value="{{ $p->id }}" @selected(old('hosting_package_id', $packages->count() === 1 ? $p->id : null) == $p->id)>{{ $p->name }}</option>@endforeach
+                </x-ui.field>
+                <x-ui.field name="expires_on" type="date" :label="__('Expiry date')" :help="__('Optional. The subscription is suspended after this date.')" />
             </div>
             <div class="field">
                 <span class="label">{{ __('Type of website') }}</span>

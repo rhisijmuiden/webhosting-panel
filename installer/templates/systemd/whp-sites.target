@@ -1,0 +1,5 @@
+[Unit]
+Description=Webhosting Panel: all site PHP-FPM masters
+
+[Install]
+WantedBy=multi-user.target

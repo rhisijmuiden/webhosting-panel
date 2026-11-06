@@ -11,23 +11,31 @@
         </div>
     </div>
 
+    @include('admin.customers.quick-actions')
+
+    @if ($customer->websites->filter(fn ($w) => $w->subscription?->suspended_reason === \App\Services\Traffic::SUSPENDED)->isNotEmpty())
+        <div class="alert alert-warn" role="status"><x-icon name="info" /><div><strong>{{ __('Websites of this customer are suspended: the data traffic limit of their package is reached.') }}</strong>
+            <p class="small">{{ __('They come back online automatically on the first day of next month.') }}</p></div>
+            <form method="POST" action="{{ route('admin.customers.traffic-unsuspend', $customer) }}">@csrf<button class="btn btn-sm" type="submit">{{ __('Put online now') }}</button></form></div>
+    @endif
     <section class="grid grid-stats">
-        <div class="card stat"><span class="label">{{ __('Package') }}</span><strong class="value" style="font-size:24px">{{ $customer->package?->name ?? '–' }}</strong></div>
-        <div class="card stat"><span class="label">{{ __('Websites') }}</span><strong class="value">{{ $customer->websites->count() }}@if ($customer->package)<span class="muted" style="font-size:16px"> / {{ $customer->package->max_websites }}</span>@endif</strong></div>
-        <div class="card stat"><span class="label">{{ __('Disk') }}</span><strong class="value" style="font-size:24px">{{ \Illuminate\Support\Number::fileSize($customer->diskUsedMb() * 1024 * 1024) }}</strong>
-            @if ($customer->package)<x-ui.meter label="" :percent="$customer->package->disk_mb ? $customer->diskUsedMb() / $customer->package->disk_mb * 100 : 0" />@endif</div>
+        <div class="card stat"><span class="label">{{ __('Subscriptions') }}</span><strong class="value"><a href="{{ route('admin.subscriptions.index', ['customer' => $customer->id]) }}">{{ $customer->websites->count() }}</a></strong></div>
+        <div class="card stat"><span class="label">{{ __('Disk') }}</span><strong class="value" style="font-size:24px">{{ \Illuminate\Support\Number::fileSize($customer->diskUsedMb() * 1024 * 1024) }}</strong></div>
+        <div class="card stat"><span class="label">{{ __('Data traffic this month') }}</span><strong class="value" style="font-size:24px">{{ \Illuminate\Support\Number::fileSize($customer->trafficBytes(), 1) }}</strong></div>
         <div class="card stat"><span class="label">CRM</span><strong class="value mono" style="font-size:18px">{{ $customer->crm_id ?? '–' }}</strong></div>
     </section>
 
-    <x-ui.card :title="__('Websites')" flush>
+    <x-ui.card :title="__('Subscriptions')" flush>
         @if ($customer->websites->isEmpty())
             <x-ui.empty icon="globe">{{ __('This customer has no websites yet.') }}</x-ui.empty>
         @else
         <x-ui.table>
-            <x-slot:head><th>{{ __('Domain') }}</th><th>PHP</th><th>{{ __('Type') }}</th><th>SSL</th><th>{{ __('Status') }}</th></x-slot:head>
+            <x-slot:head><th>{{ __('Domain') }}</th><th>{{ __('Package') }}</th><th>{{ __('Expiry date') }}</th><th>PHP</th><th>{{ __('Type') }}</th><th>SSL</th><th>{{ __('Status') }}</th></x-slot:head>
             @foreach ($customer->websites as $w)
                 <tr>
                     <td><a class="strong" href="{{ route('admin.websites.show', $w) }}">{{ $w->domain }}</a></td>
+                    <td>{{ $w->subscription?->package?->name ?? __('No package') }}</td>
+                    <td>{{ $w->subscription?->expires_on?->toDateString() ?? '–' }}</td>
                     <td>{{ $w->php_version }}</td><td>{{ __(ucfirst($w->profile)) }}</td>
                     <td><x-ui.pill :status="$w->ssl_status">{{ __(ucfirst($w->ssl_status)) }}</x-ui.pill></td>
                     <td><x-ui.pill :status="$w->status">{{ __(ucfirst($w->status)) }}</x-ui.pill></td>
@@ -43,9 +51,17 @@
             <div>
                 @forelse ($customer->users as $u)
                     <div class="row">
-                        <span><strong>{{ $u->name }}</strong><br><span class="small muted">{{ $u->email }} · {{ $locales[$u->locale] ?? $u->locale }}@if ($u->hasTwoFactor()) · 2FA @endif</span></span>
-                        <form method="POST" action="{{ route('admin.customers.users.destroy', [$customer, $u]) }}" data-confirm="{{ __('Delete this login?') }}">@csrf @method('DELETE')
-                            <button class="btn btn-sm btn-danger" type="submit" aria-label="{{ __('Delete') }} {{ $u->email }}"><x-icon name="trash" /></button></form>
+                        <span><strong>{{ $u->name }}</strong>@if ($u->teamMember) <x-ui.pill status="info" :dot="false" title="{{ implode(', ', $u->teamMember->areaLabels()) }}">{{ __('Team member') }}</x-ui.pill>@endif<br><span class="small muted">{{ $u->email }} · {{ $locales[$u->locale] ?? $u->locale }}@if ($u->hasTwoFactor()) · 2FA @endif</span></span>
+                        <span class="login-actions">
+                            <form method="POST" action="{{ route('admin.customers.users.password', [$customer, $u]) }}" data-confirm="{{ __('Give :email a new password? The old password stops working.', ['email' => $u->email]) }}">@csrf
+                                <button class="btn btn-sm" type="submit" title="{{ __('New password') }}"><x-icon name="key" /><span class="login-action-label">{{ __('New password') }}</span></button></form>
+                            @if ($u->hasTwoFactor())
+                                <form method="POST" action="{{ route('admin.customers.users.two-factor', [$customer, $u]) }}" data-confirm="{{ __('Turn off two-factor authentication for :email?', ['email' => $u->email]) }}">@csrf
+                                    <button class="btn btn-sm" type="submit" title="{{ __('Turn off 2FA') }}"><x-icon name="lock" /><span class="login-action-label">{{ __('Turn off 2FA') }}</span></button></form>
+                            @endif
+                            <form method="POST" action="{{ route('admin.customers.users.destroy', [$customer, $u]) }}" data-confirm="{{ __('Delete this login?') }}">@csrf @method('DELETE')
+                                <button class="btn btn-sm btn-danger" type="submit" aria-label="{{ __('Delete') }} {{ $u->email }}"><x-icon name="trash" /></button></form>
+                        </span>
                     </div>
                 @empty
                     <p class="small muted">{{ __('No logins yet.') }}</p>

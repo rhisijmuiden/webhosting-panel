@@ -1,0 +1,124 @@
+name: Installer
+
+on:
+  # Feature branches are tested through their pull request; push only runs for
+  # the release branches, so a PR no longer runs the full install twice.
+  push:
+    branches: [test, main]
+    paths: ["installer/**", "tests/**", "agent/**", "panel/deploy/**", "webmail/**", "backup/**", "mail/**", ".github/workflows/installer.yml", ".shellcheckrc"]
+  pull_request:
+    paths: ["installer/**", "tests/**", "agent/**", "panel/deploy/**", "webmail/**", "backup/**", "mail/**", ".github/workflows/installer.yml", ".shellcheckrc"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to the same PR or branch cancels the run that is still going.
+concurrency:
+  group: installer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        run: |
+          shellcheck --version
+          shellcheck -x installer/install.sh installer/bootstrap.sh installer/lib/*.sh \
+            installer/modules/*.sh installer/lang/*.sh installer/bin/* tests/smoke.sh
+
+  install-debian13:
+    name: Full install on Debian 13 (systemd container)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Allow user namespaces like Debian does
+        # Ubuntu 24.04 runners block unprivileged user namespaces through AppArmor;
+        # Debian 13 allows them, and the web terminal sandbox (bubblewrap) needs them.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Restore apt package cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/apt-cache
+          key: apt-trixie-${{ github.run_id }}
+          restore-keys: apt-trixie-
+      - name: Build Debian 13 image with systemd
+        run: |
+          mkdir -p ~/apt-cache
+          du -sh ~/apt-cache
+          docker build -t whp-trixie tests/
+      - name: Boot container
+        run: |
+          docker run -d --name whp --privileged --cgroupns=host \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock \
+            -v "$PWD:/src:ro" -v "$HOME/apt-cache:/var/cache/apt/archives" --hostname panel.example.test whp-trixie
+          for i in $(seq 1 30); do
+            state=$(docker exec whp systemctl is-system-running 2>/dev/null || true)
+            [[ $state == running || $state == degraded ]] && break
+            sleep 2
+          done
+          echo "systemd: $state"
+          docker exec whp bash -c 'cp -r --no-preserve=ownership /src /root/src'
+      - name: Install
+        run: |
+          docker exec whp /root/src/installer/install.sh -y \
+            --hostname panel.example.test --email admin@example.test \
+            --relay-host smtp.example.test --relay-port 587 --relay-user relay --relay-pass secret \
+            --no-letsencrypt --clamav
+      - name: Smoke tests
+        run: docker exec whp bash /root/src/tests/smoke.sh
+      - name: Backup engine tests (backups, restores, restore tests with MariaDB)
+        run: docker exec -e WHP_TEST_DB=1 whp bash /root/src/backup/tests/run.sh
+      - name: Second run (idempotent)
+        run: |
+          docker exec whp /root/src/installer/install.sh -y --no-letsencrypt
+          docker exec whp bash -c 'whp-status --plain; curl -s -H "Host: site.test" http://127.0.0.1/ | grep -q php=8.5'
+      - name: Panel update provisions the server (install.sh --upgrade)
+        run: |
+          # What agent/scripts/update.sh does after checking out new code: run the
+          # installer from the server's code dir in a transient unit. A new
+          # numbered migration must run exactly once; services are reloaded, not
+          # restarted, so MariaDB keeps its PID.
+          docker exec whp bash -c 'printf "touch /run/whp-ci-migration\n" >/opt/webhosting-panel/installer/migrations/9999-ci-check.sh'
+          before=$(docker exec whp systemctl show -p MainPID --value mariadb)
+          docker exec whp systemd-run --wait --pipe --collect --setenv=WHP_LANG=en \
+            /bin/bash /opt/webhosting-panel/installer/install.sh --upgrade </dev/null
+          after=$(docker exec whp systemctl show -p MainPID --value mariadb)
+          echo "mariadb pid $before -> $after"; [[ $before == "$after" ]]
+          docker exec whp bash -c '
+            set -e
+            test -e /run/whp-ci-migration
+            grep -qx 0001-code-permissions /var/lib/webhosting-panel/provision/migrations-applied
+            grep -qx 9999-ci-check /var/lib/webhosting-panel/provision/migrations-applied
+            rm /run/whp-ci-migration
+            # The channel picked in the panel (Info > Switch channel) survives an upgrade.
+            sed -i "s/^WHP_CHANNEL=.*/WHP_CHANNEL=test/" /etc/webhosting-panel/panel.env
+            /bin/bash /opt/webhosting-panel/installer/install.sh --upgrade </dev/null >/dev/null
+            test ! -e /run/whp-ci-migration   # ran once only
+            grep -qx WHP_CHANNEL=test /etc/webhosting-panel/panel.env
+            grep -qx WHP_CHANNEL=test /etc/webhosting-panel/installer.env
+            grep -q ^WHP_UPGRADED_AT= /etc/webhosting-panel/installer.env
+            grep -q ^WHP_MAIL=yes /etc/webhosting-panel/installer.env
+            whp-status --plain
+            curl -s -H "Host: site.test" http://127.0.0.1/ | grep -q php=8.5
+            [[ $(curl -sk -o /dev/null -w %{http_code} --resolve panel.example.test:8443:127.0.0.1 https://panel.example.test:8443/login) == 200 ]]'
+      - name: Collect logs
+        if: failure()
+        run: |
+          docker exec whp bash -c 'systemctl --failed; journalctl -p warning -n 150 --no-pager; echo ===== install.log; tail -n 120 /var/log/webhosting-panel/install.log' || true
+      - name: Prepare apt package cache
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/test'
+        run: |
+          docker exec whp bash -c 'rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock'
+          sudo chown -R "$(id -u):$(id -g)" ~/apt-cache
+          du -sh ~/apt-cache
+      - name: Save apt package cache
+        # Saved from the test branch only; pull requests into test read it.
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/test'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/apt-cache
+          key: apt-trixie-${{ github.run_id }}

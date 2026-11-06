@@ -17,6 +17,7 @@
     <div class="page-head">
         <div><h1>{{ __('Backups') }}</h1><p class="sub">{{ __('Encrypted full and incremental backups of websites, mail, databases and server configuration.') }}</p></div>
     </div>
+    @include('backups::partials.admin-tabs')
 
     @foreach ($agentErrors as $e)<div class="alert alert-bad" role="alert"><x-icon name="info" />{{ $e }}</div>@endforeach
     @error('agent')<div class="alert alert-bad" role="alert"><x-icon name="info" />{{ $message }}</div>@enderror
@@ -30,6 +31,8 @@
             </div>
         </div>
     @endif
+
+    @include('backups::partials.restore-test-summary')
 
     <section class="grid grid-2" style="align-items:start">
         <x-ui.card :title="__('Last backup')">

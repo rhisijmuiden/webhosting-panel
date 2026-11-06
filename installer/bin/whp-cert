@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Request or renew a Let's Encrypt certificate through the ACME webroot that
+# every Nginx server on this host answers (/var/www/acme).
+#
+#   whp-cert <domain> [extra names...]
+# Exit 0 when /etc/letsencrypt/live/<domain>/fullchain.pem is valid afterwards.
+set -euo pipefail
+[[ $# -ge 1 ]] || { sed -n '2,6p' "$0"; exit 2; }
+domain=$1; shift
+email=$(grep -E '^WHP_EMAIL=' /etc/webhosting-panel/installer.env 2>/dev/null | cut -d= -f2- || true)
+args=(certonly --webroot -w /var/www/acme --non-interactive --agree-tos --no-eff-email
+      --key-type ecdsa --cert-name "$domain" -d "$domain" --keep-until-expiring --expand)
+for n in "$@"; do args+=(-d "$n"); done
+# The server hostname carries the mail TLS certificate: keep its key across
+# renewals so DANE TLSA records (3 1 1, public key hash) stay valid.
+host=$(grep -E '^WHP_HOSTNAME=' /etc/webhosting-panel/installer.env 2>/dev/null | cut -d= -f2- || true)
+[[ -n $host && $domain == "$host" ]] && args+=(--reuse-key)
+if [[ -n $email ]]; then args+=(--email "$email"); else args+=(--register-unsafely-without-email); fi
+[[ -n ${WHP_ACME_STAGING:-} ]] && args+=(--staging)
+install -d -m 0755 /var/www/acme
+certbot "${args[@]}" >>/var/log/webhosting-panel/certbot.log 2>&1
+test -r "/etc/letsencrypt/live/$domain/fullchain.pem" || exit 1
+# Existing hostname certificates (issued before --reuse-key): set it for renewals.
+conf=/etc/letsencrypt/renewal/$domain.conf
+if [[ -n $host && $domain == "$host" && -f $conf ]] && ! grep -q '^reuse_key' "$conf"; then
+  sed -i '/^\[renewalparams\]/a reuse_key = True' "$conf"
+fi
+exit 0

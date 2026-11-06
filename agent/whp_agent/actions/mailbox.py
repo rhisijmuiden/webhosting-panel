@@ -37,6 +37,9 @@ MAX_MAILBOXES = 50000
 _LOCAL = re.compile(r"^[a-z0-9](?:[a-z0-9._+-]{0,62}[a-z0-9])?$")
 _DOMAIN = re.compile(r"^(?=.{1,253}$)(?!-)([a-z0-9-]{1,63}(?<!-)\.)+[a-z]{2,63}$")
 _HASH = re.compile(r"^\{ARGON2ID\}\$argon2id\$v=19\$m=\d+,t=\d+,p=\d+\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+$")
+# Hashes taken over from another server by the migration (Plesk stores SHA512-CRYPT).
+# Dovecot checks them as they are; the panel stores Argon2id at the next password change.
+_CRYPT = re.compile(r"^\{(SHA512-CRYPT|SHA256-CRYPT|MD5-CRYPT)\}\$(6|5|1)\$(rounds=\d+\$)?[./A-Za-z0-9]{1,16}\$[./A-Za-z0-9]{22,86}$")
 HEADER = "# Managed by the Webhosting Panel (mail.mailboxes_sync). Do not edit.\n"
 
 
@@ -76,8 +79,8 @@ def parse_sync(params: dict, local_domains: set[str]) -> dict:
         if email in boxes:
             raise ActionError("invalid_params", f"duplicate mailbox {email}")
         pw = b.get("password_hash")
-        if not isinstance(pw, str) or not _HASH.match(pw):
-            raise ActionError("invalid_params", f"mailboxes[{i}].password_hash must be an {{ARGON2ID}} hash")
+        if not isinstance(pw, str) or not (_HASH.match(pw) or _CRYPT.match(pw)):
+            raise ActionError("invalid_params", f"mailboxes[{i}].password_hash must be an {{ARGON2ID}} or migrated crypt hash")
         quota = b.get("quota_mb", 0)
         if isinstance(quota, bool) or not isinstance(quota, int) or not 0 <= quota <= 10_000_000:
             raise ActionError("invalid_params", f"mailboxes[{i}].quota_mb must be 0 (unlimited) or more")
@@ -135,6 +138,13 @@ def render(plan: dict) -> dict[str, str]:
             logins.setdefault(addr, set()).add(email)
     for src, targets in sorted(plan["aliases"].items()):
         aliases.append(f"{src} {','.join(targets)}\n")
+    # Postfix reads virtual_alias_maps before the mailboxes, so a catch-all
+    # ("@domain") would also take the mail of every existing mailbox. An
+    # identity entry per mailbox keeps their mail where it belongs.
+    catch_all = {src[1:] for src in plan["aliases"] if src.startswith("@")}
+    for email in sorted(plan["mailboxes"]):
+        if email.split("@", 1)[1] in catch_all and email not in plan["aliases"]:
+            aliases.append(f"{email} {email}\n")
     sender = [HEADER] + [f"{addr} {','.join(sorted(who))}\n" for addr, who in sorted(logins.items())]
     return {
         "dovecot_users": "".join(users),

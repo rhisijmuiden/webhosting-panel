@@ -43,6 +43,12 @@ class User extends Authenticatable implements HasLocalePreference
         return $this->belongsTo(Customer::class);
     }
 
+    /** Set when this login is a team member of the customer (not the owner). */
+    public function teamMember(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(TeamMember::class);
+    }
+
     public function isAdmin(): bool
     {
         return $this->role === self::ROLE_ADMIN;

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Services\Totp;
+use Illuminate\Auth\Events\Failed;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -26,10 +27,13 @@ class TwoFactorChallengeController extends Controller
         $user = $request->user();
 
         if (! $user->hasTwoFactor() || ! $totp->verify($user->two_factor_secret, $request->input('code'))) {
+            // Counted as a failed login (login protection blocks repeated guessing).
+            event(new Failed('web', $user, ['email' => $user->email]));
             throw ValidationException::withMessages(['code' => __('The code is not valid.')]);
         }
 
         $request->session()->put('two_factor_passed', true);
+        $request->session()->forget('two_factor_via');
         $request->session()->regenerate();
 
         return redirect()->intended(route('home'));

@@ -19,8 +19,8 @@ class AdminTest extends TestCase
     {
         $this->actingAsAdmin();
         $package = HostingPackage::create(['name' => 'Start']);
-        $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test', 'hosting_package_id' => $package->id]);
-        $site = Website::create(['customer_id' => $customer->id, 'domain' => 'example.test', 'status' => 'active']);
+        $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test']);
+        $site = $this->withPackage(Website::create(['customer_id' => $customer->id, 'domain' => 'example.test', 'status' => 'active']), $package);
 
         foreach (['/admin', '/admin/customers', "/admin/customers/{$customer->id}", '/admin/customers/create',
             "/admin/customers/{$customer->id}/edit", '/admin/packages', '/admin/packages/create', "/admin/packages/{$package->id}/edit",
@@ -58,11 +58,11 @@ class AdminTest extends TestCase
     {
         $this->actingAsAdmin();
         $package = HostingPackage::create(['name' => 'Start', 'max_websites' => 1, 'disk_mb' => 5000]);
-        $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test', 'hosting_package_id' => $package->id]);
+        $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test']);
 
         $this->post('/admin/websites', [
             'customer_id' => $customer->id, 'domain' => 'Example.NL', 'profile' => 'laravel', 'php_version' => '8.5',
-            'ssl' => '1', 'www_alias' => '1', 'page_cache' => '1',
+            'ssl' => '1', 'www_alias' => '1', 'page_cache' => '1', 'hosting_package_id' => $package->id, 'expires_on' => '2099-12-31',
         ])->assertRedirect();
 
         $site = Website::firstOrFail();
@@ -71,11 +71,17 @@ class AdminTest extends TestCase
         $this->assertSame('active', $site->ssl_status);
         $this->assertFalse($site->page_cache, 'Laravel sites have no page cache');
         $call = collect($this->agent()->calls)->firstWhere('action', 'site.add');
-        $this->assertSame(['domain' => 'example.nl', 'php' => '8.5', 'profile' => 'laravel', 'cache' => false, 'ssl' => true, 'no_alias' => false, 'quota_mb' => 5000], $call['params']);
+        // Every website is a subscription: on the chosen package, in its own resource slice.
+        $sub = $site->subscription;
+        $this->assertSame([$package->id, '2099-12-31'], [$sub->hosting_package_id, $sub->expires_on->toDateString()]);
+        $this->assertSame(['domain' => 'example.nl', 'php' => '8.5', 'profile' => 'laravel', 'cache' => false, 'ssl' => true, 'no_alias' => false, 'quota_mb' => 5000, 'subscription_id' => $sub->id, 'php_workers' => 10], $call['params']);
+        $this->assertSame(['subscription_id' => $sub->id, 'cpu_percent' => null, 'memory_mb' => null, 'io_mbps' => null, 'max_processes' => null],
+            collect($this->agent()->calls)->firstWhere('action', 'subscription.limits')['params']);
 
-        // The package allows one website.
+        // A second website of the same customer is a second subscription, with or without a package.
         $this->post('/admin/websites', ['customer_id' => $customer->id, 'domain' => 'second.nl', 'profile' => 'php', 'php_version' => '8.4'])
-            ->assertSessionHasErrors('domain');
+            ->assertSessionHasNoErrors();
+        $this->assertNull(Website::where('domain', 'second.nl')->sole()->subscription->hosting_package_id);
     }
 
     public function test_failed_provisioning_is_shown(): void

@@ -1,0 +1,10 @@
+# Managed by the Webhosting Panel installer.
+# SSH, Postfix, Dovecot and /var/log/nginx are picked up by CrowdSec's own
+# setup (acquis.d/setup.*.yaml); this file adds the per-site and panel logs.
+source: file
+filenames:
+  - /var/www/vhosts/*/logs/access.log
+  - /var/www/vhosts/*/logs/error.log
+  - /var/log/webhosting-panel/nginx-*.log
+labels:
+  type: nginx

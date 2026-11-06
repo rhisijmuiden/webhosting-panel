@@ -35,6 +35,8 @@ final class Present
             'mailboxes' => $unlimited($p->max_mailboxes, 1_000_000),
             'databases' => $unlimited($p->max_databases, 1_000_000),
             'cron_jobs' => $unlimited($p->max_cronjobs, 1_000_000),
+            'traffic_gb_month' => $p->traffic_gb_month,
+            'php_workers' => $p->php_workers,
         ]);
     }
 
@@ -118,6 +120,11 @@ final class Present
             'measured_at' => ($site?->updated_at ?? now())->toIso8601String(),
             'disk_mb' => ['used' => (int) ($site?->disk_used_mb ?? 0), 'limit' => $limits['disk_mb'] ?? null],
             'domains' => ['used' => $site ? 1 : 0, 'limit' => $limits['domains'] ?? null],
+            'traffic_gb_month' => [
+                'used' => $site ? round((int) \App\Models\WebsiteTraffic::where('website_id', $site->id)
+                    ->where('month', now()->utc()->format('Y-m'))->value('bytes') / 1024 ** 3, 2) : 0,
+                'limit' => $limits['traffic_gb_month'] ?? null,
+            ],
         ];
     }
 

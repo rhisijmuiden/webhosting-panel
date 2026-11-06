@@ -1,0 +1,8 @@
+[Unit]
+Description=Webhosting Panel: retry Let's Encrypt for sites still on a self-signed certificate
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/whp-site ssl --pending

@@ -1,0 +1,491 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Rhis\Migration\Services;
+
+use App\Models\ActivityLog;
+use App\Models\Customer;
+use App\Models\HostingPackage;
+use App\Models\SiteDatabase;
+use App\Models\Website;
+use App\Services\Agent\AgentClient;
+use App\Services\Agent\AgentException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Rhis\DnsMail\Models\MailAlias;
+use Rhis\DnsMail\Models\MailDomain;
+use Rhis\DnsMail\Models\Mailbox;
+use Rhis\DnsMail\Services\MailPusher;
+use Rhis\Migration\Jobs\PrepareMigration;
+use Rhis\Migration\Models\MigrationItem;
+use Rhis\Migration\Models\MigrationSource;
+use RuntimeException;
+use Throwable;
+
+/**
+ * Runs the migration of one domain:
+ *  1. prepare(): customer, website (whp-site), mail domain and mailboxes here
+ *  2. startTransfer(): the agent copies files, databases, mail and certificate
+ *  3. tick() picks up the finished agent job and records the result
+ * A sync runs step 2 and 3 again; DnsCutover switches DNS at the end.
+ */
+final class Migrator
+{
+    public function __construct(private readonly AgentClient $agent) {}
+
+    /**
+     * Queue the selected domains. $choices: domain => [customer => 'new'|'<id>', files, databases, mail, ssl].
+     *
+     * @return list<MigrationItem>
+     */
+    public function queue(MigrationSource $source, array $choices): array
+    {
+        $items = [];
+        foreach ($choices as $domain => $c) {
+            $d = $source->inventoryDomain((string) $domain);
+            if ($d === null) {
+                continue;
+            }
+            $item = MigrationItem::firstOrNew(['migration_source_id' => $source->id, 'domain' => $d['name']]);
+            if ($item->exists && $item->status !== 'failed') {
+                continue; // Already on its way; use sync to copy again.
+            }
+            $plan = SitePlan::for($d, (string) config('migration.min_php', '8.3'));
+            $item->fill([
+                'status' => 'queued',
+                'source_data' => $d + ['owner' => $source->owner($d['owner_id'] ?? null), 'server_ips' => $source->inventory['server_ips'] ?? []],
+                'options' => [
+                    'customer' => (string) ($c['customer'] ?? 'new'),
+                    'files' => (bool) ($c['files'] ?? true) && ! empty($d['web']),
+                    'databases' => (bool) ($c['databases'] ?? true),
+                    'mail' => (bool) ($c['mail'] ?? true),
+                    'ssl' => (bool) ($c['ssl'] ?? true),
+                    'plan' => $plan,
+                ],
+                'error' => null,
+                'job_kind' => 'initial',
+            ]);
+            if ($plan['php_note']) {
+                $item->addNote($plan['php_note']['text'], $plan['php_note']['params']);
+            }
+            foreach ($d['notes'] ?? [] as $n) {
+                $item->addNote($n);
+            }
+            $item->log($item->exists ? 'Queued again.' : 'Queued for migration from :source.', ['source' => $source->name]);
+            $item->save();
+            $items[] = $item;
+        }
+        ActivityLog::record('migration.queued', $source->host, ['domains' => count($items)]);
+        $this->tick();
+
+        return $items;
+    }
+
+    /** Called every minute and after changes: finish agent jobs, start queued items within the parallel limit. */
+    public function tick(): void
+    {
+        foreach (MigrationItem::whereIn('status', ['copying', 'syncing'])->whereNotNull('agent_job')->get() as $item) {
+            $this->poll($item);
+        }
+        $free = max(1, (int) config('migration.parallel', 2)) - MigrationItem::whereIn('status', MigrationItem::ACTIVE)->count();
+        if ($free <= 0) {
+            return;
+        }
+        foreach (MigrationItem::where('status', 'queued')->orderBy('id')->limit($free)->get() as $item) {
+            $item->log('Started: creating customer, website and mailboxes.');
+            $item->update(['status' => 'preparing', 'started_at' => $item->started_at ?? now()]);
+            PrepareMigration::dispatch($item);
+        }
+    }
+
+    /** Step 1 (queue job): everything that has to exist here before data is copied. */
+    public function prepare(MigrationItem $item): void
+    {
+        $d = $item->source_data;
+        $opt = $item->options;
+        $plan = $opt['plan'];
+        try {
+            $customer = $item->customer ?? $this->customer($item);
+            $item->customer()->associate($customer);
+            $item->log('Customer: :name.', ['name' => $customer->displayName()]);
+
+            $website = $item->website ?? Website::where('domain', $item->domain)->first();
+            if ($website && $website->customer_id !== $customer->id) {
+                throw new RuntimeException(__(':domain already exists here for another customer.', ['domain' => $item->domain]));
+            }
+            if ($website === null) {
+                // Before the website exists: the mail domain keeps DNS untouched until the switch.
+                $this->mailDomain($item, $customer);
+                // Plesk subscriptions map 1:1: the service plan becomes the package (by name),
+                // with the setup and expiry date of the Plesk subscription.
+                $package = $this->package($item);
+                $website = new Website([
+                    'customer_id' => $customer->id, 'domain' => $item->domain, 'aliases' => $plan['aliases'],
+                    'profile' => $plan['profile'], 'php_version' => $plan['php'],
+                    'page_cache' => $plan['profile'] !== 'laravel', 'ssl_status' => 'off', 'status' => 'provisioning',
+                    'disk_quota_mb' => $package?->disk_mb,
+                ]);
+                $website->initialPackageId = $package?->id;
+                $website->save();
+                $this->subscriptionDates($item, $website);
+                $item->log('Subscription: package :package.', ['package' => $package?->name ?? __('No package')]);
+            }
+            $item->website()->associate($website);
+            $item->save();
+
+            if ($website->status !== 'active') {
+                $this->provision($item, $website, $customer, $plan);
+            } else {
+                $item->log('Website :domain already exists here and is used as it is.', ['domain' => $website->domain]);
+            }
+
+            if ($opt['mail'] && ! empty($d['mailboxes']) && class_exists(MailDomain::class)) {
+                $this->mailboxes($item, $customer);
+                $item->log('Mail domain and :count mailboxes are ready.', ['count' => count($d['mailboxes'])])->save();
+            }
+
+            $this->startTransfer($item, 'initial');
+        } catch (Throwable $e) {
+            report($e);
+            $item->log(self::errorText($e), [], 'error');
+            $item->update(['status' => 'failed', 'error' => self::errorText($e)]);
+            ActivityLog::record('migration.failed', $item->domain, ['error' => Str::limit($e->getMessage(), 300)], $item->customer_id);
+        }
+    }
+
+    /**
+     * Create the site on the server. A site that whp-site already has (an earlier
+     * attempt got that far) is taken as it is; a PHP version that is not installed
+     * here falls back to the panel's own PHP 8.4.
+     */
+    private function provision(MigrationItem $item, Website $website, Customer $customer, array $plan): void
+    {
+        $existing = collect($this->agent->call('site.list', [], 60)['sites'] ?? [])->firstWhere('domain', $website->domain);
+        if ($existing) {
+            $site = $this->agent->call('site.show', ['domain' => $website->domain], 60);
+            $item->log('Website :domain was already on the server (earlier attempt) and is reused.', ['domain' => $website->domain]);
+        } else {
+            $item->log('Creating website :domain (PHP :php).', ['domain' => $website->domain, 'php' => $website->php_version]);
+            $params = array_filter([
+                'domain' => $website->domain, 'php' => $website->php_version, 'profile' => $website->profile,
+                'aliases' => array_values(array_filter($plan['aliases'], fn ($a) => $a !== $website->domain)),
+                'no_alias' => $plan['aliases'] === [], 'docroot' => $plan['docroot'], 'cache' => $website->page_cache,
+                'ssl' => false, 'quota_mb' => $website->disk_quota_mb, 'subscription_id' => $website->subscription?->id,
+            ], fn ($v) => $v !== null);
+            try {
+                $site = $this->agent->call('site.add', $params, 840);
+            } catch (AgentException $e) {
+                if ($website->php_version === '8.4' || ! str_contains(self::errorText($e), 'PHP')) {
+                    $website->update(['status' => 'failed', 'last_error' => self::errorText($e)]);
+
+                    throw $e;
+                }
+                $item->addNote('PHP :from is not installed on this server, so the website uses PHP :to.', ['from' => $website->php_version, 'to' => '8.4']);
+                $item->log('PHP :from is not installed on this server, so the website uses PHP :to.', ['from' => $website->php_version, 'to' => '8.4'], 'warn');
+                $website->php_version = '8.4';
+                $site = $this->agent->call('site.add', ['php' => '8.4'] + $params, 840);
+            }
+        }
+        $website->fillFromAgent($site);
+        $website->status = 'active';
+        $website->last_error = null;
+        $website->save();
+        $item->log('Website created on this server.', [], 'ok')->save();
+    }
+
+    /** The agent's message plus what the command itself printed (whp-site writes its reason to stderr). */
+    public static function errorText(Throwable $e): string
+    {
+        $text = $e->getMessage();
+        if ($e instanceof AgentException) {
+            $out = trim(preg_replace('/\e\[[0-9;]*m/', '', (string) ($e->details['stderr'] ?? $e->details['stdout'] ?? '')));
+            if ($out !== '') {
+                $lines = array_values(array_filter(array_map('trim', explode("\n", $out)), fn ($l) => $l !== ''));
+                $fatal = array_values(array_filter($lines, fn ($l) => str_starts_with($l, '✗') || stripos($l, 'error') !== false || stripos($l, 'failed') !== false));
+                $text .= "\n".implode("\n", array_slice($fatal ?: $lines, -6));
+            }
+        }
+
+        return Str::limit($text, 2000);
+    }
+
+    /** Step 2: the agent copies. kind initial|sync (mirror everything again) or late_mail (only new mail, after the switch). */
+    public function startTransfer(MigrationItem $item, string $kind): void
+    {
+        $opt = $item->options;
+        $d = $item->source_data;
+        $params = $item->source->connection() + ['domain' => $item->domain];
+
+        if ($kind !== 'late_mail') {
+            if ($opt['files'] && ! empty($d['web'])) {
+                $params['files'] = ['target' => $opt['plan']['target'], 'delete' => true];
+            }
+            if ($opt['databases']) {
+                $params['databases'] = $this->databases($item);
+            }
+            $params['ssl'] = $kind === 'initial' && (bool) $opt['ssl'];
+            // Passwords this panel generated before: wp-config.php gets them again after the files are mirrored.
+            $known = [];
+            foreach ($item->secrets ?? [] as $k => $v) {
+                if (str_starts_with((string) $k, 'db:')) {
+                    $known[substr((string) $k, 3)] = (string) $v;
+                }
+            }
+            if ($known) {
+                $params['db_passwords'] = $known;
+            }
+        }
+        if ($opt['mail'] && ! empty($d['mailboxes'])) {
+            $params['mail'] = ['mode' => $kind === 'late_mail' ? 'add' : 'mirror', 'mailboxes' => array_column($d['mailboxes'], 'local')];
+        }
+
+        $job = $this->agent->call('migrate.transfer', $params, 120);
+        $item->log(match ($kind) {
+            'sync' => 'Sync started: copying the latest changes.',
+            'late_mail' => 'Fetching mail that still arrived on the old server.',
+            default => 'Copy started: website files, databases, mail and certificate.',
+        });
+        $item->update([
+            'status' => $kind === 'initial' ? 'copying' : 'syncing',
+            'job_kind' => $kind, 'agent_job' => $job['job'] ?? null, 'error' => null,
+        ]);
+        ActivityLog::record('migration.transfer_started', $item->domain, ['kind' => $kind], $item->customer_id);
+    }
+
+    /** Step 3: record a finished agent job. */
+    public function poll(MigrationItem $item): void
+    {
+        try {
+            $job = $this->agent->call('job.status', ['job' => $item->agent_job]);
+        } catch (AgentException $e) {
+            if ($e->errorCode === 'not_found') {
+                $item->log('The copy job was lost (agent restarted). Start it again.', [], 'error');
+                $item->update(['status' => 'failed', 'error' => __('The copy job was lost (agent restarted). Start it again.')]);
+            }
+
+            return;
+        }
+        if (($job['status'] ?? 'running') === 'running') {
+            if (isset($job['started_at']) && $job['started_at'] < now()->subDay()->getTimestamp()) {
+                $item->log('The copy job did not finish within a day.', [], 'error');
+                $item->update(['status' => 'failed', 'error' => __('The copy job did not finish within a day.')]);
+            }
+
+            return;
+        }
+        $item->logAgent($job['log'] ?? [], $job['finished_at'] ?? null);
+        if ($job['status'] !== 'succeeded') {
+            $item->log($job['error']['message'] ?? 'The copy job failed.', [], 'error');
+            $item->update(['status' => $item->job_kind === 'late_mail' ? 'live' : 'failed', 'error' => $job['error']['message'] ?? __('The copy job failed.')]);
+
+            return;
+        }
+
+        $result = $job['result'] ?? [];
+        DB::transaction(function () use ($item, $result) {
+            $secrets = $item->secrets ?? [];
+            foreach ($result['databases'] ?? [] as $db) {
+                if (! ($db['ok'] ?? false) || ! $item->website_id) {
+                    continue;
+                }
+                SiteDatabase::updateOrCreate(['name' => $db['target']], [
+                    'website_id' => $item->website_id, 'origin' => 'migration',
+                    'users' => array_column($db['users'] ?? [], 'user'),
+                ]);
+                foreach ($db['users'] ?? [] as $u) {
+                    if (! empty($u['new_password'])) {
+                        $secrets['db:'.$u['user']] = $u['new_password'];
+                        $item->addNote('Database user :user got a new password (the old one could not be copied). Put it in the website configuration; it is shown on this page.', ['user' => $u['user']]);
+                    }
+                }
+            }
+            foreach ($result['wordpress'] ?? [] as $wp) {
+                if ($wp['ok'] ?? false) {
+                    $item->log('WordPress :path: configuration and paths updated for this server (:count paths in the database).',
+                        ['path' => '/'.($wp['path'] ?? ''), 'count' => (int) ($wp['db_replacements'] ?? 0)], 'ok');
+                }
+            }
+            if (($result['ssl']['installed'] ?? false) === false && in_array($result['ssl']['reason'] ?? '', ['expired', 'key_mismatch', 'name_mismatch'], true)) {
+                $item->addNote('The certificate of the old server was not taken over (:reason). Let\'s Encrypt issues one after the DNS switch.', ['reason' => $result['ssl']['reason']]);
+            }
+            $live = $item->job_kind === 'late_mail';
+            $errors = count($result['errors'] ?? []);
+            $item->log($errors ? 'Copy finished with :count problems.' : 'Copy finished.', ['count' => $errors], $errors ? 'warn' : 'ok');
+            $item->fill([
+                'status' => $live ? 'live' : 'copied',
+                'secrets' => $secrets,
+                'result' => $result,
+                'error' => ($result['errors'] ?? []) ? implode("\n", $result['errors']) : null,
+                $item->job_kind === 'initial' ? 'copied_at' : 'synced_at' => now(),
+            ])->save();
+        });
+
+        if ($item->website) {
+            try {
+                $item->website->fillFromAgent($this->agent->call('site.show', ['domain' => $item->domain]));
+                $item->website->save();
+            } catch (AgentException) {
+                // Shown on the next refresh.
+            }
+        }
+        ActivityLog::record('migration.transfer_done', $item->domain, ['kind' => $item->job_kind, 'errors' => count($result['errors'] ?? [])], $item->customer_id);
+    }
+
+    /** @return list<array{name: string, target: string, users: list<string>}> */
+    private function databases(MigrationItem $item): array
+    {
+        $out = [];
+        foreach ($item->source_data['databases'] ?? [] as $db) {
+            if (($db['type'] ?? 'mysql') !== 'mysql' || ($db['server'] ?? 'local') !== 'local') {
+                continue;
+            }
+            $name = (string) $db['name'];
+            $taken = SiteDatabase::where('name', $name)->where('website_id', '!=', $item->website_id)->exists();
+            if ($taken || in_array(strtolower($name), SiteDatabase::RESERVED, true)) {
+                $item->addNote('Database :name was skipped: that name is already in use on this server.', ['name' => $name]);
+                $item->save();
+
+                continue;
+            }
+            $out[] = ['name' => $name, 'target' => $name, 'users' => array_values(array_filter($db['users'] ?? [],
+                fn ($u) => is_string($u) && preg_match('/^[A-Za-z0-9_.-]{1,80}$/', $u)))];
+        }
+
+        return $out;
+    }
+
+    private function customer(MigrationItem $item): Customer
+    {
+        $choice = $item->options['customer'] ?? 'new';
+        if (ctype_digit($choice)) {
+            return Customer::findOrFail((int) $choice);
+        }
+        $owner = $item->source_data['owner'] ?? null;
+        $isAdmin = ($owner['kind'] ?? 'admin') === 'admin';
+        $email = ! $isAdmin ? strtolower(trim((string) ($owner['email'] ?? ''))) : '';
+        if ($email !== '' && ($existing = Customer::where('email', $email)->first())) {
+            return $existing;
+        }
+        $subscription = (string) ($item->source_data['subscription'] ?? $item->domain);
+        // Domains of one Plesk subscription end up with the same customer.
+        $sibling = MigrationItem::where('migration_source_id', $item->migration_source_id)->whereNotNull('customer_id')
+            ->where('id', '!=', $item->id)->get()
+            ->first(fn (MigrationItem $i) => ($i->source_data['subscription'] ?? null) === $subscription);
+        if ($sibling?->customer) {
+            return $sibling->customer;
+        }
+
+        return Customer::create([
+            'name' => $isAdmin ? $subscription : ($owner['name'] ?? $subscription),
+            'company' => $isAdmin ? null : (($owner['company'] ?? '') ?: null),
+            'email' => $email ?: 'info@'.$subscription,
+            'phone' => $isAdmin ? null : (($owner['phone'] ?? '') ?: null),
+            'status' => 'active',
+            'notes' => __('Migrated from :host.', ['host' => $item->source->hostname ?: $item->source->host]),
+        ]);
+    }
+
+    /**
+     * The package for the Plesk service plan of this domain's subscription: the package
+     * with the same name, or a new one with that name (unlimited until the admin sets
+     * limits). No plan (custom subscription): no package.
+     */
+    private function package(MigrationItem $item): ?HostingPackage
+    {
+        $name = trim((string) ($item->source_data['plan'] ?? ''));
+        if ($name === '') {
+            return null;
+        }
+        $package = HostingPackage::whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+        if ($package) {
+            return $package;
+        }
+        $source = $item->source?->hostname ?: $item->source?->host;
+        ActivityLog::record('package.created', $name, ['via' => 'migration', 'source' => $source]);
+
+        return HostingPackage::create([
+            'name' => $name,
+            'description' => __('Service plan :plan from :host. All limits are unlimited: set them on this package.', ['plan' => $name, 'host' => $source]),
+            'is_active' => true,
+        ]);
+    }
+
+    /** Setup date and expiry date of the Plesk subscription. */
+    private function subscriptionDates(MigrationItem $item, Website $website): void
+    {
+        $subscription = $website->subscription;
+        if (! $subscription) {
+            return;
+        }
+        $created = self::date($item->source_data['created'] ?? null);
+        $expires = self::date($item->source_data['expires'] ?? null);
+        if ($created) {
+            $subscription->created_at = $created.' 00:00:00';
+        }
+        if ($expires) {
+            $subscription->expires_on = $expires;
+        }
+        $subscription->save();
+    }
+
+    private static function date(mixed $value): ?string
+    {
+        return is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : null;
+    }
+
+    private function mailDomain(MigrationItem $item, Customer $customer): void
+    {
+        if (! class_exists(MailDomain::class)) {
+            return;
+        }
+        MailDomain::firstOrCreate(['domain' => $item->domain], ['customer_id' => $customer->id, 'dns_managed' => false]);
+    }
+
+    private function mailboxes(MigrationItem $item, Customer $customer): void
+    {
+        $domain = MailDomain::firstOrCreate(['domain' => $item->domain], ['customer_id' => $customer->id, 'dns_managed' => false]);
+        $creds = collect($this->agent->call('migrate.credentials', $item->source->connection() + ['domain' => $item->domain], 300)['mailboxes'] ?? [])
+            ->keyBy('local');
+
+        foreach ($item->source_data['mailboxes'] as $box) {
+            $local = (string) $box['local'];
+            if (! preg_match('/^[a-z0-9](?:[a-z0-9._+-]{0,62}[a-z0-9])?$/', $local)) {
+                $item->addNote('Mailbox :address was skipped: the name is not allowed here.', ['address' => $local.'@'.$item->domain]);
+
+                continue;
+            }
+            $c = $creds->get($local, ['scheme' => 'none', 'secret' => '']);
+            $hash = SitePlan::mailHash((string) $c['scheme'], (string) $c['secret']);
+            if ($hash === null) {
+                $hash = Mailbox::hashPassword(Str::password(24));
+                $item->addNote('The password of :address could not be read from the old server. Set a new one under Mail.', ['address' => $local.'@'.$item->domain]);
+            }
+            $existing = $domain->mailboxes()->where('local_part', $local)->first();
+            if ($existing) {
+                continue; // Keep a password set here in the meantime.
+            }
+            $domain->mailboxes()->create([
+                'local_part' => $local, 'password_hash' => $hash, 'quota_mb' => (int) ($box['quota_mb'] ?? 0), 'enabled' => true,
+            ]);
+        }
+        $boxes = $domain->mailboxes()->pluck('local_part')->all();
+        $aliases = [];
+        foreach ($item->source_data['mailboxes'] as $box) {
+            foreach ($box['aliases'] ?? [] as $a) {
+                $aliases[$a] = [$box['local'].'@'.$item->domain];
+            }
+        }
+        foreach ($item->source_data['forwarders'] ?? [] as $f) {
+            $aliases[$f['local']] = $f['targets'];
+        }
+        foreach ($aliases as $local => $targets) {
+            if (in_array($local, $boxes, true) || ! preg_match('/^[a-z0-9](?:[a-z0-9._+-]{0,62}[a-z0-9])?$/', (string) $local)) {
+                continue;
+            }
+            MailAlias::firstOrCreate(['mail_domain_id' => $domain->id, 'local_part' => $local], ['targets' => array_values($targets)]);
+        }
+        $item->save();
+        app(MailPusher::class)->push();
+    }
+}

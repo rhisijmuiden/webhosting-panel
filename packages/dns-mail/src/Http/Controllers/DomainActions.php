@@ -23,9 +23,11 @@ use Rhis\DnsMail\Models\MailDomain;
 use Rhis\DnsMail\Models\MailSenderRule;
 use Rhis\DnsMail\Models\Mailbox;
 use Rhis\DnsMail\Services\DnsMailConfig;
+use Rhis\DnsMail\Services\DnsOnboarder;
 use Rhis\DnsMail\Services\DnsSync;
 use Rhis\DnsMail\Services\DomainProvisioner;
 use Rhis\DnsMail\Services\DomainRecords;
+use Rhis\DnsMail\Services\ExternalDnsCheck;
 use Throwable;
 
 /**
@@ -34,7 +36,7 @@ use Throwable;
  */
 abstract class DomainActions extends Controller
 {
-    public const TABS = ['mail', 'mailboxes', 'spam', 'dns'];
+    public const TABS = ['mail', 'mailboxes', 'spam', 'import', 'dns'];
 
     public const OWN_RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT'];
 
@@ -57,7 +59,7 @@ abstract class DomainActions extends Controller
 
     public function show(Request $request, int|string $mailDomain): View
     {
-        $domain = $this->findDomain($mailDomain)->load(['customer.package', 'website', 'mailboxes', 'aliases', 'senderRules']);
+        $domain = $this->findDomain($mailDomain)->load(['customer', 'website.subscription.package', 'aliasOf.website.subscription.package', 'mailboxes', 'aliases', 'senderRules', 'onboarding']);
         $tab = in_array($request->query('tab'), self::TABS, true) ? $request->query('tab') : 'mail';
         $settings = $this->records->settings($domain);
         $profile = $this->records->profile();
@@ -68,13 +70,14 @@ abstract class DomainActions extends Controller
             'spf' => $profile->spf($settings),
             'dmarc' => $settings->dmarc,
             'mailRecords' => $this->records->mail($domain),
+            'allRecords' => $this->records->all($domain),
             'mailHost' => $this->config->mailHost(),
             'webmailHost' => $this->config->get('webmail_host'),
             'hasCloudflare' => $this->config->hasCloudflare(),
             'm365OrderUrl' => $this->config->get('m365_order_url'),
             'm365Price' => $this->config->get('m365_price'),
-            'mailboxLimit' => $domain->customer->package?->max_mailboxes,
-            'mailboxCount' => Mailbox::whereHas('domain', fn ($q) => $q->where('customer_id', $domain->customer_id))->count(),
+            'mailboxLimit' => self::mailboxLimit($domain),
+            'mailboxCount' => $domain->mailboxes()->count(),
             'inspect' => null,
             'adopt' => false,
         ];
@@ -87,6 +90,10 @@ abstract class DomainActions extends Controller
             } catch (Throwable $e) {
                 $data['quarantineError'] = $e->getMessage();
             }
+        }
+        $data['onboarding'] = $domain->onboarding;
+        if ($tab === 'dns' && $domain->onboarding?->isActive() && $domain->onboarding->seen_at === null && $this->area() === 'client') {
+            $domain->onboarding->update(['seen_at' => now()]);
         }
         if ($tab === 'dns' && $domain->dns_managed && $data['hasCloudflare']) {
             $data['adopt'] = $request->boolean('adopt');
@@ -175,7 +182,46 @@ abstract class DomainActions extends Controller
     public function storeRecord(Request $request, int|string $mailDomain): RedirectResponse
     {
         $domain = $this->findDomain($mailDomain);
-        $data = $request->validate([
+        $record = $this->ownRecordFromRequest($request, $domain);
+        try {
+            $this->dns->addOwnRecord($domain, $record);
+        } catch (Throwable $e) {
+            return back()->withErrors(['content' => $e->getMessage()])->withInput();
+        }
+
+        return redirect()->to($this->route('domains.show', [$domain->id, 'tab' => 'dns']))->with('status', __('Record added.'));
+    }
+
+    public function updateRecord(Request $request, int|string $mailDomain, string $record): RedirectResponse
+    {
+        $domain = $this->findDomain($mailDomain);
+        $new = $this->ownRecordFromRequest($request, $domain, 'edit');
+        try {
+            $this->dns->updateOwnRecord($domain, $record, $new);
+        } catch (Throwable $e) {
+            return back()->withErrors(['dns' => $e->getMessage()]);
+        }
+
+        return redirect()->to($this->route('domains.show', [$domain->id, 'tab' => 'dns']))->with('status', __('Record saved.'));
+    }
+
+    /** Cloudflare proxy for the website records (apex, www and aliases). Mail records stay DNS only. */
+    public function updateProxy(Request $request, int|string $mailDomain): RedirectResponse
+    {
+        $domain = $this->findDomain($mailDomain);
+        $domain->update(['proxied' => $request->boolean('proxied')]);
+        ActivityLog::record('dns.proxy_changed', $domain->domain, ['proxied' => $domain->proxied], $domain->customer_id);
+        $warnings = $this->provisioner->afterChange($domain, withDkim: false);
+
+        return redirect()->to($this->route('domains.show', [$domain->id, 'tab' => 'dns']))
+            ->with('status', $domain->proxied ? __('The website now goes through the Cloudflare proxy.') : __('The website now points straight at the server (DNS only).'))
+            ->with('warnings', $warnings);
+    }
+
+    /** Validate the add/edit record form into a record of this domain. */
+    private function ownRecordFromRequest(Request $request, MailDomain $domain, string $bag = 'default'): DnsRecord
+    {
+        $data = $request->validateWithBag($bag, [
             'type' => ['required', Rule::in(self::OWN_RECORD_TYPES)],
             'name' => ['nullable', 'string', 'max:190', 'regex:/^(@|[a-z0-9_*]([a-z0-9_.-]*[a-z0-9_])?)$/i'],
             'content' => ['required', 'string', 'max:2048'],
@@ -191,19 +237,85 @@ abstract class DomainActions extends Controller
             'TXT' => !str_contains($content, "\n"),
         };
         if (!$valid) {
-            throw ValidationException::withMessages(['content' => __('This value does not fit a :type record.', ['type' => $data['type']])]);
+            throw ValidationException::withMessages(['content' => __('This value does not fit a :type record.', ['type' => $data['type']])])->errorBag($bag);
         }
-        try {
-            $this->dns->addOwnRecord($domain, new DnsRecord(
-                $data['type'], $name, $content, (int) ($data['ttl'] ?? 1),
-                proxied: in_array($data['type'], ['A', 'AAAA', 'CNAME'], true) ? $request->boolean('proxied') : null,
-                priority: $data['type'] === 'MX' ? (int) ($data['priority'] ?? 10) : null,
-            ));
-        } catch (Throwable $e) {
-            return back()->withErrors(['content' => $e->getMessage()])->withInput();
+        $proxied = in_array($data['type'], DnsRecord::PROXIABLE_TYPES, true) ? $request->boolean('proxied') : null;
+        if ($proxied && !DnsRecord::mayProxy($data['type'], $name, $domain->domain)) {
+            throw ValidationException::withMessages(['proxied' => __(':name carries mail or other non-web traffic and cannot go through the Cloudflare proxy.', ['name' => $data['name'] ?: '@'])])->errorBag($bag);
         }
 
-        return redirect()->to($this->route('domains.show', [$domain->id, 'tab' => 'dns']))->with('status', __('Record added.'));
+        return new DnsRecord(
+            $data['type'], $name, $content, (int) ($data['ttl'] ?? 1),
+            proxied: $proxied,
+            priority: $data['type'] === 'MX' ? (int) ($data['priority'] ?? 10) : null,
+        );
+    }
+
+    /** The DNS wizard: move the domain's DNS to the RHIS Cloudflare account. */
+    public function connect(int|string $mailDomain): View
+    {
+        $domain = $this->findDomain($mailDomain)->load(['onboarding', 'customer']);
+        $onboarding = $domain->onboarding;
+        if ($onboarding?->isActive() && $onboarding->seen_at === null && $this->area() === 'client') {
+            $onboarding->update(['seen_at' => now()]);
+        }
+
+        return view('dns-mail::domain.connect', [
+            'area' => $this->area(),
+            'domain' => $domain,
+            'onboarding' => $onboarding,
+            'hasCloudflare' => $this->config->hasCloudflare(),
+        ]);
+    }
+
+    public function startConnect(int|string $mailDomain, DnsOnboarder $onboarder): RedirectResponse
+    {
+        $domain = $this->findDomain($mailDomain);
+        try {
+            $result = $onboarder->start($domain);
+        } catch (Throwable $e) {
+            return back()->withErrors(['connect' => $e->getMessage()]);
+        }
+
+        return redirect()->to($this->route('domains.connect', $domain->id))
+            ->with('status', $result['onboarding']->isActive()
+                ? __('Your DNS is already running on RHIS Cloudflare.')
+                : __(':domain is ready at RHIS Cloudflare. Now change the nameservers at your registrar.', ['domain' => $domain->domain]))
+            ->with('warnings', $result['warnings']);
+    }
+
+    public function checkConnect(int|string $mailDomain, DnsOnboarder $onboarder): RedirectResponse
+    {
+        $domain = $this->findDomain($mailDomain)->load('onboarding');
+        $o = $domain->onboarding;
+        if ($o === null) {
+            return redirect()->to($this->route('domains.connect', $domain->id));
+        }
+        if ($o->last_checked_at !== null && $o->last_checked_at->diffInSeconds(now()) < 20) {
+            return back()->with('status', __('Just checked. Try again in a moment.'));
+        }
+        try {
+            $live = $onboarder->check($o, force: true);
+        } catch (Throwable $e) {
+            return back()->withErrors(['connect' => $e->getMessage()]);
+        }
+        $o->refresh();
+
+        return back()->with('status', match (true) {
+            $live => __('Done! DNS for :domain now runs on RHIS Cloudflare.', ['domain' => $domain->domain]),
+            $o->nameserversMatch() => __('The new nameservers are visible. Cloudflare confirms this within a few minutes; we keep checking.'),
+            default => __('The nameservers have not changed yet. A change at the registrar can take a few hours; we keep checking and mail you.'),
+        });
+    }
+
+    /** Domains with DNS elsewhere: look up every needed record now. */
+    public function checkExternal(int|string $mailDomain, ExternalDnsCheck $check): RedirectResponse
+    {
+        $domain = $this->findDomain($mailDomain)->load('website');
+        $result = $check->run($domain);
+
+        return redirect()->to($this->route('domains.show', [$domain->id, 'tab' => 'dns']))
+            ->with($result['ok'] ? 'status' : 'warning', $result['ok'] ? __('All DNS records are set correctly.') : __('Some DNS records are still missing or wrong. See the list below.'));
     }
 
     public function destroyRecord(int|string $mailDomain, string $record): RedirectResponse
@@ -220,7 +332,7 @@ abstract class DomainActions extends Controller
 
     public function storeMailbox(Request $request, int|string $mailDomain): RedirectResponse
     {
-        $domain = $this->findDomain($mailDomain)->load('customer.package');
+        $domain = $this->findDomain($mailDomain)->load('customer', 'website.subscription.package');
         if (!$domain->hasLocalMail()) {
             return back()->withErrors(['local_part' => __('Mailboxes can only be added when mail for this domain is hosted here.')]);
         }
@@ -232,8 +344,8 @@ abstract class DomainActions extends Controller
             'password' => ['required', 'string', 'min:10', 'max:200', 'confirmed'],
             'quota_mb' => ['required', 'integer', 'min:0', 'max:1048576'],
         ], [], ['local_part' => __('address')]);
-        $limit = $domain->customer->package?->max_mailboxes;
-        $count = Mailbox::whereHas('domain', fn ($q) => $q->where('customer_id', $domain->customer_id))->count();
+        $limit = self::mailboxLimit($domain);
+        $count = $domain->mailboxes()->count();
         if ($limit !== null && $count >= $limit) {
             return back()->withErrors(['local_part' => __('The hosting package allows :count mailboxes. Remove one or upgrade the package.', ['count' => $limit])]);
         }
@@ -489,5 +601,13 @@ abstract class DomainActions extends Controller
             MailProvider::Microsoft365 => 'Microsoft 365',
             MailProvider::External => 'Other provider',
         };
+    }
+
+    /** Mailboxes the package of the domain's website allows (an alias domain uses its main domain's website; null = unlimited). */
+    protected static function mailboxLimit(MailDomain $domain): ?int
+    {
+        $website = $domain->website ?? $domain->aliasOf?->website;
+
+        return $website?->package?->max_mailboxes;
     }
 }

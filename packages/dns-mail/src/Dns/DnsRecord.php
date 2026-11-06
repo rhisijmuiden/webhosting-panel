@@ -56,6 +56,35 @@ final readonly class DnsRecord
         };
     }
 
+    /** First labels of names that carry mail or other non-HTTP traffic: Cloudflare's proxy would break them. */
+    public const array NEVER_PROXIED_LABELS = [
+        'mail', 'smtp', 'imap', 'pop', 'pop3', 'webmail', 'autoconfig', 'autodiscover', 'mta-sts', 'ftp', 'sftp', 'ssh',
+    ];
+
+    /** Types Cloudflare can proxy. */
+    public const array PROXIABLE_TYPES = ['A', 'AAAA', 'CNAME'];
+
+    /**
+     * Whether a record with this type and name may go through the Cloudflare
+     * proxy. Mail hosts (mail.<domain> and friends), underscore names and
+     * anything that is not A/AAAA/CNAME stay DNS only.
+     */
+    public static function mayProxy(string $type, string $name, string $zone): bool
+    {
+        if (!in_array(strtoupper($type), self::PROXIABLE_TYPES, true)) {
+            return false;
+        }
+        $name = self::normaliseName($name);
+        $zone = self::normaliseName($zone);
+        if ($name === $zone) {
+            return true;
+        }
+        $relative = str_ends_with($name, '.' . $zone) ? substr($name, 0, -strlen($zone) - 1) : $name;
+        $first = explode('.', $relative)[0];
+
+        return !str_starts_with($first, '_') && !in_array($first, self::NEVER_PROXIED_LABELS, true);
+    }
+
     public static function normaliseName(string $name): string
     {
         return rtrim(strtolower(trim($name)), '.');
@@ -103,6 +132,18 @@ final readonly class DnsRecord
         );
 
         return implode(' ', $chunks);
+    }
+
+    /** Value as people read it: "10 mail.example.com" for MX, "0 1 993 host" for SRV. */
+    public function displayValue(): string
+    {
+        if ($this->type === 'SRV') {
+            $s = $this->srv ?? [];
+
+            return sprintf('%d %d %d %s', $s['priority'] ?? 0, $s['weight'] ?? 0, $s['port'] ?? 0, $s['target'] ?? '');
+        }
+
+        return ($this->type === 'MX' ? $this->priority . ' ' : '') . $this->content;
     }
 
     public function isManaged(): bool

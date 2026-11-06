@@ -12,9 +12,22 @@
         "php": "^8.3",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
+        "rhis/apps": "@dev",
         "rhis/backups": "@dev",
         "rhis/crm-api": "@dev",
-        "rhis/dns-mail": "@dev"
+        "rhis/dns-mail": "@dev",
+        "rhis/domain-aliases": "@dev",
+        "rhis/files": "@dev",
+        "rhis/git": "@dev",
+        "rhis/migration": "@dev",
+        "rhis/monitoring": "@dev",
+        "rhis/reports": "@dev",
+        "rhis/security": "@dev",
+        "rhis/server-admin": "@dev",
+        "rhis/subdomains": "@dev",
+        "rhis/vulnerabilities": "@dev",
+        "rhis/webapps": "@dev",
+        "rhis/wordpress": "@dev"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

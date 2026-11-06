@@ -1,0 +1,4 @@
+# Template variables are read indirectly by render(), so "unused" warnings are expected.
+disable=SC2034,SC2154,SC2153
+external-sources=true
+source-path=SCRIPTDIR

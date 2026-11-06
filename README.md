@@ -1,8 +1,20 @@
 # Webhosting Panel
 
-A hosting control panel for Debian 13, built to replace Plesk: websites with
-Nginx and PHP-FPM, MariaDB, mail, Let's Encrypt, CrowdSec, backups, and an API
-for the RHIS CRM.
+A hosting control panel for Debian 13, built to replace Plesk: a fast, secure web
+and mail server (Nginx and PHP-FPM, MariaDB, mail, Let's Encrypt, CrowdSec), with
+an admin and client panel, backups, and an API for the RHIS CRM.
+
+*Nederlands: [README.nl.md](README.nl.md)*
+
+## Install a server
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/webhosting-panel/main/installer/bootstrap.sh | sudo bash
+```
+
+See [docs/installer.md](docs/installer.md).
+
+## Layout
 
 | Folder | What |
 | --- | --- |
@@ -13,7 +25,13 @@ for the RHIS CRM.
 | `brand/` | RHIS house style used by the panel |
 | `docs/` | Architecture and API documentation |
 
-Branches: `main` is production, `test` is the test channel. The panel can switch
-between them and update itself from the Info dialog.
-
 How the parts talk to each other: [docs/architecture/interfaces.md](docs/architecture/interfaces.md).
+
+## Branches
+
+| Branch | Channel | Use |
+| --- | --- | --- |
+| `main` | production | What servers on the production channel run |
+| `test` | test | New work is merged here first, then released to `main` |
+
+Switching channel is done from the panel (Info screen) or with `--channel test` on install.

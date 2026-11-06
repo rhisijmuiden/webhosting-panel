@@ -1,6 +1,7 @@
 """Websites, through the installer's whp-site CLI."""
 
 import json
+import re
 
 from .. import validate as v
 from ..registry import ActionError, action
@@ -46,6 +47,18 @@ def site_add(params):
     quota = v.integer(params, "quota_mb", required=False, minimum=0, maximum=10_000_000)
     if quota:
         argv += ["--quota", str(quota)]
+    owner = _owner(params)
+    if owner:
+        argv += ["--owner", owner]
+    workers = v.integer(params, "php_workers", required=False, minimum=1, maximum=999)
+    if workers:
+        argv += ["--workers", str(workers)]
+    # A subdomain (test.example.com) of the site example.com: shares its disk quota.
+    parent = v.domain(params, "parent", required=False)
+    if parent:
+        if not domain.endswith("." + parent):
+            raise ActionError("invalid_params", f"{domain} is not a subdomain of {parent}")
+        argv += ["--parent", parent]
     return _site(argv, timeout=600)
 
 
@@ -56,7 +69,20 @@ def site_show(params):
 
 @action("site.php")
 def site_php(params):
-    return _site(["php", v.domain(params, "domain"), v.choice(params, "php", PHP_VERSIONS)])
+    domain = v.domain(params, "domain")
+    result = _site(["php", domain, v.choice(params, "php", PHP_VERSIONS)])
+    # WP-cron timers start the site's PHP binary directly: point them at the new version.
+    try:
+        from .wordpress import refresh_cron_units
+        refresh_cron_units(domain)
+    except ActionError:
+        pass
+    try:
+        from .apps import refresh_app_timers  # app background tasks (FreshRSS feeds)
+        refresh_app_timers(domain)
+    except ActionError:
+        pass
+    return result
 
 
 @action("site.cache")
@@ -92,3 +118,92 @@ def site_suspend(params):
 @action("site.unsuspend")
 def site_unsuspend(params):
     return _site(["unsuspend", v.domain(params, "domain")], timeout=120)
+
+
+def _owner(params) -> str | None:
+    """Slice owner: s<subscription id> (one website on one package), or c<customer id> (older panels)."""
+    subscription = v.integer(params, "subscription_id", required=False, minimum=1, maximum=999_999_999)
+    if subscription:
+        return f"s{subscription}"
+    customer = v.integer(params, "customer_id", required=False, minimum=1, maximum=999_999_999)
+    return f"c{customer}" if customer else None
+
+
+@action("site.owner")
+def site_owner(params):
+    """Run the site in its subscription's resource slice (no subscription_id: the shared slice)."""
+    domain = v.domain(params, "domain")
+    result = _site(["owner", domain, _owner(params) or "-"], timeout=120)
+    # WP-cron timers carry the slice in their unit: write them again.
+    try:
+        from .wordpress import refresh_cron_units
+        refresh_cron_units(domain)
+    except ActionError:
+        pass
+    try:
+        from .apps import refresh_app_timers  # app background tasks (FreshRSS feeds)
+        refresh_app_timers(domain)
+    except ActionError:
+        pass
+    return result
+
+
+@action("subscription.limits")
+def subscription_limits(params):
+    """Resource jail of one subscription (one website). A missing or null value removes that cap."""
+    subscription = v.integer(params, "subscription_id", minimum=1, maximum=999_999_999)
+    return _slice(f"s{subscription}", params)
+
+
+@action("customer.limits")
+def customer_limits(params):
+    """Resource jail shared by all sites of one customer (before subscriptions; kept for older panels)."""
+    customer = v.integer(params, "customer_id", minimum=1, maximum=999_999_999)
+    return _slice(f"c{customer}", params)
+
+
+def _slice(owner: str, params):
+    cpu = v.integer(params, "cpu_percent", required=False, minimum=10, maximum=10_000)
+    memory = v.integer(params, "memory_mb", required=False, minimum=64, maximum=10_000_000)
+    io = v.integer(params, "io_mbps", required=False, minimum=1, maximum=100_000)
+    tasks = v.integer(params, "max_processes", required=False, minimum=16, maximum=100_000)
+    return _site(["slice", owner,
+                  "--cpu", f"{cpu}%" if cpu else "",
+                  "--memory", str(memory or ""),
+                  "--io", str(io or ""),
+                  "--tasks", str(tasks or "")], timeout=120)
+
+
+# Keys a site may set in its PHP settings, with the form whp-site accepts.
+PHP_INI = {
+    "memory_limit": r"[1-9][0-9]{0,5}M",
+    "max_execution_time": r"[0-9]{1,5}",
+    "max_input_time": r"[0-9]{1,5}",
+    "max_input_vars": r"[1-9][0-9]{1,6}",
+    "post_max_size": r"[1-9][0-9]{0,5}M",
+    "upload_max_filesize": r"[1-9][0-9]{0,5}M",
+    "display_errors": r"on|off",
+}
+
+
+@action("site.php_settings")
+def site_php_settings(params):
+    """Replace the site's php.ini values (php_admin_value) and set its number of PHP workers."""
+    domain = v.domain(params, "domain")
+    settings = params.get("settings") or {}
+    if not isinstance(settings, dict) or len(settings) > len(PHP_INI):
+        raise ActionError("invalid_params", "settings must be an object")
+    argv = ["phpini", domain, "--reset"]
+    for key, value in sorted(settings.items()):
+        if key not in PHP_INI:
+            raise ActionError("invalid_params", f"Unknown PHP setting: {key}")
+        if isinstance(value, bool):
+            value = "on" if value else "off"
+        value = str(value)
+        if not re.fullmatch(PHP_INI[key], value):
+            raise ActionError("invalid_params", f"Invalid value for {key}")
+        argv += ["--set", f"{key}={value}"]
+    workers = v.integer(params, "php_workers", required=False, minimum=1, maximum=999)
+    if workers:
+        argv += ["--workers", str(workers)]
+    return _site(argv, timeout=120)
