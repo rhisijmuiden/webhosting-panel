@@ -50,7 +50,15 @@ def site_info(domain):
         "ssl": data.get("SITE_SSL", ""),
         "aliases": [a for a in data.get("SITE_ALIASES", "").split(",") if a],
         "suspended": data.get("SITE_SUSPENDED") == "yes",
+        "slice": site_slice(data.get("SITE_OWNER", "")),
     }
+
+
+def site_slice(owner):
+    """The systemd slice a site's processes run in: its customer's slice when it has one."""
+    if owner and re.fullmatch(r"c[0-9]{1,9}", owner):
+        return f"whp-sites-{owner}.slice"
+    return "whp-sites.slice"
 
 
 def clean_path(value):
@@ -133,7 +141,7 @@ def wp_argv(site, wp_dir, args, timeout=300, memory="512M"):
         # Pass the arguments literally: no $VAR expansion (wp eval code contains $).
         "--expand-environment=no",
         f"--uid={site['user']}", f"--gid={site['user']}",
-        "--slice=whp-sites.slice",
+        f"--slice={site.get('slice') or 'whp-sites.slice'}",
         f"--working-directory={wp_dir}",
         "-p", "UMask=0022",  # nginx (www-data) must be able to read the files WP-CLI writes
         "-p", "NoNewPrivileges=yes",

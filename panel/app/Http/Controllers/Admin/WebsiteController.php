@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\Website;
 use App\Services\Agent\AgentException;
+use App\Services\PhpSettings;
 use App\Services\WebsiteManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -101,5 +102,17 @@ class WebsiteController extends Controller
         $this->manager->remove($website, $request->boolean('keep_files'));
 
         return redirect()->route('admin.websites.index')->with('status', __('The website is being removed.'));
+    }
+
+    public function php(Request $request, Website $website, PhpSettings $php): RedirectResponse
+    {
+        $data = $request->validate($php->siteRules(), [], collect(PhpSettings::KEYS)->mapWithKeys(fn ($k, $key) => ["php.$key" => __($k[0])])->all());
+        try {
+            $this->manager->setPhpSettings($website, $php->fromInput($data['php'] ?? []));
+        } catch (AgentException $e) {
+            return back()->withInput()->withErrors(['agent' => $e->getMessage()]);
+        }
+
+        return back()->with('status', __('PHP settings saved.'));
     }
 }

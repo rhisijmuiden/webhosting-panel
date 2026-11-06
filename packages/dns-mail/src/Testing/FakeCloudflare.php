@@ -24,15 +24,49 @@ final class FakeCloudflare implements HttpClient
 
     private int $seq = 0;
 
-    public function addZone(string $name, array $records = []): string
+    /** @var list<array{id: string, name: string}> */
+    public array $accounts = [['id' => 'acc1', 'name' => 'RHIS']];
+
+    /** @var array<string, list<array>> records "found at the old provider" that a scan copies in, by domain */
+    public array $scannable = [];
+
+    /** Domains that exist in another Cloudflare account (create fails with 1061). */
+    public array $taken = [];
+
+    public int $activationChecks = 0;
+
+    public function addZone(string $name, array $records = [], string $status = 'active'): string
     {
         $id = 'zone' . (++$this->seq);
-        $this->zones[$id] = ['id' => $id, 'name' => $name, 'records' => []];
+        $this->zones[$id] = ['id' => $id, 'name' => $name, 'records' => [], 'status' => $status,
+            'name_servers' => ['ada.ns.cloudflare.com', 'bob.ns.cloudflare.com'], 'original_name_servers' => ['ns1.oldhost.nl', 'ns2.oldhost.nl'],
+            'original_registrar' => 'Old Registrar B.V.'];
         foreach ($records as $r) {
             $this->store($id, $r);
         }
 
         return $id;
+    }
+
+    /** The registrar now points at Cloudflare: the zone becomes active. */
+    public function activate(string $zoneName): void
+    {
+        foreach ($this->zones as $id => $z) {
+            if ($z['name'] === $zoneName) {
+                $this->zones[$id]['status'] = 'active';
+            }
+        }
+    }
+
+    public function zoneByName(string $name): ?array
+    {
+        foreach ($this->zones as $z) {
+            if ($z['name'] === $name) {
+                return $z;
+            }
+        }
+
+        return null;
     }
 
     /** @return list<array> */
@@ -65,7 +99,37 @@ final class FakeCloudflare implements HttpClient
         if ($method === 'GET' && $path === '/zones') {
             $zones = array_values(array_filter($this->zones, fn ($z) => !isset($query['name']) || $z['name'] === $query['name']));
 
-            return $this->ok(array_map(fn ($z) => ['id' => $z['id'], 'name' => $z['name'], 'status' => 'active'], $zones));
+            return $this->ok(array_map(fn ($z) => $this->zoneOut($z), $zones));
+        }
+        if ($method === 'GET' && $path === '/accounts') {
+            return $this->ok($this->accounts, ['page' => 1, 'total_pages' => 1]);
+        }
+        if ($method === 'POST' && $path === '/zones') {
+            $name = (string) ($data['name'] ?? '');
+            if ($this->zoneByName($name) !== null || in_array($name, $this->taken, true)) {
+                return $this->error(400, 1061, "{$name} already exists");
+            }
+            $id = $this->addZone($name, [], 'pending');
+
+            return $this->ok($this->zoneOut($this->zones[$id]));
+        }
+        if (preg_match('#^/zones/([^/]+)(/activation_check)?$#', $path, $m) && isset($this->zones[$m[1]])) {
+            if ($method === 'PUT' && isset($m[2])) {
+                $this->activationChecks++;
+
+                return $this->ok(['id' => $m[1]]);
+            }
+            if ($method === 'GET' && !isset($m[2])) {
+                return $this->ok($this->zoneOut($this->zones[$m[1]]));
+            }
+        }
+        if ($method === 'POST' && preg_match('#^/zones/([^/]+)/dns_records/scan$#', $path, $m) && isset($this->zones[$m[1]])) {
+            $found = $this->scannable[$this->zones[$m[1]]['name']] ?? [];
+            foreach ($found as $r) {
+                $this->store($m[1], $r);
+            }
+
+            return $this->ok(['recs_added' => count($found), 'total_records_parsed' => count($found)]);
         }
         if ($method === 'GET' && preg_match('#^/zones/([^/]+)/dnssec$#', $path, $m) && isset($this->zones[$m[1]])) {
             return $this->ok(['status' => $this->dnssec[$m[1]] ?? 'disabled']);
@@ -83,6 +147,12 @@ final class FakeCloudflare implements HttpClient
             $method === 'DELETE' && $id !== null => $this->delete($zoneId, $id),
             default => $this->error(405, 10000, 'Method not allowed'),
         };
+    }
+
+    private function zoneOut(array $z): array
+    {
+        return ['id' => $z['id'], 'name' => $z['name'], 'status' => $z['status'] ?? 'active', 'name_servers' => $z['name_servers'] ?? [],
+            'original_name_servers' => $z['original_name_servers'] ?? [], 'original_registrar' => $z['original_registrar'] ?? null];
     }
 
     private function batch(string $zoneId, array $data): HttpResponse

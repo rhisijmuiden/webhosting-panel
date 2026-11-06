@@ -85,6 +85,8 @@ Actions added by phase 2:
 | `crowdsec.decisions`, `crowdsec.metrics`, `crowdsec.ban`, `crowdsec.unban` | Through `/usr/bin/cscli` |
 | `security.apply`, `security.site_activity`, `security.site_release`, `security.check_ip` | Login protection, see below |
 | `site.list`, `site.add`, `site.show`, `site.php`, `site.cache`, `site.ssl`, `site.quota`, `site.remove`, `site.suspend`, `site.unsuspend` | Through the installer's `whp-site … --json` |
+| `site.owner`, `customer.limits`, `site.php_settings`, `db.limits`, `traffic.report` | Package limits: resource jail per customer, PHP settings, traffic (see `docs/limits.md`) |
+| `php.extensions.list`, `.search_pecl`, `.install`, `.remove`, `.toggle` | Extra PHP extensions per version (apt or PECL; install/remove are jobs) |
 | `stats.sample` | Server and per-site usage, rates since the previous call |
 | `panel.version`, `panel.check_update`, `panel.update`, `panel.set_channel` | Updates and release channel |
 
@@ -116,7 +118,8 @@ settings again (run by `panel/deploy/install.sh` and after every update).
 ### Usage statistics
 
 Every site runs as `whp-site-<id>.service` in
-`/sys/fs/cgroup/whp.slice/whp-sites.slice/` (`<id>` is the domain with `.` and
+`/sys/fs/cgroup/whp.slice/whp-sites.slice/`, or one level deeper in its
+customer's `whp-sites-c<customer id>.slice` (`<id>` is the domain with `.` and
 `-` as `_`). The panel stores one sample a minute (`whp:metrics:collect`) and
 rolls them up hourly (`whp:metrics:rollup`): minutes kept 48 hours, hours 90
 days, days forever.
