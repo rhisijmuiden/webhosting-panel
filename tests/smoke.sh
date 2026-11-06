@@ -232,7 +232,13 @@ PY
   ip addr add 203.0.113.60/32 dev lo 2>/dev/null || true
   ip addr add 203.0.113.61/32 dev lo 2>/dev/null || true
   check "mail threshold lowered for the test" agent_call security.apply '{"services":{"mail":{"temp_after":3,"window_minutes":10,"perm_after":0}}}'
-  sleep 5
+  # The apply restarts CrowdSec; the mail journal is only read once its
+  # journalctl reader runs, so wait for that before sending bad logins.
+  for _ in $(seq 60); do
+    systemctl is-active --quiet crowdsec && pgrep -f 'journalctl.*postfix@' >/dev/null && break
+    sleep 1
+  done
+  sleep 3
   python3 - <<'PY' || true
 import smtplib, ssl
 ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
@@ -259,6 +265,8 @@ for _ in range(4):
 PY
   echo "     CrowdSec acquisition:"; cat /etc/crowdsec/acquis.yaml /etc/crowdsec/acquis.d/*.yaml 2>/dev/null | grep -vE '^\s*(#|$)' | sed 's/^/       /'
   check "failed SMTP logins (submission) get the address blocked" wait_ban 203.0.113.60 whp/mail-bf
+  journalctl -o json --no-pager -n 400 SYSLOG_IDENTIFIER=postfix/submission/smtpd 2>/dev/null \
+    | jq -r 'select(.MESSAGE|tostring|test("SASL")) | "     smtpd unit: \(._SYSTEMD_UNIT)"' | sort -u || true
   check "failed IMAP logins get the address blocked" wait_ban 203.0.113.61 whp/mail-bf
   cscli decisions delete --ip 203.0.113.50 >/dev/null 2>&1 || true
   check "panel settings applied again" runuser -u whp -- php /opt/webhosting-panel/panel/artisan whp:security:apply
