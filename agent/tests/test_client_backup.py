@@ -40,6 +40,17 @@ FAKE_RCLONE = textwrap.dedent('''\
             continue
         rest.append(args[i]); i += 1
     cmd, rest = rest[0], rest[1:]
+    if "--config" in args:
+        conf = args[args.index("--config") + 1]
+        text = open(conf).read()
+        if "type = onedrive" in text:  # pretend the access token was renewed
+            lines = []
+            for line in text.splitlines():
+                if line.startswith("token = "):
+                    tok = json.loads(line[8:]); tok["access_token"] = "renewed-" + tok["refresh_token"]
+                    line = "token = " + json.dumps(tok)
+                lines.append(line)
+            open(conf, "w").write("\\n".join(lines) + "\\n")
     def local(p):
         assert p.startswith("remote:"), p
         return os.path.join(ROOT, p[len("remote:"):])
@@ -295,6 +306,25 @@ class ClientBackupTest(unittest.TestCase):
             cb.resolve_host("10.1.2.3")
         with self.assertRaises(ActionError):
             cb.resolve_host("169.254.169.254")
+
+    def test_onedrive_location_uses_the_token_and_keeps_the_renewed_one(self):
+        token = {"access_token": "a1", "token_type": "Bearer", "refresh_token": "r1", "expiry": "2026-11-06T19:00:00Z"}
+        self.target = {"type": "onedrive", "id": 7, "client_id": "11111111-2222-3333-4444-555555555555",
+                       "client_secret": "s3cret", "token": json.dumps(token), "drive_id": "b!abc", "drive_type": "business",
+                       "path": "backups"}
+        result = cb.client_backup_target_test({"domain": "klant.nl", "target": self.target})
+        self.assertEqual(result["token"]["access_token"], "renewed-r1")
+        kept = json.loads((cb.STATE / "onedrive" / "t7.json").read_text())
+        self.assertEqual(kept["token"]["access_token"], "renewed-r1")
+        self.run_backup("full")
+        self.assertEqual(len(self.remote_files()), 1)
+        # A new connection from the panel (other refresh token) wins over the kept token.
+        self.target["token"] = {**token, "refresh_token": "r2"}
+        self.assertEqual(cb._token_for(cb.parse_target({"target": self.target}))["refresh_token"], "r2")
+        with self.assertRaises(ActionError):
+            cb.parse_target({"target": {**self.target, "token": {"access_token": "x"}}})
+        with self.assertRaises(ActionError):
+            cb.parse_target({"target": {**self.target, "drive_type": "ftp"}})
 
     def test_file_names_must_belong_to_the_domain(self):
         with self.assertRaises(ActionError):

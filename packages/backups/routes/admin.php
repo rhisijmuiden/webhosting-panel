@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Rhis\Backups\Http\AdminBackupController as C;
 use Rhis\Backups\Http\AdminBrowserController as B;
 use Rhis\Backups\Http\AdminRestoreTestController as RT;
+use Rhis\Backups\Http\AdminOneDriveController;
 
 Route::get('/', [C::class, 'index'])->name('index');
 Route::post('/run', [C::class, 'run'])->name('run');
@@ -25,3 +26,4 @@ Route::get('/restore-tests', [RT::class, 'index'])->name('restore-tests.index');
 Route::post('/restore-tests', [RT::class, 'store'])->name('restore-tests.store');
 Route::put('/restore-tests/settings', [RT::class, 'settings'])->name('restore-tests.settings');
 Route::get('/restore-tests/{test}', [RT::class, 'show'])->whereNumber('test')->name('restore-tests.show');
+Route::put('/onedrive', [AdminOneDriveController::class, 'update'])->name('onedrive.update');

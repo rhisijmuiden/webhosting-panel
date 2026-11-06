@@ -141,9 +141,9 @@ final class ClientLocationController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:80'],
             'type' => ['required', Rule::in(ClientBackupTarget::TYPES)],
-            'host' => ['required', 'string', 'max:253', 'regex:/^[A-Za-z0-9.-]+$/'],
+            'host' => ['required_unless:type,onedrive', 'nullable', 'string', 'max:253', 'regex:/^[A-Za-z0-9.-]+$/'],
             'port' => ['nullable', 'integer', 'min:1', 'max:65535'],
-            'username' => ['required', 'string', 'max:128', 'regex:/^[A-Za-z0-9._@+-]+$/'],
+            'username' => ['required_unless:type,onedrive', 'nullable', 'string', 'max:128', 'regex:/^[A-Za-z0-9._@+-]+$/'],
             'password' => ['nullable', 'string', 'max:1000', 'not_regex:/[\r\n]/'],
             'ssh_key' => ['nullable', 'string', 'max:16000'],
             'tls' => ['nullable', Rule::in(['explicit', 'implicit'])],
@@ -172,15 +172,17 @@ final class ClientLocationController extends Controller
             return $withInput()->withErrors(['allow_plain_ftp' => __('Plain FTP sends the password unencrypted. Confirm that you want to use it, or choose FTPS or SFTP.')]);
         }
 
+        if ($type === 'onedrive') {
+            return $this->saveOneDrive($request, $target, $new, $data);
+        }
+
         $connectionChanged = $new || $target->type !== $type || $target->host !== $data['host'] || (int) $target->port !== (int) ($data['port'] ?? 0);
-        $mine = $this->customer($request)->websites()->pluck('id')->all();
+        $this->fillCommon($target, $data, $this->customer($request));
         $target->fill([
-            'name' => $data['name'], 'type' => $type, 'host' => strtolower($data['host']), 'port' => $data['port'] ?? null,
-            'username' => $data['username'], 'tls' => $data['tls'] ?? 'explicit', 'path' => trim((string) ($data['path'] ?? ''), '/ '),
-            'allow_plain_ftp' => $request->boolean('allow_plain_ftp'), 'schedule' => $data['schedule'],
-            'schedule_time' => $data['schedule_time'], 'full_day' => $data['full_day'], 'keep_full' => (int) $data['keep_full'],
-            'parts' => array_values($data['parts']),
-            'website_ids' => array_values(array_intersect(array_map('intval', $data['websites'] ?? []), $mine)) ?: null,
+            'type' => $type, 'host' => strtolower($data['host']), 'port' => $data['port'] ?? null,
+            'username' => $data['username'], 'tls' => $data['tls'] ?? 'explicit',
+            'allow_plain_ftp' => $request->boolean('allow_plain_ftp'),
+            'onedrive_token' => null, 'drive_id' => null, 'drive_type' => null, 'account' => null,
         ]);
         foreach (self::SECRETS as $secret) {
             if (filled($data[$secret] ?? null)) {
@@ -194,14 +196,56 @@ final class ClientLocationController extends Controller
             $target->ssh_key = null;
         }
 
+        return $this->testAndStore($request, $target, $new, $connectionChanged);
+    }
+
+    /** OneDrive: the connection comes from "Connect with Microsoft" (kept in the session until saved). */
+    private function saveOneDrive(Request $request, ClientBackupTarget $target, bool $new, array $data): RedirectResponse
+    {
+        $customer = $this->customer($request);
+        $connection = session('backups.onedrive.connection');
+        $connection = is_array($connection) && ($connection['customer_id'] ?? null) === $customer->id ? $connection : null;
+        if (! $connection && ($target->type !== 'onedrive' || blank($target->onedrive_token))) {
+            return back()->withInput($request->except(self::SECRETS))
+                ->withErrors(['onedrive' => __('Connect with Microsoft first.')]);
+        }
+        $this->fillCommon($target, $data, $customer);
+        $target->fill(['type' => 'onedrive', 'host' => null, 'port' => null, 'username' => null, 'tls' => 'explicit',
+            'allow_plain_ftp' => false, 'password' => null, 'ssh_key' => null, 'host_key' => null]);
+        if ($connection) {
+            $target->fill(['onedrive_token' => $connection['token'], 'drive_id' => $connection['drive_id'],
+                'drive_type' => $connection['drive_type'], 'account' => $connection['account']]);
+        }
+        $response = $this->testAndStore($request, $target, $new, false);
+        if ($target->exists) {
+            session()->forget('backups.onedrive.connection');
+        }
+
+        return $response;
+    }
+
+    private function fillCommon(ClientBackupTarget $target, array $data, $customer): void
+    {
+        $mine = $customer->websites()->pluck('id')->all();
+        $target->fill([
+            'name' => $data['name'], 'path' => trim((string) ($data['path'] ?? ''), '/ '), 'schedule' => $data['schedule'],
+            'schedule_time' => $data['schedule_time'], 'full_day' => $data['full_day'], 'keep_full' => (int) $data['keep_full'],
+            'parts' => array_values($data['parts']),
+            'website_ids' => array_values(array_intersect(array_map('intval', $data['websites'] ?? []), $mine)) ?: null,
+        ]);
+    }
+
+    private function testAndStore(Request $request, ClientBackupTarget $target, bool $new, bool $connectionChanged): RedirectResponse
+    {
         // Test before saving: a location that does not work is not stored.
         $error = $this->probe($target, $request, persist: false);
         if ($error) {
-            return $withInput()->withErrors(['agent' => __('Cannot reach the location: :message', ['message' => $error])]);
+            return back()->withInput($request->except(self::SECRETS))
+                ->withErrors(['agent' => __('Cannot reach the location: :message', ['message' => $error])]);
         }
         $target->save();
         ActivityLog::record($new ? 'client_backup.location_added' : 'client_backup.location_changed', $target->name,
-            ['type' => $type, 'host' => $target->host], $target->customer_id);
+            ['type' => $target->type, 'host' => $target->host ?? $target->account], $target->customer_id);
 
         $status = $new ? __('Backup location :name added.', ['name' => $target->name]) : __('Backup location :name saved.', ['name' => $target->name]);
         if ($target->host_key && $connectionChanged) {
@@ -226,6 +270,9 @@ final class ClientLocationController extends Controller
             }
 
             return $e->getMessage();
+        }
+        if ($target->type === 'onedrive' && ! empty($result['token']) && is_array($result['token'])) {
+            $target->onedrive_token = json_encode($result['token'], JSON_UNESCAPED_SLASHES);
         }
         if (! empty($result['host_key']) && ! $target->host_key) {
             $target->host_key = $result['host_key'];
