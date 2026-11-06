@@ -43,7 +43,7 @@ class Menu
         ?string $section = null,
         int $order = 50,
         array $activePatterns = [],
-        ?string $badge = null,
+        string|\Closure|null $badge = null,
         ?\Closure $visible = null,
     ): self {
         $this->items[$key] = compact('key', 'label', 'route', 'icon', 'section', 'order', 'activePatterns', 'badge', 'visible');
@@ -71,10 +71,13 @@ class Menu
         return $this;
     }
 
-    /** Items grouped by section, in order, without unknown routes or hidden items. */
-    public function sections(): array
+    /**
+     * All visible items, placed and in order. An item placed with a 'parent'
+     * (for example everything that lives under "Tools & settings") is left out
+     * of the sidebar but still makes its parent active.
+     */
+    private function resolved(): array
     {
-        $sections = [];
         $items = collect($this->items)
             ->filter(fn ($i) => Route::has($i['route']))
             ->filter(fn ($i) => $i['visible'] === null || ($i['visible'])())
@@ -83,16 +86,40 @@ class Menu
                 if ($place === null) {
                     $i['order'] += $this->placements ? 1000 : 0;
 
-                    return $i;
+                    return $i + ['parent' => null];
                 }
 
-                return array_merge($i, array_filter($place, fn ($v) => $v !== null));
+                return array_merge($i, ['parent' => null], array_filter($place, fn ($v) => $v !== null));
             })
-            ->sortBy('order');
+            ->sortBy('order')
+            ->map(function ($i) {
+                $patterns = $i['activePatterns'] ?: [$i['route'], preg_replace('/\.index$/', '', $i['route']).'.*'];
+                $i['active'] = request()->routeIs(...$patterns);
 
-        foreach ($items as $item) {
-            $patterns = $item['activePatterns'] ?: [$item['route'], preg_replace('/\.index$/', '', $item['route']).'.*'];
-            $item['active'] = request()->routeIs(...$patterns);
+                return $i;
+            })
+            ->all();
+
+        foreach ($items as $key => $item) {
+            if ($item['parent'] !== null && $item['active'] && isset($items[$item['parent']])) {
+                $items[$item['parent']]['active'] = true;
+            }
+        }
+
+        return $items;
+    }
+
+    /** Items grouped by section, in order, without unknown routes, hidden items or child pages. */
+    public function sections(): array
+    {
+        $sections = [];
+        foreach ($this->resolved() as $item) {
+            if ($item['parent'] !== null) {
+                continue;
+            }
+            if ($item['badge'] instanceof \Closure) {
+                $item['badge'] = rescue(fn () => ($item['badge'])(), null, false);
+            }
             $sections[$item['section'] ?? ''][] = $item;
         }
 
@@ -104,17 +131,34 @@ class Menu
         return $sections;
     }
 
-    /** The active item with its section, for the breadcrumbs in the top bar. */
+    /** Every reachable page with the label of its section or parent, for the Ctrl/Cmd+K palette. */
+    public function pages(): array
+    {
+        $items = $this->resolved();
+
+        return collect($items)->map(fn ($i) => $i + [
+            'context' => $i['parent'] !== null ? ($items[$i['parent']]['label'] ?? '') : ($i['section'] ?? ''),
+        ])->values()->all();
+    }
+
+    /**
+     * The active item for the breadcrumbs in the top bar. A child page returns
+     * itself, with its parent as the crumb before it.
+     */
     public function active(): ?array
     {
-        foreach ($this->sections() as $section => $items) {
-            foreach ($items as $item) {
-                if ($item['active']) {
-                    return $item + ['section_label' => $section];
-                }
-            }
+        $items = $this->resolved();
+        $active = collect($items)->filter(fn ($i) => $i['active']);
+        $item = $active->first(fn ($i) => $i['parent'] !== null) ?? $active->first();
+        if ($item === null) {
+            return null;
+        }
+        if ($item['parent'] !== null && isset($items[$item['parent']])) {
+            $parent = $items[$item['parent']];
+
+            return $item + ['section_label' => $parent['label'], 'section_route' => $parent['route']];
         }
 
-        return null;
+        return $item + ['section_label' => $item['section'] ?? '', 'section_route' => null];
     }
 }
