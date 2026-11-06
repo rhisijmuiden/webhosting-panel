@@ -17,7 +17,7 @@ class Website extends Model
     public const PROFILES = ['php', 'wordpress', 'laravel'];
 
     protected $fillable = [
-        'customer_id', 'domain', 'aliases', 'profile', 'php_version', 'page_cache', 'ssl_status',
+        'customer_id', 'parent_id', 'domain', 'aliases', 'profile', 'php_version', 'page_cache', 'ssl_status',
         'status', 'system_user', 'document_root', 'disk_used_mb', 'disk_quota_mb', 'last_error', 'php_settings',
     ];
 
@@ -69,6 +69,23 @@ class Website extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    /** The main website of a subdomain (null for a main website). */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Website::class, 'parent_id');
+    }
+
+    /** Subdomains (test.example.com) of this website: part of its subscription. */
+    public function subdomains(): HasMany
+    {
+        return $this->hasMany(Website::class, 'parent_id')->orderBy('domain');
+    }
+
+    public function isSubdomain(): bool
+    {
+        return $this->parent_id !== null;
     }
 
     public function traffic(): HasMany

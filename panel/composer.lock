@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3f85c418b8615ddbbb8d5048266e7f51",
+    "content-hash": "9b4571341e7fd12b686fd6c6ad8302fd",
     "packages": [
         {
             "name": "brick/math",
@@ -3645,6 +3645,39 @@
                 "proprietary"
             ],
             "description": "Server management for the Webhosting Panel: Debian updates, reboot (never shutdown), a maintenance window with health checks, automatic patching of critical CVEs, PHP end-of-life handling and scheduled maintenance tasks (database optimize, cleanup).",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/subdomains",
+            "version": "dev-claude/project-thread-3oea1o",
+            "dist": {
+                "type": "path",
+                "url": "../packages/subdomains",
+                "reference": "02614ae6938af8b35020cd77aaba4a85d5b9419a"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Subdomains\\SubdomainsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Subdomains\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Subdomains and site cloning for the Webhosting Panel: customers add subdomains under their domain's subscription and clone a website (WordPress, Joomla or plain files) to a test subdomain or another website.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8900,6 +8933,7 @@
         "rhis/migration": 20,
         "rhis/security": 20,
         "rhis/server-admin": 20,
+        "rhis/subdomains": 20,
         "rhis/vulnerabilities": 20,
         "rhis/wordpress": 20
     },

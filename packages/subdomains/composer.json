@@ -1,0 +1,24 @@
+{
+    "name": "rhis/subdomains",
+    "description": "Subdomains and site cloning for the Webhosting Panel: customers add subdomains under their domain's subscription and clone a website (WordPress, Joomla or plain files) to a test subdomain or another website.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rhis\\Subdomains\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rhis\\Subdomains\\SubdomainsServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
