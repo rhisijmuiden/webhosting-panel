@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a1604587bc9fcd45e31bf804382a10a1",
+    "content-hash": "9ad879686ab321a6743a0df9b4b216fa",
     "packages": [
         {
             "name": "brick/math",
@@ -3306,6 +3306,39 @@
             "time": "2026-09-16T11:39:30+00:00"
         },
         {
+            "name": "rhis/apps",
+            "version": "dev-claude/project-thread-nqaa7a",
+            "dist": {
+                "type": "path",
+                "url": "../packages/apps",
+                "reference": "04cca7c1c003f7829a6b966a630f39ccd3d7b61b"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Apps\\AppsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Apps\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "One-click app installer for the Webhosting Panel (WordPress, Joomla, Nextcloud), on top of the agent's apps.* actions.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "rhis/backups",
             "version": "dev-claude/project-thread-nqaa7a",
             "dist": {
@@ -3414,6 +3447,39 @@
                 "proprietary"
             ],
             "description": "Cloudflare DNS sync, per-domain mail routing (RHIS mail or Microsoft 365) and SnappyMail webmail config for the Webhosting Panel.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/migration",
+            "version": "dev-claude/project-thread-nqaa7a",
+            "dist": {
+                "type": "path",
+                "url": "../packages/migration",
+                "reference": "e07d840053cc6532c7b0a5dd3bee337c4768c256"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Migration\\MigrationServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Migration\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Server migration for the Webhosting Panel: move websites, databases, mailboxes, certificates and DNS from a Plesk server.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8626,9 +8692,11 @@
     "aliases": [],
     "minimum-stability": "stable",
     "stability-flags": {
+        "rhis/apps": 20,
         "rhis/backups": 20,
         "rhis/crm-api": 20,
         "rhis/dns-mail": 20,
+        "rhis/migration": 20,
         "rhis/wordpress": 20
     },
     "prefer-stable": true,

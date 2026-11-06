@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # End-to-end checks after a full install. Runs inside the test container.
-# shellcheck disable=SC2016,SC1091,SC2329
+# shellcheck disable=SC2016,SC1091,SC2329,SC2317
 set -uo pipefail
 fail=0
 pass() { printf '\e[32mPASS\e[0m %s\n' "$*"; }
@@ -122,6 +122,60 @@ if [[ -f /opt/webhosting-panel/panel/artisan ]]; then
   check "panel stylesheet is served as CSS" bash -c "curl -skI --resolve \"$HOST:8443:127.0.0.1\" https://$HOST:8443/assets/app.css | grep -qi 'content-type: text/css'"
   check "panel queue worker active" systemctl is-active --quiet whp-queue.service
   check "agent active" systemctl is-active --quiet whp-agent.service
+
+  echo "== app installer"
+  # One request to the agent over its socket; prints the data, fails on an error.
+  agent() {
+    python3 - "$1" "${2:-"{}"}" <<'PY'
+import json, socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.connect("/run/whp-agent/agent.sock")
+s.sendall((json.dumps({"id": "smoke", "action": sys.argv[1], "params": json.loads(sys.argv[2])}) + "\n").encode())
+buf = b""
+while not buf.endswith(b"\n"):
+    chunk = s.recv(65536)
+    if not chunk:
+        break
+    buf += chunk
+r = json.loads(buf)
+print(json.dumps(r.get("data") if r.get("ok") else r.get("error")))
+sys.exit(0 if r.get("ok") else 1)
+PY
+  }
+  # Start a job and wait for it; prints the finished job.
+  agent_job() {
+    local id i st
+    id=$(agent "$1" "$2" | jq -r .job) || return 1
+    for i in $(seq 1 300); do
+      st=$(agent job.status "{\"job\":\"$id\"}")
+      [[ $(jq -r .status <<<"$st") != running ]] && break
+      sleep 2
+    done
+    printf '%s\n' "$st" >/tmp/app-job.json
+    jq -e '.status == "succeeded"' <<<"$st" >/dev/null || { jq . <<<"$st"; return 1; }
+  }
+  app_params() { printf '{"domain":"%s","app":"%s","path":"%s","title":"Smoke","admin_user":"smoke","admin_email":"smoke@example.test","admin_password":"Smoke-test-pass-123","locale":"%s"}' "$@"; }
+
+  export -f agent app_params
+  check "app catalog" bash -c 'agent apps.catalog | jq -e "[.apps[].id] == [\"wordpress\",\"joomla\",\"nextcloud\"]"'
+  whp-site add wp.test --php 8.4 --no-ssl --json >/dev/null
+  check "install WordPress (nl) through the agent" agent_job apps.install "$(app_params wp.test wordpress '' nl)"
+  WP_ID=$(jq -r .result.id /tmp/app-job.json); WP_DB=$(jq -r .result.database /tmp/app-job.json)
+  check "WordPress home page answers" bash -c "curl -s -H 'Host: wp.test' http://127.0.0.1/ | grep -q 'wp-content'"
+  check "WordPress is in Dutch" bash -c "curl -s -H 'Host: wp.test' http://127.0.0.1/ | grep -q 'lang=\"nl-NL\"'"
+  check "WordPress login page" bash -c "[[ \$(curl -s -o /dev/null -w %{http_code} -H 'Host: wp.test' http://127.0.0.1/wp-login.php) == 200 ]]"
+  check "WordPress files belong to the site user and nginx can read them" bash -c "[[ \$(stat -c %U /var/www/vhosts/wp.test/public/wp-includes/version.php) == s_wp_test && \$(stat -c %a /var/www/vhosts/wp.test/public/wp-includes/css) == 755 ]]"
+  check "wp-config.php is private" bash -c "[[ \$(stat -c %a /var/www/vhosts/wp.test/public/wp-config.php) == 600 ]]"
+  check "WordPress database and user exist" bash -c "mariadb -N -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$WP_DB'\" | grep -qv '^0$'"
+  check "admin password is not in the job file" bash -c "! grep -rq 'Smoke-test-pass-123' /var/lib/webhosting-panel/jobs /var/lib/webhosting-panel/apps"
+  check "second install in a used folder is refused" bash -c '! agent apps.install "$(app_params wp.test joomla portal en)"'
+  check "remove WordPress" agent_job apps.remove "{\"domain\":\"wp.test\",\"id\":\"$WP_ID\"}"
+  check "after removal: placeholder back, database gone" bash -c "[[ \$(ls /var/www/vhosts/wp.test/public) == index.html ]] && ! mariadb -e 'USE \`$WP_DB\`' 2>/dev/null"
+  whp-site add joomla.test --php 8.4 --no-ssl --json >/dev/null
+  check "install Joomla in a subfolder" agent_job apps.install "$(app_params joomla.test joomla portal en)"
+  check "Joomla answers in /portal/" bash -c "curl -s -L -H 'Host: joomla.test' http://127.0.0.1/portal/ | grep -qi 'joomla'"
+  check "Joomla administrator login" bash -c "[[ \$(curl -s -o /dev/null -w %{http_code} -H 'Host: joomla.test' http://127.0.0.1/portal/administrator/) == 200 ]]"
+  check "Joomla installation folder is gone" test ! -e /var/www/vhosts/joomla.test/public/portal/installation
 fi
 
 exit $fail

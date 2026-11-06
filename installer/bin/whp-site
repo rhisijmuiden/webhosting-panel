@@ -8,6 +8,9 @@
 #   whp-site php <domain> <version>
 #   whp-site cache <domain> on|off|purge
 #   whp-site ssl <domain> | --pending
+#   whp-site ssl <domain> --import-cert <fullchain.pem> --import-key <key.pem>
+#                                    (serve a certificate taken over from another server,
+#                                     SSL becomes 'imported' until Let's Encrypt succeeds)
 #   whp-site quota <domain> <MB>     (0 = unlimited; hard limit when the filesystem
 #                                     has project quotas, see docs/installer.md)
 #   whp-site limits <domain> [--cpu 200%] [--memory 1G]   (empty value removes the cap)
@@ -134,9 +137,14 @@ site_apply() {
     for i in {1..20}; do [[ -S /run/php/site-$SITE_ID.sock ]] && break; sleep 0.25; done
     body=$(render_string "$TPL/nginx/site-body.conf")
   fi
-  if [[ $SITE_SSL == active ]]; then
-    SITE_CERT=/etc/letsencrypt/live/$SITE_DOMAIN/fullchain.pem
-    SITE_KEY=/etc/letsencrypt/live/$SITE_DOMAIN/privkey.pem
+  if [[ $SITE_SSL == active || $SITE_SSL == imported ]]; then
+    if [[ $SITE_SSL == imported ]]; then
+      SITE_CERT=$(imported_cert_dir "$SITE_DOMAIN")/fullchain.pem
+      SITE_KEY=$(imported_cert_dir "$SITE_DOMAIN")/privkey.pem
+    else
+      SITE_CERT=/etc/letsencrypt/live/$SITE_DOMAIN/fullchain.pem
+      SITE_KEY=/etc/letsencrypt/live/$SITE_DOMAIN/privkey.pem
+    fi
     if nginx_has_http3; then SITE_QUIC="listen 443 quic;
     listen [::]:443 quic;"; else SITE_QUIC="# HTTP/3 not available"; fi
     SITE_BODY=$body
@@ -194,6 +202,8 @@ render_string() {
   rm -f "$tmp"
 }
 
+imported_cert_dir() { printf '%s/ssl/%s' "$WHP_ETC" "$1"; }
+
 site_cert() {
   local names=()
   [[ -n $SITE_ALIASES ]] && IFS=',' read -r -a names <<<"$SITE_ALIASES"
@@ -201,10 +211,28 @@ site_cert() {
      || { ((${#names[@]})) && "$INSTALLER_DIR/bin/whp-cert" "$SITE_DOMAIN"; }; then
     SITE_SSL=active
     info "$(t cert_ok "$SITE_DOMAIN")"
+  elif [[ $SITE_SSL == imported && -s $(imported_cert_dir "$SITE_DOMAIN")/fullchain.pem ]]; then
+    # Keep serving the certificate from the old server until DNS points here.
+    warn "$(t site_cert_pending "$SITE_DOMAIN" "$SITE_DOMAIN")"
   else
     SITE_SSL=pending
     warn "$(t site_cert_pending "$SITE_DOMAIN" "$SITE_DOMAIN")"
   fi
+}
+
+# Install a certificate taken over from another server (migration).
+site_cert_import() {
+  local cert=$1 key=$2 dir
+  [[ -r $cert && -r $key ]] || die "certificate or key file not readable"
+  openssl x509 -noout -in "$cert" >/dev/null 2>&1 || die "not a PEM certificate: $cert"
+  [[ "$(openssl x509 -pubkey -noout -in "$cert")" == "$(openssl pkey -pubout -in "$key" 2>/dev/null)" ]] \
+    || die "the key does not belong to the certificate"
+  dir=$(imported_cert_dir "$SITE_DOMAIN")
+  install -d -m 0700 "$dir"
+  install -m 0644 "$cert" "$dir/fullchain.pem"
+  install -m 0600 "$key" "$dir/privkey.pem"
+  SITE_SSL=imported
+  info "imported certificate for $SITE_DOMAIN (valid until $(openssl x509 -noout -enddate -in "$cert" | cut -d= -f2))"
 }
 
 print_site() {
@@ -413,7 +441,7 @@ cmd_ssl() {
     local f
     for f in "$SITES_DB"/*.env; do
       [[ -e $f ]] || continue
-      [[ $(env_get "$f" SITE_SSL) == pending ]] && list+=("$(env_get "$f" SITE_DOMAIN)")
+      case $(env_get "$f" SITE_SSL) in pending|imported) list+=("$(env_get "$f" SITE_DOMAIN)") ;; esac
     done
     # The server hostname itself, when it still runs on a self-signed certificate.
     if [[ -n $WHP_HOSTNAME && ! -e /etc/letsencrypt/live/$WHP_HOSTNAME ]] \
@@ -423,10 +451,26 @@ cmd_ssl() {
   else
     list=("$target")
   fi
+  local import_cert='' import_key=''
+  shift
+  while (($#)); do
+    case $1 in
+      --import-cert) import_cert=${2:-}; shift ;;
+      --import-key) import_key=${2:-}; shift ;;
+      --json) ;;
+      *) usage ;;
+    esac
+    shift
+  done
   local d
   for d in "${list[@]}"; do
     site_load "$d"
-    site_cert
+    if [[ -n $import_cert || -n $import_key ]]; then
+      [[ $target != --pending ]] || usage
+      site_cert_import "$import_cert" "$import_key"
+    else
+      site_cert
+    fi
     site_save
     site_apply
     if [[ $JSON == yes && $target != --pending ]]; then print_site "$d"; fi
@@ -488,6 +532,7 @@ cmd_remove() {
     rm -rf --one-file-system "${SITE_ROOT:?}"
     certbot delete --non-interactive --cert-name "$domain" >>"$WHP_INSTALL_LOG" 2>&1 || true
   fi
+  rm -rf "$(imported_cert_dir "$domain")"
   userdel "$SITE_USER" 2>/dev/null || true
   rm -f "$(site_file "$domain")"
   ok "$(t site_removed "$domain")"
