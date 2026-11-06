@@ -181,7 +181,7 @@ PY
   whp-site add files.test --php 8.4 --no-ssl --json >/dev/null
   fm() { agent "$1" "$(jq -nc '$ARGS.named' --arg domain files.test "${@:2}")"; }
   fm_spool() { local n; n=$1-$(openssl rand -hex 16); printf '%s' "$n"; }
-  export -f fm fm_spool
+  export -f fm fm_spool agent_job
   check "file manager lists the site root" bash -c 'fm files.list | jq -e "[.entries[].name] | index(\"public\") != null"'
   check "file manager stays inside the webspace" bash -c '! fm files.list --arg path ../site.test && ! fm files.list --arg path public/../../site.test'
   check "file manager spool belongs to the panel user" bash -c "[[ \$(stat -c '%U %a' /var/lib/webhosting-panel/files-spool) == 'whp 700' ]]"
@@ -192,7 +192,7 @@ PY
   check "editor read goes through the spool" bash -c "fm files.read --arg path public/tools/fm.php --arg spool $rd >/dev/null && runuser -u whp -- grep -q fm-ok /var/lib/webhosting-panel/files-spool/$rd"
   check "zip and unzip as jobs" bash -c 'agent_job files.compress "{\"domain\":\"files.test\",\"paths\":[\"public/tools\"],\"dir\":\"\",\"name\":\"tools\"}" && agent_job files.extract "{\"domain\":\"files.test\",\"path\":\"tools.zip\",\"to\":\"tmp\"}" && test -f /var/www/vhosts/files.test/tmp/tools/fm.php'
   check "managed folders cannot be deleted" bash -c '! agent files.delete "{\"domain\":\"files.test\",\"paths\":[\"public\"]}" && test -d /var/www/vhosts/files.test/public'
-  check "web terminal tools installed" test -x /usr/bin/ttyd -a -x /usr/bin/bwrap
+  check "web terminal tools installed" bash -c "command -v ttyd && command -v bwrap"
   check "terminal sandbox hides the server" bash -c "cd /opt/webhosting-panel/agent && python3 -c '
 import subprocess, sys
 from whp_agent.actions.files import _site

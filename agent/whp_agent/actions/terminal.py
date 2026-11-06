@@ -21,7 +21,8 @@ from ..registry import ActionError, action
 from ..run import run
 from .files import _site
 
-TTYD = os.environ.get("WHP_TTYD", "/usr/bin/ttyd")
+TTYD = os.environ.get("WHP_TTYD") or next(
+    (p for p in ("/usr/bin/ttyd", "/usr/local/bin/ttyd") if os.path.exists(p)), "/usr/bin/ttyd")
 BWRAP = os.environ.get("WHP_BWRAP", "/usr/bin/bwrap")
 RUN_DIR = os.environ.get("WHP_TERMINAL_DIR", "/run/whp-terminal")
 SYSTEMD_RUN = "/usr/bin/systemd-run"
