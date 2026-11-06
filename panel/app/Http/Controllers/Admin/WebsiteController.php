@@ -59,7 +59,7 @@ class WebsiteController extends Controller
 
     public function show(Website $website): View
     {
-        return view('admin.websites.show', ['website' => $website->load('customer.package')]);
+        return view('admin.websites.show', ['website' => $website->load('customer.package', 'databases')]);
     }
 
     public function update(Request $request, Website $website): RedirectResponse

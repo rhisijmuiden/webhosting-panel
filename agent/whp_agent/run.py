@@ -7,7 +7,7 @@ from .registry import ActionError
 SAFE_ENV = {"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C.UTF-8"}
 
 
-def run(argv, timeout=60, check=True, input_text=None, cwd=None, env=None):
+def run(argv, timeout=60, check=True, input_text=None, cwd=None, env=None, umask=-1):
     if not isinstance(argv, (list, tuple)) or not argv or not all(isinstance(a, str) for a in argv):
         raise ActionError("internal", "run() needs a list of strings")
     full_env = dict(SAFE_ENV)
@@ -23,6 +23,7 @@ def run(argv, timeout=60, check=True, input_text=None, cwd=None, env=None):
             cwd=cwd,
             env=full_env,
             shell=False,
+            umask=umask,
         )
     except FileNotFoundError:
         raise ActionError("command_failed", f"Command not found: {argv[0]}")
