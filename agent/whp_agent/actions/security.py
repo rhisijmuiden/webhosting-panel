@@ -371,10 +371,12 @@ ACQUIS = {
 
 # Debian 13 logs to the journal only (no /var/log/mail.log), and CrowdSec's own
 # setup does not pick up Postfix and Dovecot there. Without this, failed SMTP and
-# IMAP logins are never seen.
+# IMAP logins are never seen. Postfix 3.10 on Debian 13 runs as postfix.service;
+# older packages used the postfix@-.service instance.
 JOURNAL_ACQUIS = {
     "source": "journalctl",
-    "journalctl_filter": ["_SYSTEMD_UNIT=postfix@-.service", "_SYSTEMD_UNIT=dovecot.service"],
+    "journalctl_filter": ["_SYSTEMD_UNIT=postfix.service", "_SYSTEMD_UNIT=postfix@-.service",
+                          "_SYSTEMD_UNIT=dovecot.service"],
     "labels": {"type": "syslog"},
 }
 

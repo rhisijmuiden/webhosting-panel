@@ -235,7 +235,7 @@ PY
   # The apply restarts CrowdSec; the mail journal is only read once its
   # journalctl reader runs, so wait for that before sending bad logins.
   for _ in $(seq 60); do
-    systemctl is-active --quiet crowdsec && pgrep -f 'journalctl.*postfix@' >/dev/null && break
+    systemctl is-active --quiet crowdsec && pgrep -f 'journalctl.*postfix' >/dev/null && break
     sleep 1
   done
   sleep 3
