@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "45c4998ac4e8f2510f4bce144db12244",
+    "content-hash": "362d011c9842962fef5d4ca3f8ce4401",
     "packages": [
         {
             "name": "brick/math",
@@ -3306,8 +3306,41 @@
             "time": "2026-09-16T11:39:30+00:00"
         },
         {
+            "name": "rhis/apps",
+            "version": "dev-claude/project-thread-9o1zwr",
+            "dist": {
+                "type": "path",
+                "url": "../packages/apps",
+                "reference": "04cca7c1c003f7829a6b966a630f39ccd3d7b61b"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Apps\\AppsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Apps\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "One-click app installer for the Webhosting Panel (WordPress, Joomla, Nextcloud), on top of the agent's apps.* actions.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "rhis/backups",
-            "version": "dev-claude/project-thread-im3b15",
+            "version": "dev-claude/project-thread-9o1zwr",
             "dist": {
                 "type": "path",
                 "url": "../packages/backups",
@@ -3340,7 +3373,7 @@
         },
         {
             "name": "rhis/crm-api",
-            "version": "dev-claude/project-thread-im3b15",
+            "version": "dev-claude/project-thread-9o1zwr",
             "dist": {
                 "type": "path",
                 "url": "../packages/crm-api",
@@ -3373,7 +3406,7 @@
         },
         {
             "name": "rhis/dns-mail",
-            "version": "dev-claude/project-thread-im3b15",
+            "version": "dev-claude/project-thread-9o1zwr",
             "dist": {
                 "type": "path",
                 "url": "../packages/dns-mail",
@@ -8593,6 +8626,7 @@
     "aliases": [],
     "minimum-stability": "stable",
     "stability-flags": {
+        "rhis/apps": 20,
         "rhis/backups": 20,
         "rhis/crm-api": 20,
         "rhis/dns-mail": 20

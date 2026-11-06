@@ -113,6 +113,14 @@ class FakeAgentClient implements AgentClient
             'mail.quarantine_delete' => ['user' => $params['user'] ?? '', 'deleted' => count($params['uids'] ?? []), 'learned' => 0],
             'mail.tlsa' => ['usage' => 3, 'selector' => 1, 'matching_type' => 1, 'certificate' => hash('sha256', 'fake-mail-key'),
                 'cert_file' => '/etc/letsencrypt/live/mail.example.test/fullchain.pem', 'not_after' => 'Feb  3 12:00:00 2027 GMT', 'reuse_key' => true],
+            'apps.catalog' => ['apps' => [
+                ['id' => 'wordpress', 'name' => 'WordPress', 'subdir' => true, 'locales' => ['en', 'nl']],
+                ['id' => 'joomla', 'name' => 'Joomla', 'subdir' => true, 'locales' => ['en']],
+                ['id' => 'nextcloud', 'name' => 'Nextcloud', 'subdir' => false, 'locales' => ['en', 'nl']],
+            ]],
+            'apps.list' => ['apps' => []],
+            'apps.install', 'apps.remove' => ['job' => (string) Str::uuid()],
+            'db.list' => ['databases' => []],
             default => throw new AgentException('unknown_action', "Unknown action: {$action}"),
         };
     }
