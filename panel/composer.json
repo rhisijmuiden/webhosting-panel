@@ -25,6 +25,7 @@
         "rhis/server-admin": "@dev",
         "rhis/subdomains": "@dev",
         "rhis/vulnerabilities": "@dev",
+        "rhis/webapps": "@dev",
         "rhis/wordpress": "@dev"
     },
     "require-dev": {
