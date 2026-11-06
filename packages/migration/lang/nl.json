@@ -79,6 +79,7 @@
     "One click points the domain here and takes over its own DNS records. Late mail can be fetched afterwards.": "Met één klik wijst het domein hierheen en worden de eigen DNS-records overgenomen. Late mail kun je daarna nog ophalen.",
     "Origin": "Herkomst",
     "Owned by the Plesk admin": "Van de Plesk-beheerder",
+    "PHP :from is not installed on this server, so the website uses PHP :to.": "PHP :from is niet geïnstalleerd op deze server, daarom gebruikt de website PHP :to.",
     "PHP :from on the old server, now :to. Test the website before switching DNS.": "PHP :from op de oude server, nu :to. Test de website voordat je DNS omzet.",
     "Panel": "Panel",
     "Panel SSH key": "SSH-sleutel van het panel",

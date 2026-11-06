@@ -124,16 +124,7 @@ final class Migrator
             $item->save();
 
             if ($website->status !== 'active') {
-                $site = $this->agent->call('site.add', array_filter([
-                    'domain' => $website->domain, 'php' => $website->php_version, 'profile' => $website->profile,
-                    'aliases' => array_values(array_filter($plan['aliases'], fn ($a) => $a !== $website->domain)),
-                    'no_alias' => $plan['aliases'] === [], 'docroot' => $plan['docroot'], 'cache' => $website->page_cache,
-                    'ssl' => false, 'quota_mb' => $website->disk_quota_mb,
-                ], fn ($v) => $v !== null), 840);
-                $website->fillFromAgent($site);
-                $website->status = 'active';
-                $website->last_error = null;
-                $website->save();
+                $this->provision($item, $website, $customer, $plan);
             }
 
             if ($opt['mail'] && ! empty($d['mailboxes']) && class_exists(MailDomain::class)) {
@@ -143,9 +134,61 @@ final class Migrator
             $this->startTransfer($item, 'initial');
         } catch (Throwable $e) {
             report($e);
-            $item->update(['status' => 'failed', 'error' => $e->getMessage()]);
+            $item->update(['status' => 'failed', 'error' => self::errorText($e)]);
             ActivityLog::record('migration.failed', $item->domain, ['error' => Str::limit($e->getMessage(), 300)], $item->customer_id);
         }
+    }
+
+    /**
+     * Create the site on the server. A site that whp-site already has (an earlier
+     * attempt got that far) is taken as it is; a PHP version that is not installed
+     * here falls back to the panel's own PHP 8.4.
+     */
+    private function provision(MigrationItem $item, Website $website, Customer $customer, array $plan): void
+    {
+        $existing = collect($this->agent->call('site.list', [], 60)['sites'] ?? [])->firstWhere('domain', $website->domain);
+        if ($existing) {
+            $site = $this->agent->call('site.show', ['domain' => $website->domain], 60);
+        } else {
+            $params = array_filter([
+                'domain' => $website->domain, 'php' => $website->php_version, 'profile' => $website->profile,
+                'aliases' => array_values(array_filter($plan['aliases'], fn ($a) => $a !== $website->domain)),
+                'no_alias' => $plan['aliases'] === [], 'docroot' => $plan['docroot'], 'cache' => $website->page_cache,
+                'ssl' => false, 'quota_mb' => $website->disk_quota_mb, 'customer_id' => $customer->id,
+            ], fn ($v) => $v !== null);
+            try {
+                $site = $this->agent->call('site.add', $params, 840);
+            } catch (AgentException $e) {
+                if ($website->php_version === '8.4' || ! str_contains(self::errorText($e), 'PHP')) {
+                    $website->update(['status' => 'failed', 'last_error' => self::errorText($e)]);
+
+                    throw $e;
+                }
+                $item->addNote('PHP :from is not installed on this server, so the website uses PHP :to.', ['from' => $website->php_version, 'to' => '8.4']);
+                $website->php_version = '8.4';
+                $site = $this->agent->call('site.add', ['php' => '8.4'] + $params, 840);
+            }
+        }
+        $website->fillFromAgent($site);
+        $website->status = 'active';
+        $website->last_error = null;
+        $website->save();
+    }
+
+    /** The agent's message plus what the command itself printed (whp-site writes its reason to stderr). */
+    public static function errorText(Throwable $e): string
+    {
+        $text = $e->getMessage();
+        if ($e instanceof AgentException) {
+            $out = trim(preg_replace('/\e\[[0-9;]*m/', '', (string) ($e->details['stderr'] ?? $e->details['stdout'] ?? '')));
+            if ($out !== '') {
+                $lines = array_values(array_filter(array_map('trim', explode("\n", $out)), fn ($l) => $l !== ''));
+                $fatal = array_values(array_filter($lines, fn ($l) => str_starts_with($l, '✗') || stripos($l, 'error') !== false || stripos($l, 'failed') !== false));
+                $text .= "\n".implode("\n", array_slice($fatal ?: $lines, -6));
+            }
+        }
+
+        return Str::limit($text, 2000);
     }
 
     /** Step 2: the agent copies. kind initial|sync (mirror everything again) or late_mail (only new mail, after the switch). */
