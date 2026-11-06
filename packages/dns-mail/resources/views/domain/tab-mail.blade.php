@@ -64,6 +64,17 @@
         </div>
     </x-ui.card>
 
+    <x-ui.card :title="__('Brand logo in mail apps (BIMI)')" x-show="provider !== 'external'">
+        <p class="muted small">{{ __('Gmail, Apple Mail and Yahoo can show your logo next to your messages. The logo must be a square SVG (Tiny PS format). Gmail and Apple also want a logo certificate (VMC or CMC).') }}</p>
+        <div class="form-grid">
+            <x-ui.field name="bimi_logo_url" type="url" :label="__('Logo (SVG) address')" :value="$domain->bimi_logo_url" :placeholder="'https://' . $domain->domain . '/bimi/logo.svg'" />
+            <x-ui.field name="bimi_vmc_url" type="url" :label="__('Logo certificate address')" :value="$domain->bimi_vmc_url" :placeholder="'https://' . $domain->domain . '/bimi/vmc.pem'" :help="__('Optional.')" />
+        </div>
+        @if ($domain->bimi_logo_url && ! \Rhis\DnsMail\Mail\Bimi::dmarcAllows($dmarc))
+            <span class="error">{{ __('Mail apps only show the logo when DMARC is set to "Send to spam" or "Reject". The record is published once the policy is tightened.') }}</span>
+        @endif
+    </x-ui.card>
+
     @if ($area === 'admin')
         <x-ui.card :title="__('DNS')">
             <input type="hidden" name="dns_managed" value="0">

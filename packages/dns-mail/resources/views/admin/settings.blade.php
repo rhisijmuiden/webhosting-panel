@@ -35,8 +35,36 @@
                 <x-ui.field name="m365_price" :label="__('Price text')" :value="$values['m365_price']" :placeholder="__('from € 6,20 per user per month')" />
             </div>
         </x-ui.card>
+        <x-ui.card :title="__('Spam filter')">
+            <p class="muted small">{{ __('Every message is checked for spam and viruses (greylisting, sender reputation, Bayes learning, ClamAV). From score 6 it is marked as spam, from 15 it is refused.') }}</p>
+            <x-ui.field name="default_quarantine_score" type="number" min="6" max="50" :label="__('Quarantine from score')" :value="$values['default_quarantine_score'] ?? 10"
+                :help="__('Default for new domains. Mail with this score or higher goes to the quarantine, where the customer can release it.')" />
+        </x-ui.card>
         <div><button type="submit" class="btn btn-primary">{{ __('Save') }}</button></div>
     </form>
+    <x-ui.card :title="__('DANE for the mail host')">
+        <x-slot:actions>
+            @if ($daneOn)<x-ui.pill status="ok">{{ __('On') }}</x-ui.pill>@else<x-ui.pill status="off">{{ __('Off') }}</x-ui.pill>@endif
+        </x-slot:actions>
+        <p class="muted small">{{ __('A TLSA record at :name tells other mail servers which certificate to expect, so nobody can intercept mail with a fake one. It needs DNSSEC on the zone and a certificate that keeps its key at renewal.', ['name' => $daneRecord]) }}</p>
+        @if ($dane = session('dane'))
+            <dl class="kv" style="margin:12px 0">
+                <dt>{{ __('Record') }}</dt><dd class="mono">{{ $dane['record'] }} TLSA {{ $dane['value'] }}</dd>
+                <dt>DNSSEC</dt><dd>@if ($dane['dnssec'] === 'active')<x-ui.pill status="ok">{{ __('Active') }}</x-ui.pill>@else<x-ui.pill status="warn">{{ $dane['dnssec'] ?? __('unknown') }}</x-ui.pill>@endif</dd>
+                @if ($dane['not_after'])<dt>{{ __('Certificate valid until') }}</dt><dd>{{ $dane['not_after'] }}</dd>@endif
+            </dl>
+            @foreach ($dane['problems'] as $problem)<p class="error">{{ $problem }}</p>@endforeach
+        @endif
+        @error('dane')<p class="error">{{ $message }}</p>@enderror
+        <div class="actions">
+            <form method="POST" action="{{ route('admin.mail.settings.dane') }}">@csrf<input type="hidden" name="action" value="check"><button class="btn btn-ghost" type="submit">{{ __('Check') }}</button></form>
+            @if ($daneOn)
+                <form method="POST" action="{{ route('admin.mail.settings.dane') }}" onsubmit="return confirm(@js(__('Withdraw the DANE record?')))">@csrf<input type="hidden" name="action" value="withdraw"><button class="btn btn-ghost" type="submit">{{ __('Withdraw') }}</button></form>
+            @else
+                <form method="POST" action="{{ route('admin.mail.settings.dane') }}">@csrf<input type="hidden" name="action" value="publish"><button class="btn btn-dark" type="submit"><x-icon name="shield" />{{ __('Publish DANE record') }}</button></form>
+            @endif
+        </div>
+    </x-ui.card>
     <x-ui.card :title="__('Test the Cloudflare connection')">
         <form method="POST" action="{{ route('admin.mail.settings.test') }}" class="actions">
             @csrf

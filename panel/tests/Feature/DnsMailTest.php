@@ -10,8 +10,9 @@ use App\Services\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Rhis\DnsMail\Dns\DnsRecord;
 use Rhis\DnsMail\Http\HttpClient;
-use Rhis\DnsMail\Models\MailDomain;
 use Rhis\DnsMail\Models\Mailbox;
+use Rhis\DnsMail\Models\MailDomain;
+use Rhis\DnsMail\Services\DnsSync;
 use Rhis\DnsMail\Testing\FakeCloudflare;
 use Tests\TestCase;
 
@@ -174,7 +175,7 @@ class DnsMailTest extends TestCase
         $user = User::factory()->create(['customer_id' => $mine->id]);
 
         $this->actingAs($user)->get('/mail/domains')->assertOk()->assertSee('mijn.nl')->assertDontSee('ander.nl');
-        foreach (['mail', 'mailboxes', 'dns'] as $tab) {
+        foreach (['mail', 'mailboxes', 'spam', 'dns'] as $tab) {
             $this->actingAs($user)->get("/mail/domains/{$own->id}?tab={$tab}")->assertOk();
         }
         $this->actingAs($user)->get("/mail/domains/{$foreign->id}")->assertNotFound();
@@ -206,5 +207,100 @@ class DnsMailTest extends TestCase
         $this->delete("/admin/domains/{$domain->id}", ['confirm' => 'wrong'])->assertSessionHasErrors('confirm');
         $this->delete("/admin/domains/{$domain->id}", ['confirm' => 'klant.nl'])->assertRedirect('/admin/domains');
         $this->assertDatabaseMissing('mail_domains', ['domain' => 'klant.nl']);
+    }
+
+    public function test_spam_settings_sender_lists_and_quarantine(): void
+    {
+        $customer = $this->customer();
+        $domain = MailDomain::create(['customer_id' => $customer->id, 'domain' => 'klant.nl', 'dns_managed' => false]);
+        $domain->mailboxes()->create(['local_part' => 'info', 'password_hash' => Mailbox::hashPassword('een-lang-wachtwoord')]);
+        $user = User::factory()->create(['customer_id' => $customer->id]);
+        $base = "/mail/domains/{$domain->id}";
+
+        $this->actingAs($user)->get("{$base}?tab=spam")->assertOk()
+            ->assertSee('Uw pakket kon niet worden bezorgd')->assertSee('info@klant.nl');
+
+        $this->actingAs($user)->put("{$base}/spam", ['quarantine' => 'on', 'spam_quarantine_score' => 8, 'spam_junk' => '1'])->assertSessionHasNoErrors();
+        $this->actingAs($user)->post("{$base}/spam/rules", ['type' => 'allow', 'value' => '@Leverancier.example'])->assertSessionHasNoErrors();
+        $this->actingAs($user)->post("{$base}/spam/rules", ['type' => 'block', 'value' => 'spam@bad.example'])->assertSessionHasNoErrors();
+        $this->actingAs($user)->post("{$base}/spam/rules", ['type' => 'block', 'value' => 'not valid'])->assertSessionHasErrors('value');
+
+        $policy = collect($this->agent()->calls)->where('action', 'mail.spam_policy_sync')->last()['params'];
+        $this->assertSame(['domain' => 'klant.nl', 'quarantine_score' => 8, 'junk' => true, 'allow' => ['leverancier.example'], 'block' => ['spam@bad.example']], $policy['domains'][0]);
+
+        $this->actingAs($user)->post("{$base}/quarantine/release", ['user' => 'info@klant.nl', 'uid' => 11, 'sender' => 'Facturen <facturen@leverancier2.example>', 'allow_sender' => '1'])
+            ->assertSessionHasNoErrors();
+        $release = collect($this->agent()->calls)->where('action', 'mail.quarantine_release')->last()['params'];
+        $this->assertSame(['domain' => 'klant.nl', 'user' => 'info@klant.nl', 'uid' => 11, 'learn' => true], $release);
+        $this->assertDatabaseHas('mail_sender_rules', ['mail_domain_id' => $domain->id, 'type' => 'allow', 'value' => 'facturen@leverancier2.example']);
+
+        // Mailboxes of other domains cannot be touched from here.
+        $this->actingAs($user)->post("{$base}/quarantine/release", ['user' => 'jan@ander.nl', 'uid' => 1])->assertSessionHasErrors('user');
+        $this->actingAs($user)->post("{$base}/quarantine/delete", ['messages' => ['info@klant.nl|12', 'jan@ander.nl|3']])->assertSessionHasNoErrors();
+        $deletes = collect($this->agent()->calls)->where('action', 'mail.quarantine_delete')->values();
+        $this->assertCount(1, $deletes);
+        $this->assertSame([12], $deletes[0]['params']['uids']);
+
+        $this->actingAs($user)->put("{$base}/spam", ['quarantine' => 'off', 'spam_junk' => '0'])->assertSessionHasNoErrors();
+        $this->assertNull($domain->fresh()->spam_quarantine_score);
+    }
+
+    public function test_bimi_is_published_only_with_enforced_dmarc(): void
+    {
+        $this->cf->addZone('klant.nl');
+        $domain = MailDomain::create(['customer_id' => $this->customer()->id, 'domain' => 'klant.nl']);
+        $this->actingAsAdmin();
+        $form = ['provider' => 'rhis', 'spf_all' => '~', 'mta_sts_mode' => 'testing', 'dns_managed' => '1',
+            'bimi_logo_url' => 'https://klant.nl/bimi/logo.svg'];
+
+        $this->put("/admin/domains/{$domain->id}/mail", $form + ['dmarc_policy' => 'none'])->assertSessionHasNoErrors();
+        $this->assertSame([], $this->records('klant.nl', 'TXT', 'default._bimi.klant.nl'));
+
+        $this->put("/admin/domains/{$domain->id}/mail", $form + ['dmarc_policy' => 'reject'])->assertSessionHasNoErrors();
+        $this->assertSame('v=BIMI1; l=https://klant.nl/bimi/logo.svg; a=', $this->records('klant.nl', 'TXT', 'default._bimi.klant.nl')[0]['content']);
+
+        $this->put("/admin/domains/{$domain->id}/mail", array_merge($form, ['dmarc_policy' => 'reject', 'bimi_logo_url' => 'https://klant.nl/a;b.svg']))->assertSessionHasErrors('bimi_logo_url');
+    }
+
+    public function test_dane_needs_dnssec_and_survives_domain_syncs(): void
+    {
+        $zone = $this->cf->addZone('rhis.nl');
+        $domain = MailDomain::create(['customer_id' => $this->customer()->id, 'domain' => 'rhis.nl']);
+        $this->actingAsAdmin();
+
+        $this->post('/admin/settings/dns-mail/dane', ['action' => 'check'])->assertSessionHas('dane');
+        $this->post('/admin/settings/dns-mail/dane', ['action' => 'publish'])->assertSessionHasErrors('dane');
+        $this->assertSame([], $this->records('rhis.nl', 'TLSA'));
+
+        $this->cf->dnssec[$zone] = 'active';
+        $this->post('/admin/settings/dns-mail/dane', ['action' => 'publish'])->assertSessionHasNoErrors();
+        $tlsa = $this->records('rhis.nl', 'TLSA', '_25._tcp.mail.rhis.nl');
+        $this->assertCount(1, $tlsa);
+        $this->assertSame(['usage' => 3, 'selector' => 1, 'matching_type' => 1, 'certificate' => hash('sha256', 'fake-mail-key')], $tlsa[0]['data']);
+        $this->assertSame('1', $this->app->make(Settings::class)->get('dnsmail.dane'));
+
+        // Syncing the rhis.nl customer domain must not delete the server's TLSA record.
+        $this->app->make(DnsSync::class)->apply($domain);
+        $this->assertCount(1, $this->records('rhis.nl', 'TLSA'));
+        $this->artisan('dns-mail:dane')->assertSuccessful();
+        $this->assertCount(1, $this->records('rhis.nl', 'TLSA'));
+
+        $this->post('/admin/settings/dns-mail/dane', ['action' => 'withdraw'])->assertSessionHasNoErrors();
+        $this->assertSame([], $this->records('rhis.nl', 'TLSA'));
+    }
+
+    public function test_nested_domains_in_one_zone_keep_their_records(): void
+    {
+        $this->cf->addZone('klant.nl');
+        $customer = $this->customer();
+        $main = MailDomain::create(['customer_id' => $customer->id, 'domain' => 'klant.nl']);
+        $shop = MailDomain::create(['customer_id' => $customer->id, 'domain' => 'shop.klant.nl']);
+        $sync = $this->app->make(DnsSync::class);
+
+        $sync->apply($shop);
+        $this->assertCount(1, $this->records('klant.nl', 'MX', 'shop.klant.nl'));
+        $sync->apply($main);
+        $this->assertCount(1, $this->records('klant.nl', 'MX', 'shop.klant.nl'));
+        $this->assertCount(1, $this->records('klant.nl', 'MX', 'klant.nl'));
     }
 }

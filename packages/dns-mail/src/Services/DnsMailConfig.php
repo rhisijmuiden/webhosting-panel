@@ -12,7 +12,7 @@ final class DnsMailConfig
 {
     public const KEYS = [
         'mail_host', 'ipv4', 'ipv6', 'relay_spf_includes', 'webmail_host', 'dmarc_rua', 'tlsrpt_rua',
-        'm365_order_url', 'm365_price',
+        'm365_order_url', 'm365_price', 'default_quarantine_score', 'dane',
     ];
 
     public function __construct(private readonly Settings $settings)
@@ -34,6 +34,18 @@ final class DnsMailConfig
         };
 
         return $config ?? $default;
+    }
+
+    public function defaultQuarantineScore(): int
+    {
+        $v = (int) $this->get('default_quarantine_score', 10);
+
+        return $v >= 6 && $v <= 50 ? $v : 10;
+    }
+
+    public function daneEnabled(): bool
+    {
+        return (bool) $this->get('dane', false);
     }
 
     public function cloudflareToken(): string

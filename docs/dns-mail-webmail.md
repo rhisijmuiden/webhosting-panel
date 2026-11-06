@@ -29,6 +29,11 @@ DMARC, DKIM, SRV, …) and follows these rules:
 3. A managed record in a slot that is no longer wanted (for example after switching a domain from RHIS mail to Microsoft 365): delete it.
 4. Every other record (customer TXT verifications, records added by hand in Cloudflare or the client portal): never touched.
 
+A domain's sync only looks at names inside that domain, and skips names that
+belong to another panel domain in the same zone (`shop.example.com` next to
+`example.com`) and server records marked `managed:rhis-panel server` (DANE).
+See `Rhis\DnsMail\Dns\RecordScope`.
+
 Changes go to Cloudflare in one atomic batch request. `SyncPlan::toArray()`
 gives the preview the admin or customer sees before applying.
 
@@ -78,6 +83,12 @@ mail.mailboxes_sync     {mailboxes: [{email, password_hash: "{ARGON2ID}$argon2id
                         -> {changed, created_homes, mailboxes, aliases, skipped_not_local}   (always send the full list)
 mail.mailbox_usage      {} -> {usage: {email: {used_kb, limit_kb}}}
 mail.mailbox_purge      {email} -> {email, moved_to}   (only after the mailbox is gone; moves mail to /var/vmail/.deleted)
+mail.spam_policy_sync   {default_quarantine_score?, domains: [{domain, quarantine_score: 6..50|null, junk?: bool, allow?: [...], block?: [...]}]}
+                        -> {changed, domains}   (always send the full list; allow/block entries are addresses or domains)
+mail.quarantine_list    {domain, user?} -> {domain, messages: [{user, uid, date, size, from, to, subject, score, virus}], truncated}
+mail.quarantine_release {domain, user, uid, learn?: true} -> {user, uid, learned}   (moves to INBOX, learns ham)
+mail.quarantine_delete  {domain, user, uids: [...], learn?: false} -> {user, deleted, learned}   (learn = learn as spam first)
+mail.tlsa               {} -> {usage: 3, selector: 1, matching_type: 1, certificate, cert_file, not_after, reuse_key}
 ```
 
 Mailboxes: the panel hashes passwords with PHP `password_hash(..., PASSWORD_ARGON2ID)`
@@ -92,9 +103,9 @@ not RHIS mail domains. A disabled mailbox still receives mail but cannot log in.
 
 | Where | What |
 | --- | --- |
-| Admin > Hosting > Domains & mail | All domains; add a domain without a website; per domain the tabs Mail settings, Mailboxes and DNS records. |
-| Admin > System > DNS & mail server | Cloudflare token (stored encrypted), mail host, public IPs, relay SPF includes, DMARC/TLS report addresses, Microsoft 365 order link and price. |
-| Client portal > Mail & DNS | The customer's own domains with the same three tabs (no DNS-management switch, no delete). |
+| Admin > Hosting > Domains & mail | All domains; add a domain without a website; per domain the tabs Mail settings, Mailboxes, Spam & quarantine and DNS records. |
+| Admin > System > DNS & mail server | Cloudflare token (stored encrypted), mail host, public IPs, relay SPF includes, DMARC/TLS report addresses, Microsoft 365 order link and price, default quarantine score, DANE. |
+| Client portal > Mail & DNS | The customer's own domains with the same tabs (no DNS-management switch, no delete). |
 
 - Creating a website creates its mail domain, a DKIM key, updates the agent and publishes DNS straight away.
 - Saving mail settings pushes the routing to the agent and publishes to Cloudflare; records that already exist with other values show up as a conflict on the DNS tab with a "take over" preview.
@@ -103,7 +114,54 @@ not RHIS mail domains. A disabled mailbox still receives mail but cannot log in.
 - Mailboxes respect `max_mailboxes` of the hosting package. Passwords are hashed in the panel (`{ARGON2ID}`), the Apple profile is a download per mailbox.
 - `Rhis\DnsMail\Testing\FakeCloudflare` is an in-memory Cloudflare API for tests and local development.
 
+## Spam, quarantine and sender lists
+
+Scanning is set up by the installer: Rspamd with greylisting (from score 4),
+Bayes in Valkey, RBLs, DMARC and ClamAV. From score 6 Rspamd adds
+`X-Spam: Yes`, above 15 it refuses the message, and it always adds
+`X-Spam-Level` with one `*` per point.
+
+Where a scanned message lands is decided by a Sieve script that Dovecot runs
+before the user's own filters. The agent writes it from the panel's settings
+(`mail.spam_policy_sync`, sent with every mail push):
+
+| Order | Rule | Goes to |
+| --- | --- | --- |
+| 1 | Sender on the domain's allow list | Inbox, whatever the score |
+| 2 | Sender on the domain's block list | Junk |
+| 3 | Score at or above the domain's quarantine score (default 10) | Quarantine folder |
+| 4 | `X-Spam: Yes` (score 6 and up), when "Move to Junk" is on | Junk |
+
+The Quarantine folder is expunged after 30 days by Dovecot. In the panel, the
+Spam & quarantine tab (admin and client portal) lists what is held across all
+mailboxes of the domain. **Deliver to inbox** moves a message to the inbox and
+teaches Bayes it is good mail; it can also put the sender on the allow list.
+**Delete** expunges and teaches Bayes it is spam. Viruses cannot be released.
+
+Allow-listing does not skip greylisting or the hard reject at 15; those happen
+before delivery.
+
+Dovecot setup lives in [mail/antispam](../mail/antispam): `dovecot.conf`
+(the `sieve_script` before-script and the Quarantine mailbox) and
+`before.sieve`, the script the server starts with until the panel pushes its
+first policy.
+
+## DANE and BIMI
+
+**DANE** (Admin > System > DNS & mail server): the panel publishes
+`_25._tcp.<mail host> TLSA 3 1 1 <sha256 of the public key>` with the value
+from `mail.tlsa`. It refuses while DNSSEC is off on the zone (checked through
+the Cloudflare API) or while certbot would give the certificate a new key at
+renewal (`reuse_key = True` missing in the renewal config), because both would
+make DANE-checking servers refuse our mail. Once on, `dns-mail:dane` runs every
+night at 04:20 and keeps the record equal to the certificate.
+
+**BIMI** (per domain, Mail settings tab): a logo URL (square SVG Tiny PS) and an
+optional VMC/CMC certificate URL give `default._bimi.<domain> TXT
+"v=BIMI1; l=…; a=…"`. The record is only published while DMARC is
+`quarantine` or `reject` at 100%, since mail apps ignore it otherwise.
+
 ## Planned next
 
-- Inbound anti-spam tuning in Rspamd (greylisting, Bayes, RBLs, fuzzy hashes), ClamAV virus scanning, and a quarantine view for customers to release false positives.
-- DANE (TLSA for the mail host, needs DNSSEC on the zone) and BIMI.
+- QR code on the mailbox page for setting up phones.
+- Customer DNS management through the RHIS CRM API (phase 4).

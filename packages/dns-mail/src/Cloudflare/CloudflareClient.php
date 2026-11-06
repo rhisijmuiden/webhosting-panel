@@ -62,6 +62,12 @@ final class CloudflareClient
         return null;
     }
 
+    /** DNSSEC status of a zone: "active", "pending", "disabled", ... (DANE needs "active"). */
+    public function dnssecStatus(string $zoneId): string
+    {
+        return (string) ($this->call('GET', '/zones/' . rawurlencode($zoneId) . '/dnssec')['status'] ?? 'disabled');
+    }
+
     /** @return list<DnsRecord> */
     public function listRecords(string $zoneId): array
     {

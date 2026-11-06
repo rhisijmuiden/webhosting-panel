@@ -76,6 +76,9 @@ final class MailDnsProfile
         if ($s->tlsRptAddress !== null && $s->provider !== MailProvider::External) {
             $records[] = new DnsRecord('TXT', '_smtp._tls.' . $d, MtaSts::tlsRptTxt($s->tlsRptAddress));
         }
+        if ($s->bimi !== null && Bimi::dmarcAllows($s->dmarc)) {
+            $records[] = new DnsRecord('TXT', $s->bimi->recordName($d), $s->bimi->txt());
+        }
 
         return $records;
     }

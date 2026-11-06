@@ -6,8 +6,10 @@ namespace Rhis\DnsMail\Laravel;
 
 use App\Models\Website;
 use App\Support\Menu;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Rhis\DnsMail\Console\DaneCommand;
 use Rhis\DnsMail\Http\CurlHttpClient;
 use Rhis\DnsMail\Http\HttpClient;
 use Rhis\DnsMail\Mail\MailServerSettings;
@@ -35,6 +37,13 @@ final class DnsMailServiceProvider extends ServiceProvider
         $this->loadViewsFrom(self::ROOT . '/resources/views', 'dns-mail');
         $this->loadMigrationsFrom(self::ROOT . '/database/migrations');
         $this->publishes([self::ROOT . '/config/dns-mail.php' => config_path('dns-mail.php')], 'dns-mail-config');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([DaneCommand::class]);
+        }
+        $this->callAfterResolving(Schedule::class, static function (Schedule $schedule): void {
+            $schedule->command('dns-mail:dane')->dailyAt('04:20')->withoutOverlapping();
+        });
 
         if (!class_exists(Menu::class)) {
             return; // Not inside the panel (e.g. package unit tests).

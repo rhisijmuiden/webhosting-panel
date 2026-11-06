@@ -6,6 +6,7 @@ namespace Rhis\DnsMail\Services;
 
 use Rhis\DnsMail\Dns\DnsRecord;
 use Rhis\DnsMail\Dns\WebRecords;
+use Rhis\DnsMail\Mail\Bimi;
 use Rhis\DnsMail\Mail\DkimKey;
 use Rhis\DnsMail\Mail\DmarcPolicy;
 use Rhis\DnsMail\Mail\DomainMailSettings;
@@ -48,7 +49,20 @@ final class DomainRecords
             m365Intune: $d->m365_intune,
             mtaStsMode: $d->mta_sts_mode ?: null,
             tlsRptAddress: $this->config->get('tlsrpt_rua') ?: null,
+            bimi: $this->bimi($d),
         );
+    }
+
+    private function bimi(MailDomain $d): ?Bimi
+    {
+        if (!$d->bimi_logo_url) {
+            return null;
+        }
+        try {
+            return new Bimi($d->bimi_logo_url, $d->bimi_vmc_url ?: null);
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     public function profile(): MailDnsProfile

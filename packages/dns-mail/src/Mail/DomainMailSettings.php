@@ -17,6 +17,7 @@ final readonly class DomainMailSettings
      * @param bool $m365Intune add enterpriseregistration/enterpriseenrollment CNAMEs for device enrolment
      * @param string|null $mtaStsMode null = off, or testing / enforce / none (none withdraws a published policy)
      * @param string|null $tlsRptAddress where sending servers report TLS problems (TLS-RPT, RFC 8460)
+     * @param Bimi|null $bimi brand logo for mail apps; only published while DMARC is enforced
      */
     public function __construct(
         public string $domain,
@@ -34,6 +35,7 @@ final readonly class DomainMailSettings
         public bool $m365Intune = false,
         public ?string $mtaStsMode = 'testing',
         public ?string $tlsRptAddress = null,
+        public ?Bimi $bimi = null,
     ) {
     }
 

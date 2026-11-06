@@ -51,6 +51,8 @@ return [
         'ms-verify' => 'A Microsoft verification record already exists.',
         'caa' => 'This domain already has CAA records.',
         'txt' => 'A TXT record with this value already exists.',
+        'tlsa' => 'This name already has TLSA (DANE) records.',
+        'bimi' => 'This domain already has a BIMI record.',
     ],
     'spf' => [
         'title' => 'SPF generator',

@@ -51,6 +51,8 @@ return [
         'ms-verify' => 'Er staat al een verificatierecord van Microsoft.',
         'caa' => 'Dit domein heeft al CAA-records.',
         'txt' => 'Er staat al een TXT-record met deze waarde.',
+        'tlsa' => 'Deze naam heeft al TLSA-records (DANE).',
+        'bimi' => 'Dit domein heeft al een BIMI-record.',
     ],
     'spf' => [
         'title' => 'SPF-generator',
