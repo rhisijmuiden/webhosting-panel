@@ -215,7 +215,12 @@ site = _site({\"domain\": \"files.test\"})
 argv = sandbox_argv(site)[:-4] + [\"/bin/bash\", \"-c\", \"test ! -e /etc/webhosting-panel && test ! -e /var/www/vhosts/site.test && ! touch /usr/x 2>/dev/null && touch public/sandbox-ok && php -v >/dev/null\"]
 sys.exit(subprocess.run(argv, user=site[\"uid\"], group=site[\"gid\"], extra_groups=[]).returncode)
 ' && test -f /var/www/vhosts/files.test/public/sandbox-ok"
-  check "terminal proxy refuses visitors without a session" bash -c "TOK=\$(agent terminal.start '{\"domain\":\"files.test\",\"minutes\":5}' | jq -r .token) && test -S /run/whp-terminal/\$TOK/ttyd.sock && [[ \$(curl -sk -o /dev/null -w %{http_code} --resolve \"$HOST:8443:127.0.0.1\" https://$HOST:8443/terminal/\$TOK/) == 401 ]] && curl -s --unix-socket /run/whp-terminal/\$TOK/ttyd.sock http://localhost/terminal/\$TOK/ | grep -qi '<html' && agent terminal.stop \"{\\\"token\\\":\\\"\$TOK\\\"}\" >/dev/null"
+  TERM_START=$(agent terminal.start '{"domain":"files.test","minutes":5}') || echo "terminal.start: $TERM_START"
+  TOK=$(jq -r '.token // empty' <<<"$TERM_START" 2>/dev/null || true)
+  check "terminal session starts (ttyd socket)" bash -c "[[ -n '$TOK' ]] && test -S /run/whp-terminal/$TOK/ttyd.sock || { ls -la /run/whp-terminal /run/whp-terminal/$TOK; systemctl status --no-pager whp-term-$TOK.service; journalctl -u whp-term-$TOK.service --no-pager | tail -20; false; }"
+  check "ttyd serves the terminal page" bash -c "curl -s --unix-socket /run/whp-terminal/$TOK/ttyd.sock http://localhost/terminal/$TOK/ | grep -qi '<html'"
+  check "terminal proxy refuses visitors without a session" bash -c "code=\$(curl -sk -o /dev/null -w %{http_code} --resolve \"$HOST:8443:127.0.0.1\" https://$HOST:8443/terminal/$TOK/); echo \"HTTP \$code\"; [[ \$code == 401 ]]"
+  check "terminal session stops" bash -c "agent terminal.stop '{\"token\":\"$TOK\"}' >/dev/null && ! test -e /run/whp-terminal/$TOK"
 fi
 
 exit $fail
