@@ -121,6 +121,11 @@ module_panel() {
   render "$TPL/systemd/whp-cert-retry.timer" /etc/systemd/system/whp-cert-retry.timer
   run systemctl daemon-reload
   svc_enable whp-cert-retry.timer whp-sites.target
+  # Existing websites: write their pool, unit and vhost again with the current templates.
+  if compgen -G "$WHP_STATE/sites/*.env" >/dev/null; then
+    "$WHP_CODE_DIR/installer/bin/whp-site" refresh --all >>"$WHP_INSTALL_LOG" 2>&1 \
+      || warn "whp-site refresh --all failed (see $WHP_INSTALL_LOG)"
+  fi
 
   # Components from later phases, in this order, when present.
   local c

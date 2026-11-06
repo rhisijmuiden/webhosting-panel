@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Client;
 use App\Http\Controllers\Controller;
 use App\Models\Website;
 use App\Services\Agent\AgentException;
+use App\Services\PhpSettings;
 use App\Services\WebsiteManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -46,6 +47,19 @@ class WebsiteController extends Controller
         }
 
         return back()->with('status', __('Website saved.'));
+    }
+
+    public function php(Request $request, Website $website, PhpSettings $php): RedirectResponse
+    {
+        $this->authorizeSite($request, $website);
+        $data = $request->validate($php->siteRules(), [], collect(PhpSettings::KEYS)->mapWithKeys(fn ($k, $key) => ["php.$key" => __($k[0])])->all());
+        try {
+            $this->manager->setPhpSettings($website, $php->fromInput($data['php'] ?? []));
+        } catch (AgentException $e) {
+            return back()->withInput()->withErrors(['agent' => __('The change could not be applied. Please try again or contact support.')]);
+        }
+
+        return back()->with('status', __('PHP settings saved.'));
     }
 
     private function authorizeSite(Request $request, Website $website): void

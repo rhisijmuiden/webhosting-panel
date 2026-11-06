@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Jobs\ApplyCustomerLimits;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +15,16 @@ class Customer extends Model
     protected $fillable = [
         'name', 'company', 'email', 'phone', 'crm_id', 'hosting_package_id', 'status', 'locale', 'notes',
     ];
+
+    protected static function booted(): void
+    {
+        // A new package means new resource limits on the server.
+        static::updated(function (Customer $customer) {
+            if ($customer->wasChanged('hosting_package_id') && $customer->websites()->exists()) {
+                ApplyCustomerLimits::dispatch($customer);
+            }
+        });
+    }
 
     public function package(): BelongsTo
     {
@@ -33,6 +44,21 @@ class Customer extends Model
     public function displayName(): string
     {
         return $this->company ?: $this->name;
+    }
+
+    /** Data traffic of all websites this month, in bytes. */
+    public function trafficBytes(?string $month = null): int
+    {
+        return (int) WebsiteTraffic::whereIn('website_id', $this->websites()->select('id'))
+            ->where('month', $month ?? now()->utc()->format('Y-m'))->sum('bytes');
+    }
+
+    /** Traffic used as a percentage of the package limit (null: unlimited). */
+    public function trafficPercent(): ?float
+    {
+        $limit = $this->package?->traffic_gb_month;
+
+        return $limit ? $this->trafficBytes() / ($limit * 1024 ** 3) * 100 : null;
     }
 
     public function diskUsedMb(): int

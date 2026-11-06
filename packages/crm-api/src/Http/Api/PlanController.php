@@ -17,7 +17,7 @@ use Rhis\CrmApi\Support\Resolve;
 final class PlanController
 {
     /** Limits that map onto panel columns; the rest is kept in crm_limits. */
-    private const COLUMNS = ['disk_mb' => 'disk_mb', 'domains' => 'max_websites', 'mailboxes' => 'max_mailboxes', 'databases' => 'max_databases', 'cron_jobs' => 'max_cronjobs'];
+    private const COLUMNS = ['disk_mb' => 'disk_mb', 'traffic_gb_month' => 'traffic_gb_month', 'domains' => 'max_websites', 'mailboxes' => 'max_mailboxes', 'databases' => 'max_databases', 'cron_jobs' => 'max_cronjobs', 'php_workers' => 'php_workers'];
 
     private const LIMITS = ['disk_mb', 'traffic_gb_month', 'domains', 'subdomains', 'mailboxes', 'mailbox_quota_mb', 'mail_aliases', 'databases', 'ftp_accounts', 'cron_jobs', 'php_workers', 'php_memory_limit_mb'];
 
@@ -105,8 +105,8 @@ final class PlanController
         $extra = Present::json($plan->crm_limits);
         foreach ($data['limits'] ?? [] as $key => $value) {
             if (isset(self::COLUMNS[$key])) {
-                // Panel columns cannot be null: "unlimited" is stored as a very high number.
-                $plan->{self::COLUMNS[$key]} = $value ?? ($key === 'disk_mb' ? 0 : 1_000_000);
+                // null = unlimited.
+                $plan->{self::COLUMNS[$key]} = $value;
             } else {
                 $extra[$key] = $value;
             }
