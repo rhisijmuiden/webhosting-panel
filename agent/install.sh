@@ -5,6 +5,9 @@ ROOT="${WHP_ROOT:-/opt/webhosting-panel}"
 # 0751 on the state dir: vmail must traverse it to reach the spam Sieve script.
 install -d -m 0751 -o root -g whp /var/lib/webhosting-panel
 install -d -m 0750 -o root -g whp /var/lib/webhosting-panel/jobs
+# Customer backup zips uploaded through the panel wait here for the agent.
+install -d -m 0750 -o whp -g whp /var/lib/webhosting-panel/uploads
+install -d -m 0700 /var/lib/webhosting-panel/client-backups
 install -d -m 0750 -o root -g whp /var/log/webhosting-panel
 install -d -m 0750 -o root -g whp /etc/webhosting-panel
 install -d -m 0755 /etc/nftables.d

@@ -132,7 +132,7 @@ class BackupsTest extends TestCase
         $foreign = Website::create(['customer_id' => $other->id, 'domain' => 'other.nl', 'status' => 'active']);
         $user = User::factory()->create(['customer_id' => $mine->id]);
 
-        $this->actingAs($user)->get('/backups')->assertOk()->assertSee('mine.nl')->assertDontSee('other.nl');
+        $this->actingAs($user)->get('/backups?tab=server')->assertOk()->assertSee('mine.nl')->assertDontSee('other.nl');
         $this->assertSame('site:mine.nl', collect($this->agent()->calls)->firstWhere('action', 'backup.list')['params']['scope']);
 
         $res = $this->actingAs($user)->post('/backups/restore', ['website' => $site->id, 'snapshot' => 'a1b2c301']);
@@ -160,7 +160,7 @@ class BackupsTest extends TestCase
 
     public function test_customer_restore_can_be_turned_off(): void
     {
-        config(['backups.customer_restore' => false]);
+        config(['backups.customer_restore' => false, 'backups.customer_targets' => false]);
         $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test']);
         $user = User::factory()->create(['customer_id' => $customer->id]);
 

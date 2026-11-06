@@ -42,7 +42,37 @@
         try { localStorage.setItem('whp-theme', v); } catch (e) { /* private mode */ }
         applyTheme(v);
       },
+      isDark() {
+        if (this.value === 'system') return window.matchMedia('(prefers-color-scheme: dark)').matches;
+        return this.value === 'dark';
+      },
     });
+
+    // Command palette (Ctrl/Cmd+K): jump to any page in the menu.
+    window.Alpine.data('palette', (items) => ({
+      items,
+      query: '',
+      cursor: 0,
+      init() { this.$watch('query', () => { this.cursor = 0; }); },
+      show() {
+        this.cursor = 0;
+        this.$refs.palette.showModal();
+        this.$nextTick(() => this.$refs.input.focus());
+      },
+      results() {
+        const q = this.query.trim().toLowerCase();
+        if (!q) return this.items;
+        return this.items.filter((i) => (i.label + ' ' + i.section).toLowerCase().includes(q));
+      },
+      move(d) {
+        const n = this.results().length;
+        if (n) this.cursor = (this.cursor + d + n) % n;
+      },
+      go() {
+        const item = this.results()[this.cursor];
+        if (item) window.location.href = item.url;
+      },
+    }));
 
     window.Alpine.data('infoDialog', (cfg) => ({
       cfg,
