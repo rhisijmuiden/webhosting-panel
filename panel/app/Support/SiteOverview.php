@@ -87,7 +87,7 @@ class SiteOverview
 
     public function has(string $route): bool
     {
-        return Route::has($route);
+        return Route::has($route) && app(\App\Services\Team\TeamAccess::class)->allowsRoute($route);
     }
 
     public function canUseTerminal(): bool

@@ -51,7 +51,7 @@
             <div>
                 @forelse ($customer->users as $u)
                     <div class="row">
-                        <span><strong>{{ $u->name }}</strong><br><span class="small muted">{{ $u->email }} · {{ $locales[$u->locale] ?? $u->locale }}@if ($u->hasTwoFactor()) · 2FA @endif</span></span>
+                        <span><strong>{{ $u->name }}</strong>@if ($u->teamMember) <x-ui.pill status="info" :dot="false" title="{{ implode(', ', $u->teamMember->areaLabels()) }}">{{ __('Team member') }}</x-ui.pill>@endif<br><span class="small muted">{{ $u->email }} · {{ $locales[$u->locale] ?? $u->locale }}@if ($u->hasTwoFactor()) · 2FA @endif</span></span>
                         <span class="login-actions">
                             <form method="POST" action="{{ route('admin.customers.users.password', [$customer, $u]) }}" data-confirm="{{ __('Give :email a new password? The old password stops working.', ['email' => $u->email]) }}">@csrf
                                 <button class="btn btn-sm" type="submit" title="{{ __('New password') }}"><x-icon name="key" /><span class="login-action-label">{{ __('New password') }}</span></button></form>
