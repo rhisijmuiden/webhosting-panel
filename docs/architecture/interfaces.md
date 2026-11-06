@@ -217,6 +217,11 @@ Server management (`server.py`, screens in `packages/server-admin`, `Rhis\Server
 `server.cleanup`, `server.php_versions`, `server.php_install`, `server.php_remove`. No shutdown action.
 See `docs/server-management.md`.
 
+Monitoring (`monitor.py`, screens in `packages/monitoring`, `Rhis\Monitoring\`, admin `/admin/monitoring`,
+client `/uptime`, public `/status`): `monitor.check` (read only) returns per website the HTTP answer and the
+certificate it serves (SNI on 127.0.0.1:443: days left, issuer, host match), real disks with inode use,
+service states, memory, load and the Postfix queue. See `docs/monitoring.md`.
+
 ## Release channels
 
 | Channel | Git branch |
