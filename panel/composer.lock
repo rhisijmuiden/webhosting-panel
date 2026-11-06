@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "440aaadc2949bb3f9161a0e045f424ee",
+    "content-hash": "c9a8d8cd1181b2ff60233f86e7136226",
     "packages": [
         {
             "name": "brick/math",
@@ -3513,6 +3513,39 @@
                 "proprietary"
             ],
             "description": "Server migration for the Webhosting Panel: move websites, databases, mailboxes, certificates and DNS from a Plesk server.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/vulnerabilities",
+            "version": "dev-claude/project-thread-0lz2y1",
+            "dist": {
+                "type": "path",
+                "url": "../packages/vulnerabilities",
+                "reference": "7164b64eee34bd2b9a000a4209de7bec66dc24bb"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Vulnerabilities\\VulnerabilitiesServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Vulnerabilities\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Security alerts for the Webhosting Panel: vulnerable WordPress core, plugins and themes and malware found on customer sites, a branded mail to the customer with the fix, and the admin security overview with customer risk ranking.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8731,6 +8764,7 @@
         "rhis/dns-mail": 20,
         "rhis/files": 20,
         "rhis/migration": 20,
+        "rhis/vulnerabilities": 20,
         "rhis/wordpress": 20
     },
     "prefer-stable": true,

@@ -12,7 +12,7 @@ use App\Services\Agent\AgentClient;
 /** Every change to a website goes through here, so admin and client panel behave the same. */
 class WebsiteManager
 {
-    public function __construct(private readonly AgentClient $agent) {}
+    public function __construct(private readonly AgentClient $agent, private readonly PhpSettings $php) {}
 
     public function create(Customer $customer, array $data): Website
     {
@@ -43,6 +43,23 @@ class WebsiteManager
         $this->agent->call('site.cache', ['domain' => $website->domain, 'enabled' => $enabled], 60);
         $website->update(['page_cache' => $enabled]);
         ActivityLog::record('website.cache_changed', $website->domain, ['enabled' => $enabled], $website->customer_id);
+    }
+
+    /**
+     * Save the website's own PHP values (missing = server default) and apply them.
+     * Values above the server maximum are lowered to it (PhpSettings::effective).
+     */
+    public function setPhpSettings(Website $website, array $values): void
+    {
+        $previous = $website->php_settings;
+        $website->update(['php_settings' => $values ?: null]);
+        try {
+            $this->php->apply($website);
+        } catch (\Throwable $e) {
+            $website->update(['php_settings' => $previous]);
+            throw $e;
+        }
+        ActivityLog::record('website.php_settings_changed', $website->domain, $values, $website->customer_id);
     }
 
     public function issueSsl(Website $website): void

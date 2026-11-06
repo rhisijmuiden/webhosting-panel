@@ -32,6 +32,9 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Strings of the panel shell (menu, top bar) live in their own file next to lang/nl.json.
+        $this->app['translator']->addJsonPath(lang_path('ui'));
+
         // The panel runs on its own port (:8443). Build every URL from APP_URL, so
         // asset links and redirects never lose the port, whatever Host the web
         // server passes on.
@@ -59,6 +62,12 @@ class AppServiceProvider extends ServiceProvider
             }
         }
 
+        // Translations of panel features live in their own file (lang/features/<feature>/nl.json),
+        // so parallel work does not keep changing lang/nl.json.
+        foreach (glob(lang_path('features/*'), GLOB_ONLYDIR) ?: [] as $dir) {
+            $this->loadJsonTranslationsFrom($dir);
+        }
+
         $this->registerMenus();
     }
 
@@ -69,6 +78,7 @@ class AppServiceProvider extends ServiceProvider
             ->add('customers', 'Customers', 'admin.customers.index', icon: 'customers', section: 'Hosting', order: 10)
             ->add('packages', 'Packages', 'admin.packages.index', icon: 'package', section: 'Hosting', order: 20)
             ->add('websites', 'Websites', 'admin.websites.index', icon: 'globe', section: 'Hosting', order: 30)
+            ->add('php', 'PHP settings', 'admin.php.index', icon: 'code', section: 'Server', order: 95)
             ->add('statistics', 'Statistics', 'admin.statistics.index', icon: 'chart', section: 'Server', order: 90)
             ->add('services', 'Services', 'admin.services.index', icon: 'server', section: 'Server', order: 100)
             ->add('security', 'Security', 'admin.security.index', icon: 'shield', section: 'Server', order: 110)
@@ -80,5 +90,58 @@ class AppServiceProvider extends ServiceProvider
         Menu::client()
             ->add('overview', 'Overview', 'client.dashboard', icon: 'dashboard', order: 0)
             ->add('websites', 'Websites', 'client.websites.index', icon: 'globe', order: 10);
+
+        $this->arrangeMenus();
+    }
+
+    /**
+     * One place that decides how the menus are grouped, so packages can keep
+     * registering their items as they do. Unknown items keep their own section.
+     */
+    private function arrangeMenus(): void
+    {
+        Menu::admin()->arrange(
+            ['', 'Overview', 'Customers', 'Hosting', 'Domains & mail', 'Server', 'System'],
+            [
+                'dashboard' => ['section' => 'Overview', 'order' => 0],
+                'security-overview' => ['section' => 'Overview', 'order' => 10, 'label' => 'Security center'],
+                'activity' => ['section' => 'Overview', 'order' => 20, 'label' => 'Activity'],
+                'customers' => ['section' => 'Customers', 'order' => 100],
+                'packages' => ['section' => 'Customers', 'order' => 110],
+                'migration' => ['section' => 'Customers', 'order' => 120, 'label' => 'Migrations'],
+                'websites' => ['section' => 'Hosting', 'order' => 200],
+                'wordpress' => ['section' => 'Hosting', 'order' => 210],
+                'apps' => ['section' => 'Hosting', 'order' => 220, 'label' => 'Apps'],
+                'git' => ['section' => 'Hosting', 'order' => 230],
+                'databases' => ['section' => 'Hosting', 'order' => 240],
+                'files' => ['section' => 'Hosting', 'order' => 250],
+                'domains' => ['section' => 'Domains & mail', 'order' => 300, 'label' => 'Domains & DNS'],
+                'mail-log' => ['section' => 'Domains & mail', 'order' => 320],
+                'services' => ['section' => 'Server', 'order' => 400],
+                'security' => ['section' => 'Server', 'order' => 405, 'label' => 'Attack blocking'],
+                'firewall' => ['section' => 'Server', 'order' => 410],
+                'backups' => ['section' => 'Server', 'order' => 420],
+                'statistics' => ['section' => 'Server', 'order' => 430],
+                'mail-settings' => ['section' => 'System', 'order' => 500],
+                'dns-mail-settings' => ['section' => 'System', 'order' => 510],
+                'crm-api' => ['section' => 'System', 'order' => 520],
+                'system' => ['section' => 'System', 'order' => 530],
+            ],
+        );
+
+        Menu::client()->arrange(
+            ['', 'Overview', 'Websites', 'Email & domains', 'Files & data', 'Account'],
+            [
+                'overview' => ['section' => 'Overview', 'order' => 0, 'label' => 'My hosting'],
+                'websites' => ['section' => 'Websites', 'order' => 100],
+                'wordpress' => ['section' => 'Websites', 'order' => 110],
+                'apps' => ['section' => 'Websites', 'order' => 120],
+                'security-alerts' => ['section' => 'Websites', 'order' => 130, 'label' => 'Security'],
+                'mail' => ['section' => 'Email & domains', 'order' => 200],
+                'files' => ['section' => 'Files & data', 'order' => 290],
+                'backups' => ['section' => 'Files & data', 'order' => 300],
+                'shop' => ['section' => 'Account', 'order' => 400],
+            ],
+        );
     }
 }

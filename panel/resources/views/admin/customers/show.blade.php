@@ -11,11 +11,18 @@
         </div>
     </div>
 
+    @if ($customer->websites->where('status', 'suspended')->where('last_error', \App\Services\Traffic::SUSPENDED)->isNotEmpty())
+        <div class="alert alert-warn" role="status"><x-icon name="info" /><div><strong>{{ __('The websites of this customer are suspended: the data traffic limit of the package is reached.') }}</strong>
+            <p class="small">{{ __('They come back online automatically on the first day of next month.') }}</p></div>
+            <form method="POST" action="{{ route('admin.customers.traffic-unsuspend', $customer) }}">@csrf<button class="btn btn-sm" type="submit">{{ __('Put online now') }}</button></form></div>
+    @endif
     <section class="grid grid-stats">
         <div class="card stat"><span class="label">{{ __('Package') }}</span><strong class="value" style="font-size:24px">{{ $customer->package?->name ?? '–' }}</strong></div>
-        <div class="card stat"><span class="label">{{ __('Websites') }}</span><strong class="value">{{ $customer->websites->count() }}@if ($customer->package)<span class="muted" style="font-size:16px"> / {{ $customer->package->max_websites }}</span>@endif</strong></div>
+        <div class="card stat"><span class="label">{{ __('Websites') }}</span><strong class="value">{{ $customer->websites->count() }}@if ($customer->package)<span class="muted" style="font-size:16px"> / {{ $customer->package->limitLabel('max_websites') }}</span>@endif</strong></div>
         <div class="card stat"><span class="label">{{ __('Disk') }}</span><strong class="value" style="font-size:24px">{{ \Illuminate\Support\Number::fileSize($customer->diskUsedMb() * 1024 * 1024) }}</strong>
             @if ($customer->package)<x-ui.meter label="" :percent="$customer->package->disk_mb ? $customer->diskUsedMb() / $customer->package->disk_mb * 100 : 0" />@endif</div>
+        <div class="card stat"><span class="label">{{ __('Data traffic this month') }}</span><strong class="value" style="font-size:24px">{{ \Illuminate\Support\Number::fileSize($customer->trafficBytes(), 1) }}</strong>
+            @if ($customer->package?->traffic_gb_month)<span class="hint">{{ __('of :size', ['size' => $customer->package->limitLabel('traffic_gb_month')]) }}</span><x-ui.meter label="" :percent="$customer->trafficPercent()" />@endif</div>
         <div class="card stat"><span class="label">CRM</span><strong class="value mono" style="font-size:18px">{{ $customer->crm_id ?? '–' }}</strong></div>
     </section>
 
