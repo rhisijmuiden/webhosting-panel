@@ -45,22 +45,79 @@ final class MailPusher
     public function mailboxParams(): array
     {
         $local = MailDomain::query()->where('provider', 'rhis')->pluck('domain', 'id');
+        $mailboxes = Mailbox::query()->whereIn('mail_domain_id', $local->keys())->get();
+        $aliases = MailAlias::query()->whereIn('mail_domain_id', $local->keys())->get();
+        $aliasDomains = $this->aliasDomains($local->keys()->all());
 
         return [
-            'mailboxes' => Mailbox::query()->whereIn('mail_domain_id', $local->keys())->get()
-                ->map(fn (Mailbox $m) => [
-                    'email' => $m->local_part . '@' . $local[$m->mail_domain_id],
-                    'password_hash' => $m->password_hash,
-                    'quota_mb' => $m->quota_mb,
-                    'enabled' => $m->enabled,
-                    'send_as' => array_values((array) $m->send_as),
-                ])->values()->all(),
-            'aliases' => MailAlias::query()->whereIn('mail_domain_id', $local->keys())->get()
-                ->map(fn (MailAlias $a) => [
+            'mailboxes' => $mailboxes->map(fn (Mailbox $m) => [
+                'email' => $m->local_part . '@' . $local[$m->mail_domain_id],
+                'password_hash' => $m->password_hash,
+                'quota_mb' => $m->quota_mb,
+                'enabled' => $m->enabled,
+                // A mailbox may also send as its address on the domain aliases.
+                'send_as' => array_values(array_unique([
+                    ...(array) $m->send_as,
+                    ...array_map(fn (string $alias) => $m->local_part . '@' . $alias, $aliasDomains[$m->mail_domain_id] ?? []),
+                ])),
+            ])->values()->all(),
+            'aliases' => [
+                ...$aliases->map(fn (MailAlias $a) => [
                     'address' => $a->local_part . '@' . $local[$a->mail_domain_id],
                     'targets' => array_values($a->targets),
                 ])->values()->all(),
+                ...$this->domainAliasEntries($local, $mailboxes, $aliases, $aliasDomains),
+            ],
         ];
+    }
+
+    /**
+     * Local alias domains per main mail domain id.
+     *
+     * @param list<int> $localIds
+     * @return array<int, list<string>>
+     */
+    private function aliasDomains(array $localIds): array
+    {
+        return MailDomain::query()->where('provider', 'rhis')->whereIn('alias_of_id', $localIds)->orderBy('domain')->get()
+            ->groupBy('alias_of_id')->map(fn ($group) => $group->pluck('domain')->all())->all();
+    }
+
+    /**
+     * user@alias -> user@main for every mailbox and alias of the main domain.
+     * Addresses the alias domain has itself (own mailbox or alias) win.
+     */
+    private function domainAliasEntries($local, $mailboxes, $aliases, array $aliasDomains): array
+    {
+        $taken = [];
+        foreach ($mailboxes as $m) {
+            $taken[$m->local_part . '@' . $local[$m->mail_domain_id]] = true;
+        }
+        foreach ($aliases as $a) {
+            $taken[$a->local_part . '@' . $local[$a->mail_domain_id]] = true;
+        }
+        $entries = [];
+        foreach ($aliasDomains as $mainId => $domains) {
+            $main = $local[$mainId] ?? null;
+            if ($main === null) {
+                continue;
+            }
+            $sources = [
+                ...$mailboxes->where('mail_domain_id', $mainId)->map(fn (Mailbox $m) => [$m->local_part, [$m->local_part . '@' . $main]])->all(),
+                ...$aliases->where('mail_domain_id', $mainId)->map(fn (MailAlias $a) => [$a->local_part, array_values($a->targets)])->all(),
+            ];
+            foreach ($domains as $domain) {
+                foreach ($sources as [$localPart, $targets]) {
+                    $address = $localPart . '@' . $domain;
+                    if (!isset($taken[$address])) {
+                        $taken[$address] = true;
+                        $entries[] = ['address' => $address, 'targets' => $targets];
+                    }
+                }
+            }
+        }
+
+        return $entries;
     }
 
     public function spamParams(): array
