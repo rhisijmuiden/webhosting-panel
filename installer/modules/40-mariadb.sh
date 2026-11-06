@@ -13,9 +13,10 @@ module_mariadb() {
   MARIADB_LOG_FILE_SIZE=$(( MARIADB_BUFFER_POOL / 4 ))
   (( MARIADB_LOG_FILE_SIZE < 64 )) && MARIADB_LOG_FILE_SIZE=64
 
+  WHP_SUM_BEFORE=$(files_sum /etc/mysql/mariadb.conf.d/90-whp.cnf)
   render "$TPL/mariadb/90-whp.cnf" /etc/mysql/mariadb.conf.d/90-whp.cnf
   svc_enable mariadb
-  svc_restart mariadb
+  svc_restart_if_changed mariadb /etc/mysql/mariadb.conf.d/90-whp.cnf
 
   # Same as mariadb-secure-installation, without questions.
   run_secret "mysql_root: secure installation" mysql_root -e "DELETE FROM mysql.global_priv WHERE User='';
