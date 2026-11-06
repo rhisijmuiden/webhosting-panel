@@ -10,9 +10,10 @@ use Rhis\DnsMail\Http\HttpClient;
 
 /**
  * Thin client for the Cloudflare v4 API, limited to what the panel needs:
- * verify a token, find zones and read/write DNS records.
+ * verify a token, find and add zones and read/write DNS records.
  *
- * The token needs Zone:Read and DNS:Edit on the zones the panel manages.
+ * The token needs Zone:Read and DNS:Edit on the zones the panel manages,
+ * and Zone:Edit on the account to add new zones (DNS onboarding wizard).
  */
 final class CloudflareClient
 {
@@ -60,6 +61,84 @@ final class CloudflareClient
         }
 
         return null;
+    }
+
+    /** @return list<array{id: string, name: string}> accounts the token can see */
+    public function listAccounts(): array
+    {
+        $accounts = [];
+        foreach ($this->paginate('/accounts', ['per_page' => 50]) as $a) {
+            $accounts[] = ['id' => (string) $a['id'], 'name' => (string) ($a['name'] ?? '')];
+        }
+
+        return $accounts;
+    }
+
+    /**
+     * Add a domain to the account as a full (nameserver) zone. Cloudflare
+     * assigns two nameservers; the zone stays "pending" until the registrar
+     * points the domain at them. Needs Zone:Edit on the account.
+     *
+     * @return array{id: string, name: string, status: string, name_servers: list<string>, original_name_servers: list<string>, original_registrar: ?string}
+     */
+    public function createZone(string $domain, string $accountId): array
+    {
+        return self::zone($this->call('POST', '/zones', [], [
+            'name' => DnsRecord::normaliseName($domain),
+            'account' => ['id' => $accountId],
+            'type' => 'full',
+        ]));
+    }
+
+    /** @return array{id: string, name: string, status: string, name_servers: list<string>, original_name_servers: list<string>, original_registrar: ?string} */
+    public function getZone(string $zoneId): array
+    {
+        return self::zone($this->call('GET', '/zones/' . rawurlencode($zoneId)));
+    }
+
+    /**
+     * Ask Cloudflare to look at the nameservers again now instead of on its
+     * own schedule. Cloudflare limits how often this may be called; a
+     * refusal is not an error for the caller.
+     */
+    public function activationCheck(string $zoneId): bool
+    {
+        try {
+            $this->call('PUT', '/zones/' . rawurlencode($zoneId) . '/activation_check');
+
+            return true;
+        } catch (CloudflareException) {
+            return false;
+        }
+    }
+
+    /**
+     * Let Cloudflare copy the records it finds at the current DNS provider
+     * (common names only). Returns how many it added.
+     */
+    public function scanRecords(string $zoneId): int
+    {
+        $result = $this->call('POST', '/zones/' . rawurlencode($zoneId) . '/dns_records/scan');
+
+        return (int) ($result['recs_added'] ?? 0);
+    }
+
+    /** @param array<mixed> $z */
+    private static function zone(array $z): array
+    {
+        $list = static fn ($v): array => array_values(array_map(
+            static fn ($n): string => DnsRecord::normaliseName((string) $n),
+            is_array($v) ? $v : [],
+        ));
+
+        return [
+            'id' => (string) ($z['id'] ?? ''),
+            'name' => (string) ($z['name'] ?? ''),
+            'status' => (string) ($z['status'] ?? ''),
+            'name_servers' => $list($z['name_servers'] ?? []),
+            'original_name_servers' => $list($z['original_name_servers'] ?? []),
+            'original_registrar' => isset($z['original_registrar']) && $z['original_registrar'] !== '' ? (string) $z['original_registrar'] : null,
+        ];
     }
 
     /** DNSSEC status of a zone: "active", "pending", "disabled", ... (DANE needs "active"). */

@@ -212,6 +212,32 @@ class AppsTest(unittest.TestCase):
         self.assertEqual(conf.count("_KEY'"), 4)
         self.assertIn("DISALLOW_FILE_EDIT", conf)
 
+    def test_wordpress_uses_the_shared_wp_cli_runner(self):
+        from whp_agent import wordpress
+        calls = []
+
+        def fake_run(argv, timeout=60, input_text=None, **kw):
+            calls.append((argv, input_text))
+            return CompletedProcess(argv, 0, "6.9\n", "")
+
+        wsite = {"domain": "klant.nl", "id": "klant_nl", "user": "s_klant_nl", "php": "8.4",
+                 "root": str(self.site_root), "docroot": str(self.docroot), "ssl": "active", "aliases": []}
+        ctx = apps.Context(self.site, "wordpress", "", self.params(), lambda _l: None)
+        ctx.db = {"name": "klant_nl_wp_ab12", "user": "klant_nl_wp_ab12", "password": "x"}
+        with mock.patch.object(wordpress, "site_info", lambda d: wsite), \
+                mock.patch.object(apps, "run", fake_run), \
+                mock.patch.object(apps.WordPress, "wp_cli", lambda self: "/usr/local/bin/wp"), \
+                mock.patch.object(apps.Context, "write_private", lambda *a, **k: None):
+            apps.WordPress().install(ctx)
+        argv0 = calls[0][0]
+        self.assertEqual(argv0[0], "/usr/bin/systemd-run")
+        self.assertIn("--uid=s_klant_nl", argv0)
+        self.assertIn("UMask=0022", argv0)
+        self.assertIn("--locale=nl_NL", argv0)
+        install = next(c for c in calls if "install" in c[0] and "core" in c[0])
+        self.assertEqual(install[1], "a-very-long-secret\n")
+        self.assertFalse(any("a-very-long-secret" in a for c in calls for a in c[0]))
+
 
 if __name__ == "__main__":
     unittest.main()

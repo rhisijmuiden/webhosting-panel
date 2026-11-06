@@ -165,3 +165,57 @@ optional VMC/CMC certificate URL give `default._bimi.<domain> TXT
 
 - QR code on the mailbox page for setting up phones.
 - Customer DNS management through the RHIS CRM API (phase 4).
+
+## DNS wizard: move a domain's DNS to RHIS Cloudflare
+
+For customers whose domain is registered elsewhere and who want RHIS to run
+their DNS. The domain stays at its registrar; only the nameservers change.
+Client portal and admin: domain > DNS records > **Start the DNS wizard**
+(`/mail/domains/{id}/dns/connect`).
+
+1. **Add the domain.** The panel creates a full zone in the RHIS Cloudflare
+   account (or reuses one that is already there), lets Cloudflare copy the
+   records it finds at the current provider (`dns_records/scan`) and
+   publishes the panel's records. Nothing is live yet.
+2. **Check the records.** Copied records that clash with the hosting show up
+   as conflicts on the DNS tab, with the usual take-over preview.
+3. **Change the nameservers.** The wizard shows the two Cloudflare
+   nameservers (copy buttons), the old ones to remove, the registrar's name
+   and a DNSSEC warning (remove the DS record first).
+4. **Checks.** `dns-mail:check` (every 5 minutes) looks up the public NS
+   records and asks Cloudflare: every 5 minutes in the first hour, every 15
+   minutes for two days, then hourly; after 28 days the attempt expires.
+   When Cloudflare marks the zone active the customer's portal users get a
+   mail (`DnsLiveNotification`, in their own language) and a notice on the
+   dashboard until they open the wizard or DNS tab.
+
+Needs a Cloudflare token with **Zone: Edit** and **Account Settings: Read**
+next to DNS: Edit, and the account ID (Admin > System > DNS & mail server;
+empty works when the token sees one account).
+
+## Customer DNS records and the Cloudflare proxy
+
+- Customers add, **edit** and remove their own A, AAAA, CNAME, MX and TXT
+  records; panel records stay locked.
+- The **Cloudflare** column switches the proxy per own record with one click.
+  Names that carry mail or other non-web traffic (`mail`, `smtp`, `imap`,
+  `pop`, `webmail`, `autoconfig`, `autodiscover`, `mta-sts`, `ftp`, `sftp`,
+  `ssh`, anything starting with `_`) can never be proxied
+  (`DnsRecord::mayProxy`).
+- **Cloudflare proxy for the website** switches apex, www and alias records
+  together (client and admin).
+- Every RHIS-mail domain gets `mail.<domain>` A/AAAA records to this server,
+  DNS only. MX, SRV and client settings still use the server's mail host
+  name; moving them to `mail.<domain>` needs per-domain certificates in
+  Postfix and Dovecot (SNI), which is a follow-up.
+
+## Domains with DNS elsewhere: record check
+
+When "Publish records to Cloudflare automatically" is off, the DNS tab lists
+every record the domain needs and checks each one against the public DNS
+(`Rhis\DnsMail\Dns\RecordCheck` through the server's resolver):
+**Correct**, **Add this record** or **Change this record** (with what is
+there now, e.g. an old web server's IP or a different SPF). The result is
+stored in `mail_domains.dns_check`, refreshed by **Check now** and by
+`dns-mail:check` every 6 hours, and shown as the "Own DNS" pill in the
+domain lists.

@@ -12,6 +12,12 @@ Route::put('domains/{mailDomain}/mail', [$c, 'updateMail'])->name('mail.domains.
 Route::post('domains/{mailDomain}/dkim', [$c, 'dkim'])->name('mail.domains.dkim');
 Route::post('domains/{mailDomain}/dns/apply', [$c, 'applyDns'])->name('mail.domains.dns.apply');
 Route::post('domains/{mailDomain}/dns/records', [$c, 'storeRecord'])->name('mail.domains.dns.records.store');
+Route::put('domains/{mailDomain}/dns/records/{record}', [$c, 'updateRecord'])->where('record', '[A-Za-z0-9]{1,64}')->name('mail.domains.dns.records.update');
+Route::put('domains/{mailDomain}/dns/proxy', [$c, 'updateProxy'])->name('mail.domains.dns.proxy');
+Route::post('domains/{mailDomain}/dns/check', [$c, 'checkExternal'])->middleware('throttle:10,1')->name('mail.domains.dns.check');
+Route::get('domains/{mailDomain}/dns/connect', [$c, 'connect'])->name('mail.domains.connect');
+Route::post('domains/{mailDomain}/dns/connect', [$c, 'startConnect'])->middleware('throttle:5,1')->name('mail.domains.connect.start');
+Route::post('domains/{mailDomain}/dns/connect/check', [$c, 'checkConnect'])->middleware('throttle:10,1')->name('mail.domains.connect.check');
 Route::delete('domains/{mailDomain}/dns/records/{record}', [$c, 'destroyRecord'])->where('record', '[A-Za-z0-9]{1,64}')->name('mail.domains.dns.records.destroy');
 Route::post('domains/{mailDomain}/mailboxes', [$c, 'storeMailbox'])->name('mail.domains.mailboxes.store');
 Route::put('domains/{mailDomain}/mailboxes/{mailbox}', [$c, 'updateMailbox'])->name('mail.domains.mailboxes.update');
