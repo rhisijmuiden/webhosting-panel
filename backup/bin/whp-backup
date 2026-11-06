@@ -123,6 +123,16 @@ declare -A CFG=(
 	[LIMIT_UPLOAD_KIB]="0"
 	[CHECK_READ_DATA_SUBSET]="2%"
 	[PRE_RESTORE_SNAPSHOT]="yes"
+	[VERIFY_DIR]="/var/lib/webhosting-panel/restore-test"
+	[VERIFY_SYSTEM]="yes"
+	[VERIFY_SITES]="2"
+	[VERIFY_MAIL]="1"
+	[VERIFY_DATABASES]="3"
+	[VERIFY_KINDS]="both"
+	[VERIFY_MAX_AGE_HOURS]="36"
+	[VERIFY_MIN_FREE_PERCENT]="10"
+	[VERIFY_DB_MEMORY_MB]="256"
+	[VERIFY_PHP_LINT]="25"
 )
 
 load_config() {
@@ -798,6 +808,474 @@ restore_files() {
 }
 
 # ----------------------------------------------------------------------------
+# verify: automatic restore tests
+#
+# Restores a sample of the newest restore points from a remote location into
+# an isolated scratch folder (never over live data), checks that the result
+# is complete and readable, and removes it again. Databases are imported into
+# a private, throw-away MariaDB instance (own data directory, unix socket
+# only, no network) so a restore test never touches the live databases.
+# ----------------------------------------------------------------------------
+
+VERIFY_RUN_DIR=""
+VERIFY_DB_DIR=""
+VERIFY_DB_READY=0
+# restic times carry the local offset (2026-11-06T02:30:00.123+01:00); jq's
+# strptime ignores offsets, so they are applied by hand.
+JQ_EPOCH='def epoch: (.[0:19] | strptime("%Y-%m-%dT%H:%M:%S") | mktime)
+	- ((capture("(?<s>[+-])(?<h>[0-9]{2}):?(?<m>[0-9]{2})$") // {s: "+", h: "00", m: "00"})
+	   | ((.h | tonumber) * 3600 + (.m | tonumber) * 60) * (if .s == "-" then -1 else 1 end)); '
+
+VERIFY_DB_PID=""
+
+verify_cleanup() {
+	if [[ -n "$VERIFY_DB_DIR" ]]; then
+		if [[ -S "$VERIFY_DB_DIR/mysqld.sock" ]]; then
+			mariadb-admin --no-defaults --socket="$VERIFY_DB_DIR/mysqld.sock" -uroot shutdown >/dev/null 2>&1 || true
+		fi
+		if [[ -n "$VERIFY_DB_PID" ]]; then
+			local i
+			for i in $(seq 1 30); do kill -0 "$VERIFY_DB_PID" 2>/dev/null || break; sleep 1; done
+			kill -9 "$VERIFY_DB_PID" 2>/dev/null || true
+		fi
+	fi
+	if [[ -n "$VERIFY_RUN_DIR" && -d "$VERIFY_RUN_DIR" ]]; then
+		rm -rf --one-file-system "$VERIFY_RUN_DIR"
+	fi
+	VERIFY_DB_DIR="" VERIFY_DB_PID="" VERIFY_RUN_DIR=""
+}
+
+# Free bytes on the file system of the scratch folder.
+verify_free_bytes() { df -PB1 "${CFG[VERIFY_DIR]}" | awk 'NR==2 {print $4}'; }
+
+# Start the private MariaDB instance (once per run, in the main shell so the
+# item tests in subshells share it). Returns 1 when it cannot be started; the
+# dumps are then only checked as files.
+verify_db_start() {
+	[[ -n "$VERIFY_DB_PID" ]] && return 0
+	command -v mariadbd >/dev/null 2>&1 || command -v mysqld >/dev/null 2>&1 || return 1
+	command -v mariadb-install-db >/dev/null 2>&1 || return 1
+	local server owner="mysql"
+	server="$(command -v mariadbd || command -v mysqld)"
+	id "$owner" >/dev/null 2>&1 || owner="root"
+	VERIFY_DB_DIR="$VERIFY_RUN_DIR/mariadb"
+	mkdir -p "$VERIFY_DB_DIR/data" "$VERIFY_DB_DIR/tmp"
+	chown -R "$owner:" "$VERIFY_DB_DIR"
+	chmod 700 "$VERIFY_DB_DIR"
+	mariadb-install-db --no-defaults --user="$owner" --datadir="$VERIFY_DB_DIR/data" \
+		--auth-root-authentication-method=normal --skip-test-db >"$VERIFY_DB_DIR/install.log" 2>&1 || return 1
+	"$server" --no-defaults --user="$owner" --datadir="$VERIFY_DB_DIR/data" --tmpdir="$VERIFY_DB_DIR/tmp" \
+		--socket="$VERIFY_DB_DIR/mysqld.sock" --pid-file="$VERIFY_DB_DIR/mysqld.pid" \
+		--skip-networking --skip-grant-tables --skip-log-bin --skip-name-resolve \
+		--innodb-buffer-pool-size="${CFG[VERIFY_DB_MEMORY_MB]}M" --innodb-log-file-size=64M \
+		--innodb-flush-log-at-trx-commit=0 --innodb-doublewrite=0 --max-allowed-packet=1G \
+		--log-error="$VERIFY_DB_DIR/error.log" >/dev/null 2>&1 &
+	# shellcheck disable=SC2128 # false positive on $!
+	VERIFY_DB_PID=$!
+	local i
+	for i in $(seq 1 60); do
+		if mariadb-admin --no-defaults --socket="$VERIFY_DB_DIR/mysqld.sock" -uroot ping >/dev/null 2>&1; then
+			VERIFY_DB_READY=1
+			log info "private MariaDB instance for restore tests started"
+			return 0
+		fi
+		kill -0 "$VERIFY_DB_PID" 2>/dev/null || break
+		sleep 1
+	done
+	log warn "the private MariaDB instance for restore tests did not start: $(tail -n2 "$VERIFY_DB_DIR/error.log" 2>/dev/null)"
+	return 1
+}
+
+verify_sql() {
+	# Run SQL in the private instance. Usage: verify_sql [db] < sql | verify_sql -e "..."
+	local -a a=(mariadb --no-defaults --socket="$VERIFY_DB_DIR/mysqld.sock" -uroot -N -B)
+	# Never let a dump run client commands (\! shell, source files).
+	mariadb --help 2>/dev/null | grep -q -- '--sandbox' && a+=(--sandbox)
+	"${a[@]}" "$@"
+}
+
+# One check result as JSON: verify_check NAME OK(true|false|warn) DETAIL
+verify_check() {
+	jq -cn --arg c "$1" --arg s "$2" --arg d "${3:-}" \
+		'{check:$c, result:(if $s == "true" then "ok" elif $s == "warn" then "warning" else "failed" end), detail:$d}'
+}
+
+# Restore one file snapshot into the scratch folder and check it.
+verify_files() {
+	local id="$1" scope="$2" dir="$3"
+	local -a checks=()
+	local lsout expected
+	if ! lsout="$(r ls --json "$id" 2>>"$STATE_DIR/restic.err")"; then
+		checks+=("$(verify_check listing false "could not read the file list of the snapshot: $(tail -n1 "$STATE_DIR/restic.err")")")
+		printf '%s\n' "${checks[@]}" | jq -cs '{checks:., files:null, bytes:null}'
+		return
+	fi
+	expected="$(jq -cs '[.[] | select(.struct_type == "node")]
+		| {files: ([.[] | select(.type == "file")] | length),
+		   bytes: ([.[] | select(.type == "file") | .size // 0] | add // 0),
+		   dirs: ([.[] | select(.type == "dir")] | length),
+		   links: ([.[] | select(.type == "symlink")] | length)}' <<<"$lsout")"
+	lsout=""
+	local efiles ebytes elinks
+	efiles="$(jq -r .files <<<"$expected")"
+	ebytes="$(jq -r .bytes <<<"$expected")"
+	elinks="$(jq -r .links <<<"$expected")"
+	checks+=("$(verify_check listing true "$efiles files, $ebytes bytes in the snapshot")")
+
+	# Enough room? Keep VERIFY_MIN_FREE_PERCENT of the disk free after the restore.
+	local free total need
+	free="$(verify_free_bytes)"
+	total="$(df -PB1 "${CFG[VERIFY_DIR]}" | awk 'NR==2 {print $2}')"
+	need=$(( ebytes + total * CFG[VERIFY_MIN_FREE_PERCENT] / 100 ))
+	if (( need > free )); then
+		checks+=("$(verify_check disk_space warn "not enough free space to restore $ebytes bytes (free: $free)")")
+		printf '%s\n' "${checks[@]}" | jq -cs --argjson e "$expected" '{checks:., files:$e.files, bytes:$e.bytes, skipped:"disk_space"}'
+		return
+	fi
+
+	mkdir -p "$dir"
+	chmod 700 "$dir"
+	if r restore "$id" --target "$dir" --verify >/dev/null 2>>"$STATE_DIR/restic.err"; then
+		checks+=("$(verify_check restore true "downloaded, decrypted and every file content verified")")
+	else
+		checks+=("$(verify_check restore false "restic restore failed: $(tail -n1 "$STATE_DIR/restic.err")")")
+	fi
+
+	local afiles abytes alinks
+	afiles="$(find "$dir" -type f | wc -l)"
+	abytes="$(find "$dir" -type f -printf '%s\n' | awk '{s += $1} END {printf "%d", s}')"
+	alinks="$(find "$dir" -type l | wc -l)"
+	if [[ "$afiles" == "$efiles" && "$abytes" == "$ebytes" ]]; then
+		checks+=("$(verify_check complete true "$afiles files and $abytes bytes restored, as in the backup")")
+	else
+		checks+=("$(verify_check complete false "restored $afiles of $efiles files, $abytes of $ebytes bytes")")
+	fi
+	if [[ "$alinks" != "$elinks" ]]; then
+		checks+=("$(verify_check symlinks false "restored $alinks of $elinks symbolic links")")
+	fi
+
+	case "$scope" in
+		site:*)
+			# Website code must still parse (catches truncated or damaged files).
+			if command -v php >/dev/null 2>&1; then
+				local -a php_files
+				mapfile -t php_files < <(find "$dir" -type f -name '*.php' -size -2M 2>/dev/null | shuf -n "${CFG[VERIFY_PHP_LINT]}" 2>/dev/null)
+				if [[ ${#php_files[@]} -gt 0 ]]; then
+					local f bad=0 first=""
+					for f in "${php_files[@]}"; do
+						if ! php -n -l "$f" >/dev/null 2>&1; then
+							bad=$((bad + 1)); [[ -n "$first" ]] || first="${f#"$dir"}"
+						fi
+					done
+					if [[ $bad -eq 0 ]]; then
+						checks+=("$(verify_check php_syntax true "${#php_files[@]} random PHP files parse")")
+					else
+						checks+=("$(verify_check php_syntax warn "$bad of ${#php_files[@]} PHP files do not parse (first: $first); this can also be the live code")")
+					fi
+				fi
+			fi
+			local wpc
+			wpc="$(find "$dir" -maxdepth 6 -name wp-config.php -type f -print -quit 2>/dev/null)"
+			if [[ -n "$wpc" ]]; then
+				if grep -q "DB_NAME" "$wpc"; then
+					checks+=("$(verify_check wordpress true "wp-config.php present and readable")")
+				else
+					checks+=("$(verify_check wordpress false "wp-config.php has no database settings")")
+				fi
+			fi
+			;;
+		mail:*)
+			local msgs
+			msgs="$(find "$dir" -type f \( -path '*/cur/*' -o -path '*/new/*' \) | wc -l)"
+			checks+=("$(verify_check mailboxes true "$msgs messages restored")")
+			;;
+		system)
+			local p missing="" paths
+			paths="$(r snapshots --json "$id" 2>/dev/null | jq -c '.[0].paths // []')" || paths="[]"
+			for p in /etc/webhosting-panel /etc/nginx; do
+				if jq -e --arg p "$p" 'any(.[]; . == $p)' <<<"$paths" >/dev/null && [[ ! -d "$dir$p" ]]; then
+					missing+=" $p"
+				fi
+			done
+			if [[ -z "$missing" ]]; then
+				checks+=("$(verify_check configuration true "server configuration folders present")")
+			else
+				checks+=("$(verify_check configuration false "missing:$missing")")
+			fi
+			;;
+	esac
+	rm -rf --one-file-system "$dir"
+	printf '%s\n' "${checks[@]}" | jq -cs --argjson f "$afiles" --argjson b "$abytes" '{checks:., files:$f, bytes:$b}'
+}
+
+# Restore one database dump and import it into the private instance.
+verify_database() {
+	local id="$1" db="$2" dir="$3"
+	local -a checks=()
+	mkdir -p "$dir"
+	chmod 700 "$dir"
+	local dumpfile="$dir/$db.sql"
+	if ! r dump "$id" "/databases/$db.sql" >"$dumpfile" 2>>"$STATE_DIR/restic.err"; then
+		checks+=("$(verify_check restore false "could not read the dump: $(tail -n1 "$STATE_DIR/restic.err")")")
+		rm -rf "$dir"
+		printf '%s\n' "${checks[@]}" | jq -cs '{checks:., bytes:null, tables:null}'
+		return
+	fi
+	local bytes
+	bytes="$(stat -c %s "$dumpfile")"
+	checks+=("$(verify_check restore true "dump downloaded and decrypted ($bytes bytes)")")
+	local tail_line
+	tail_line="$(tail -c 4096 "$dumpfile" | grep -a -- '-- Dump completed' | tail -n1 || true)"
+	if [[ -n "$tail_line" ]]; then
+		checks+=("$(verify_check dump_complete true "${tail_line#-- }")")
+	else
+		checks+=("$(verify_check dump_complete false "the dump has no end marker: it was cut off while it was made")")
+	fi
+	local etables
+	etables="$(grep -a -c '^CREATE TABLE ' "$dumpfile" || true)"
+
+	local tables="null"
+	if [[ $VERIFY_DB_READY -eq 1 ]]; then
+		local err="$dir/import.err"
+		if verify_sql -e "CREATE DATABASE \`whp_restore_test\` CHARACTER SET utf8mb4" 2>"$err" \
+			&& verify_sql whp_restore_test <"$dumpfile" 2>"$err"; then
+			tables="$(verify_sql -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='whp_restore_test' AND TABLE_TYPE='BASE TABLE'")"
+			local rows
+			rows="$(verify_sql -e "SELECT COALESCE(SUM(TABLE_ROWS),0) FROM information_schema.TABLES WHERE TABLE_SCHEMA='whp_restore_test'")"
+			if [[ "$tables" == "$etables" ]]; then
+				checks+=("$(verify_check import true "imported in a private test database: $tables tables, about $rows rows")")
+			else
+				checks+=("$(verify_check import false "imported $tables of $etables tables")")
+			fi
+			local bad
+			bad="$(mariadb-check --no-defaults --socket="$VERIFY_DB_DIR/mysqld.sock" -uroot --check --silent whp_restore_test 2>&1 \
+				| grep -v -E '^\s*$|\sOK$|^note|^status' | head -n3 || true)"
+			if [[ -z "$bad" ]]; then
+				checks+=("$(verify_check tables true "every table passes CHECK TABLE")")
+			else
+				checks+=("$(verify_check tables false "$(tr '\n' ' ' <<<"$bad")")")
+			fi
+		else
+			checks+=("$(verify_check import false "import failed: $(tail -n1 "$err" | cut -c1-300)")")
+		fi
+		verify_sql -e "DROP DATABASE IF EXISTS \`whp_restore_test\`" >/dev/null 2>&1 || true
+	else
+		checks+=("$(verify_check import warn "no private MariaDB instance available here; only the dump file was checked")")
+	fi
+	rm -rf --one-file-system "$dir"
+	printf '%s\n' "${checks[@]}" | jq -cs --argjson b "$bytes" --argjson t "$tables" '{checks:., bytes:$b, tables:$t}'
+}
+
+verify_item() {
+	# Test one snapshot. Args: target, snapshot meta JSON, reason (latest|latest_full)
+	local meta="$1" reason="$2"
+	local id scope short started took res status
+	id="$(jq -r .id <<<"$meta")"
+	short="${id:0:8}"
+	scope="$(jq -r .scope <<<"$meta")"
+	started="$(date +%s%N)"
+	log info "restore test of $scope (${short}, $(jq -r .kind <<<"$meta"))"
+	case "$scope" in
+		db:*) res="$(verify_database "$id" "${scope#db:}" "$VERIFY_RUN_DIR/$short")" ;;
+		*) res="$(verify_files "$id" "$scope" "$VERIFY_RUN_DIR/$short")" ;;
+	esac
+	took=$(( ($(date +%s%N) - started) / 1000000 ))
+	if jq -e '.skipped' <<<"$res" >/dev/null 2>&1; then
+		status="skipped"
+	elif jq -e 'any(.checks[]; .result == "failed")' <<<"$res" >/dev/null; then
+		status="failed"
+	elif jq -e 'any(.checks[]; .result == "warning")' <<<"$res" >/dev/null; then
+		status="warning"
+	else
+		status="ok"
+	fi
+	jq -c --argjson meta "$meta" --arg st "$status" --arg why "$reason" --argjson ms "$took" \
+		--argjson now "$(date +%s)" \
+		"$JQ_EPOCH"'{scope:$meta.scope, snapshot:$meta.id, short_id:$meta.short_id, kind:$meta.kind, time:$meta.time,
+		  age_hours: ((($now - ($meta.time | epoch)) / 3600) | floor),
+		  picked:$why, status:$st, duration_ms:$ms} + .' <<<"$res"
+}
+
+# Choose which items get a restore test: the ones tested longest ago first,
+# so over a few runs every website, mailbox and database is covered.
+verify_pick() {
+	local target="$1" category="$2" count="$3" candidates="$4"
+	[[ "$count" =~ ^[0-9]+$ && "$count" -gt 0 ]] || return 0
+	local hist="$STATE_DIR/verify-history.json"
+	jq -r --arg t "$target" --arg c "$category" --slurpfile h "$hist" '
+		[.[] | select(if $c == "system" then . == "system" else startswith($c + ":") end)]
+		| map({s: ., last: ($h[0][$t + "|" + .] // 0)})
+		| sort_by(.last, (.s | explode | add)) | .[].s' <<<"$candidates" | head -n "$count"
+}
+
+verify_target() {
+	local target="$1" kinds="$2" max_age="$3"; shift 3
+	local -a explicit=("$@")
+	load_target "$target"
+	local started
+	started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	local snaps
+	if ! snaps="$(snapshots_json --tag whp --host "${CFG[BACKUP_HOST]}")"; then
+		jq -cn --arg t "$target" --arg s "$started" --arg err "$(tail -n1 "$STATE_DIR/restic.err" 2>/dev/null)" \
+			'{target:$t, status:"failed", started:$s, finished:$s, error:("cannot read the backups on this location: " + $err), items:[], coverage:null}'
+		return
+	fi
+	snaps="$(jq -c '[.[] | select(.kind == "full" or .kind == "incremental")]' <<<"$snaps")"
+
+	# Coverage: does everything that lives on this server have a recent backup?
+	local live with_backup coverage
+	if [[ ${#explicit[@]} -gt 0 ]]; then
+		live="$(expand_scopes "${explicit[@]}" | jq -R . | jq -cs .)"
+	else
+		live="$(expand_scopes all | jq -R . | jq -cs .)"
+	fi
+	coverage="$(jq -c --argjson snaps "$snaps" --argjson max "$max_age" --argjson now "$(date +%s)" "$JQ_EPOCH"'
+		. as $live
+		| ($snaps | group_by(.scope) | map({key: .[0].scope, value: (map(.time | epoch) | max)}) | from_entries) as $newest
+		| {items: ($live | length),
+		   with_backup: ([$live[] | select($newest[.] != null)] | length),
+		   missing: [$live[] | select($newest[.] == null)],
+		   stale: [$live[] | select($newest[.] != null and ($max > 0) and (($now - $newest[.]) / 3600) > $max)
+		           | {scope: ., age_hours: ((($now - $newest[.]) / 3600) | floor)}]}' <<<"$live")"
+
+	local candidates
+	candidates="$(jq -c --argjson snaps "$snaps" '[.[] | select(. as $s | any($snaps[]; .scope == $s))]' <<<"$live")"
+	local -a picked=()
+	if [[ ${#explicit[@]} -gt 0 ]]; then
+		mapfile -t picked < <(jq -r '.[]' <<<"$candidates")
+	else
+		[[ "${VERIFY_COUNT[system]}" == "yes" ]] && mapfile -t -O "${#picked[@]}" picked < <(verify_pick "$target" system 1 "$candidates")
+		mapfile -t -O "${#picked[@]}" picked < <(verify_pick "$target" site "${VERIFY_COUNT[sites]}" "$candidates")
+		mapfile -t -O "${#picked[@]}" picked < <(verify_pick "$target" mail "${VERIFY_COUNT[mail]}" "$candidates")
+		mapfile -t -O "${#picked[@]}" picked < <(verify_pick "$target" db "${VERIFY_COUNT[databases]}" "$candidates")
+	fi
+
+	local tested="[]" scope latest full res
+	for scope in "${picked[@]}"; do
+		[[ -n "$scope" ]] || continue
+		latest="$(jq -c --arg s "$scope" '[.[] | select(.scope == $s)][0]' <<<"$snaps")"
+		res="$(verify_item "$latest" latest)"
+		tested="$(jq -c --argjson r "$res" '. + [$r]' <<<"$tested")"
+		if [[ "$kinds" == "both" && "$(jq -r .kind <<<"$latest")" != "full" ]]; then
+			full="$(jq -c --arg s "$scope" '[.[] | select(.scope == $s and .kind == "full")][0] // empty' <<<"$snaps")"
+			if [[ -n "$full" ]]; then
+				res="$(verify_item "$full" latest_full)"
+				tested="$(jq -c --argjson r "$res" '. + [$r]' <<<"$tested")"
+			fi
+		fi
+		# Remember when this item was tested (for the rotation).
+		local hist="$STATE_DIR/verify-history.json"
+		jq -c --arg k "$target|$scope" --argjson now "$(date +%s)" '.[$k] = $now' "$hist" >"$hist.tmp" && mv -f "$hist.tmp" "$hist"
+	done
+
+	local status
+	status="$(jq -r --argjson cov "$coverage" '
+		if any(.[]; .status == "failed") or ($cov.missing | length > 0) then "failed"
+		elif any(.[]; .status == "warning" or .status == "skipped") or ($cov.stale | length > 0) then "warning"
+		elif length == 0 then "warning"
+		else "ok" end' <<<"$tested")"
+	jq -cn --arg t "$target" --arg type "${TGT[TYPE]}" --arg st "$status" --arg s "$started" \
+		--arg f "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson items "$tested" --argjson cov "$coverage" \
+		'{target:$t, type:$type, status:$st, started:$s, finished:$f, items:$items, coverage:$cov}
+		 + (if ($items | length) == 0 then {error:"no restore points to test on this location"} else {} end)'
+}
+
+declare -A VERIFY_COUNT=()
+
+cmd_verify() {
+	local target="" kinds="${CFG[VERIFY_KINDS]}" max_age="${CFG[VERIFY_MAX_AGE_HOURS]}"
+	local -a scopes=()
+	VERIFY_COUNT=([system]="${CFG[VERIFY_SYSTEM]}" [sites]="${CFG[VERIFY_SITES]}" [mail]="${CFG[VERIFY_MAIL]}" [databases]="${CFG[VERIFY_DATABASES]}")
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			--target) target="$2"; shift 2 ;;
+			--scope) scopes+=("$2"); shift 2 ;;
+			--sites) VERIFY_COUNT[sites]="$2"; shift 2 ;;
+			--mail) VERIFY_COUNT[mail]="$2"; shift 2 ;;
+			--databases) VERIFY_COUNT[databases]="$2"; shift 2 ;;
+			--no-system) VERIFY_COUNT[system]="no"; shift ;;
+			--system) VERIFY_COUNT[system]="yes"; shift ;;
+			--kinds) kinds="$2"; shift 2 ;;
+			--max-age-hours) max_age="$2"; shift 2 ;;
+			*) die invalid_params "unknown option for verify: $1" ;;
+		esac
+	done
+	local n
+	for n in sites mail databases; do
+		[[ "${VERIFY_COUNT[$n]}" =~ ^[0-9]{1,4}$ ]] || die invalid_params "--$n must be a number"
+	done
+	[[ "$kinds" == "latest" || "$kinds" == "both" ]] || die invalid_params "--kinds must be latest or both"
+	[[ "$max_age" =~ ^[0-9]{1,5}$ ]] || die invalid_params "--max-age-hours must be a number"
+	[[ ${#scopes[@]} -eq 0 ]] || validate_scopes "${scopes[@]}"
+	[[ -z "$target" ]] || valid_name "$target" || die invalid_params "invalid target name"
+	[[ "${CFG[VERIFY_DIR]}" == /* && "${CFG[VERIFY_DIR]}" != *..* ]] || die config_error "VERIFY_DIR must be an absolute path"
+
+	take_lock
+	# A restore test may take a while; live websites always go first.
+	renice -n 15 -p $$ >/dev/null 2>&1 || true
+	ionice -c 3 -p $$ >/dev/null 2>&1 || true
+	mkdir -p "$STATE_DIR"
+	: >"$STATE_DIR/restic.err"
+	install -d -m 711 "${CFG[VERIFY_DIR]}"
+	[[ -f "$STATE_DIR/verify-history.json" ]] || echo '{}' >"$STATE_DIR/verify-history.json"
+	# Leftovers of an interrupted test (the lock guarantees none is running).
+	local old
+	for old in "${CFG[VERIFY_DIR]}"/run-*; do rm -rf --one-file-system "$old"; done
+	VERIFY_RUN_DIR="$(mktemp -d "${CFG[VERIFY_DIR]}/run-XXXXXX")"
+	chmod 711 "$VERIFY_RUN_DIR"
+	trap verify_cleanup EXIT
+
+	local -a targets=()
+	if [[ -n "$target" ]]; then
+		load_target "$target"
+		targets=("$target")
+	else
+		local t
+		while IFS= read -r t; do
+			load_target "$t"
+			[[ "${TGT[ENABLED]}" == "yes" ]] && targets+=("$t")
+		done < <(all_targets)
+	fi
+	[[ ${#targets[@]} -gt 0 ]] || die not_found "no backup targets configured"
+
+	# Databases to test? Then start the private MariaDB instance now.
+	local want_db=0 sc
+	for sc in "${scopes[@]}"; do [[ "$sc" == db:* || "$sc" == databases || "$sc" == all ]] && want_db=1; done
+	if [[ ${#scopes[@]} -eq 0 && "${VERIFY_COUNT[databases]}" != "0" ]]; then
+		local dbs
+		dbs="$(list_databases)"
+		[[ -z "$dbs" ]] || want_db=1
+	fi
+	if [[ $want_db -eq 1 ]]; then verify_db_start || true; fi
+
+	local started runs="[]" t res
+	started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	for t in "${targets[@]}"; do
+		log info "target $t: restore test"
+		res="$(verify_target "$t" "$kinds" "$max_age" "${scopes[@]}")"
+		log info "target $t: restore test $(jq -r .status <<<"$res")"
+		runs="$(jq -c --argjson r "$res" '. + [$r]' <<<"$runs")"
+	done
+	verify_cleanup
+	trap - EXIT
+	local status doc
+	status="$(jq -r 'if any(.[]; .status == "failed") then "failed" elif any(.[]; .status == "warning") then "warning" else "ok" end' <<<"$runs")"
+	doc="$(jq -n --arg st "$status" --arg s "$started" --arg f "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+		--arg host "${CFG[BACKUP_HOST]}" --arg kinds "$kinds" --argjson runs "$runs" \
+		'{status:$st, host:$host, kinds:$kinds, started:$s, finished:$f, sandbox_removed:true, targets:$runs}')"
+	printf '%s\n' "$doc" >"$STATE_DIR/verify-last.json.tmp" && mv -f "$STATE_DIR/verify-last.json.tmp" "$STATE_DIR/verify-last.json"
+	if [[ $JSON -eq 1 ]]; then
+		emit "$doc"
+	else
+		jq -r '"restore test \(.status) (\(.started) - \(.finished))",
+			(.targets[] | .target as $t | (.items[] | "  \($t)  \(.scope)  \(.short_id)  \(.kind)  \(.status)"),
+			 (.coverage.missing[]? | "  \($t)  \(.)  NO BACKUP"),
+			 (.coverage.stale[]? | "  \($t)  \(.scope)  last backup \(.age_hours) h ago"))' <<<"$doc"
+	fi
+	[[ "$status" != "failed" ]]
+}
+
+# ----------------------------------------------------------------------------
 # maintenance
 # ----------------------------------------------------------------------------
 
@@ -895,6 +1373,11 @@ Backups:
   restore --target N --snapshot ID (--to DIR | --in-place) [--include PATH] [--database NAME]
   prune --target N            apply retention and free space
   check --target N [--read-data]
+  verify [--target N] [--scope S]... [--sites N] [--mail N] [--databases N]
+         [--no-system] [--kinds latest|both] [--max-age-hours H]
+      restore test: restores a sample of the newest restore points (and the
+      newest full one) into an isolated scratch folder and a private MariaDB
+      instance, checks them and removes everything again
   unlock --target N
   status
   version
@@ -927,6 +1410,7 @@ main() {
 		restore) cmd_restore "$@" ;;
 		prune) cmd_prune "$@" ;;
 		check) cmd_check "$@" ;;
+		verify) cmd_verify "$@" ;;
 		unlock) cmd_unlock "$@" ;;
 		status) cmd_status ;;
 		*) usage >&2; die invalid_params "unknown command: $command" ;;
