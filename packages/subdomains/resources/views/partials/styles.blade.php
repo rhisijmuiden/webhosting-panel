@@ -23,15 +23,21 @@
     .sd-input { display: flex; align-items: stretch; }
     .sd-input .input { border-top-right-radius: 0; border-bottom-right-radius: 0; min-width: 0; flex: 1 1 auto; }
     .sd-suffix { display: inline-flex; align-items: center; padding: 0 12px; border: 1px solid var(--line); border-left: 0; border-radius: 0 var(--radius-md) var(--radius-md) 0;
-        background: var(--surface-sunken); color: var(--ink-muted); font-size: .9rem; white-space: nowrap; max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
-    .sd-add { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; gap: 12px; align-items: end; margin-top: 12px; }
+        background: var(--surface-sunken); color: var(--ink-muted); font-size: .9rem; white-space: nowrap; max-width: 70%; overflow: hidden; text-overflow: ellipsis; }
+    .sd-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; margin-top: 12px; }
+    .sd-add > .field:first-of-type { grid-column: 1 / -1; }
     .sd-add .field { margin: 0; }
+    .sd-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line-soft); }
+    .sd-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+    .sd-name { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+    .sd-status { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sd-actions { margin-left: auto; }
     .sd-remove { position: relative; }
     .sd-remove summary { list-style: none; }
     .sd-remove summary::-webkit-details-marker { display: none; }
     .sd-remove-form { position: absolute; right: 0; z-index: 5; width: min(320px, 80vw); margin-top: 6px; padding: 14px; text-align: left;
         background: var(--surface-raised); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.18); }
-    @media (max-width: 720px) { .sd-add { grid-template-columns: 1fr; } }
+    @media (max-width: 520px) { .sd-add { grid-template-columns: 1fr; } }
     @media (max-width: 900px) { .clone-layout { grid-template-columns: 1fr; } }
     @media (prefers-reduced-motion: reduce) { .clone-progress li.is-now::before { animation: none; } }
 </style>

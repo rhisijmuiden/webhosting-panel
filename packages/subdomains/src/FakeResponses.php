@@ -17,6 +17,7 @@ final class FakeResponses
                 'db_name' => 'example_wp_1a2b', 'db_user' => 'example_wp_1a2b', 'db_host' => 'localhost', 'problem' => null]],
             'target_content' => [], 'size_mb' => 184, 'target_url' => isset($p['target']) ? 'https://'.$p['target'] : null,
         ]);
+        $agent->respond('db.drop', fn (array $p) => ['name' => $p['name'] ?? '', 'dropped' => true]);
         $agent->respond('site.clone', fn (array $p) => ['job' => 'fake-clone-'.md5(($p['source'] ?? '').($p['target'] ?? ''))]);
     }
 }

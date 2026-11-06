@@ -30,21 +30,20 @@
     @else
         <p class="muted small">{{ __('Test a change on test.:domain before it goes live, or run a shop or blog on its own address. Subdomains are part of this subscription: no extra package needed.', ['domain' => $website->domain]) }}</p>
         @if ($sdList->isNotEmpty())
-            <x-ui.table>
-                <x-slot:head><th>{{ __('Subdomain') }}</th><th>{{ __('Status') }}</th><th class="num"><span class="sr-only">{{ __('Actions') }}</span></th></x-slot:head>
+            <ul class="sd-list">
                 @foreach ($sdList as $s)
-                    <tr>
-                        <td><a class="strong" href="{{ route($sdArea.'.websites.show', $s) }}">{{ $s->domain }}</a>
-                            <div class="muted small">{{ $s->profile === 'wordpress' ? 'WordPress' : __(ucfirst($s->profile ?? 'php')) }} · PHP {{ $s->php_version }}</div></td>
-                        <td><x-ui.pill :status="$s->status">{{ $sdStatus[$s->status] ?? $s->status }}</x-ui.pill>
+                    <li class="sd-row">
+                        <div class="sd-name"><a class="strong" href="{{ route($sdArea.'.websites.show', $s) }}">{{ $s->domain }}</a>
+                            <div class="muted small">{{ ['wordpress' => 'WordPress', 'laravel' => 'Laravel'][$s->profile] ?? 'PHP' }} · PHP {{ $s->php_version }}</div></div>
+                        <div class="sd-status"><x-ui.pill :status="$s->status">{{ $sdStatus[$s->status] ?? $s->status }}</x-ui.pill>
                             @if ($s->status === 'active')<x-ui.pill :status="$s->ssl_status">{{ $s->ssl_status === 'active' ? __('SSL valid') : __('SSL :status', ['status' => __($s->ssl_status)]) }}</x-ui.pill>@endif
-                            @if ($s->status === 'failed' && $s->last_error)<div class="small mono muted">{{ \Illuminate\Support\Str::limit($s->last_error, 160) }}</div>@endif</td>
-                        <td class="num">
-                            <div class="actions" style="justify-content:flex-end">
+                            @if ($s->status === 'failed' && $s->last_error)<div class="small mono muted">{{ \Illuminate\Support\Str::limit($s->last_error, 160) }}</div>@endif</div>
+                        <div class="sd-actions">
+                            <div class="actions">
                                 @if ($s->status === 'active')
                                     <a class="btn btn-sm btn-ghost" href="https://{{ $s->domain }}" target="_blank" rel="noopener" title="{{ __('Visit website') }}"><x-icon name="external" /><span class="sr-only">{{ __('Visit website') }}</span></a>
                                     @if ($sdCanClone && $website->status === 'active')
-                                        <a class="btn btn-sm" href="{{ route($sdArea.'.clones.create', [$website, 'target' => $s->id]) }}"><x-icon name="migrate" />{{ __('Clone into') }}</a>
+                                        <a class="btn btn-sm" href="{{ route($sdArea.'.clones.create', [$website, 'target' => $s->id]) }}" ><x-icon name="migrate" />{{ __('Clone into') }}</a>
                                     @endif
                                 @endif
                                 @if ($sdCanManage && in_array($s->status, ['active', 'failed'], true))
@@ -59,10 +58,10 @@
                                     </details>
                                 @endif
                             </div>
-                        </td>
-                    </tr>
+                        </div>
+                    </li>
                 @endforeach
-            </x-ui.table>
+            </ul>
         @endif
         @if ($sdCanManage && ! $sdBlocker)
             <form method="POST" action="{{ route($sdArea.'.subdomains.store', $website) }}" class="form sd-add">
