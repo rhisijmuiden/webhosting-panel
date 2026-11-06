@@ -11,6 +11,8 @@
         </div>
     </div>
 
+    @include('admin.customers.quick-actions')
+
     @if ($customer->websites->filter(fn ($w) => $w->subscription?->suspended_reason === \App\Services\Traffic::SUSPENDED)->isNotEmpty())
         <div class="alert alert-warn" role="status"><x-icon name="info" /><div><strong>{{ __('Websites of this customer are suspended: the data traffic limit of their package is reached.') }}</strong>
             <p class="small">{{ __('They come back online automatically on the first day of next month.') }}</p></div>
@@ -50,8 +52,16 @@
                 @forelse ($customer->users as $u)
                     <div class="row">
                         <span><strong>{{ $u->name }}</strong><br><span class="small muted">{{ $u->email }} · {{ $locales[$u->locale] ?? $u->locale }}@if ($u->hasTwoFactor()) · 2FA @endif</span></span>
-                        <form method="POST" action="{{ route('admin.customers.users.destroy', [$customer, $u]) }}" data-confirm="{{ __('Delete this login?') }}">@csrf @method('DELETE')
-                            <button class="btn btn-sm btn-danger" type="submit" aria-label="{{ __('Delete') }} {{ $u->email }}"><x-icon name="trash" /></button></form>
+                        <span class="login-actions">
+                            <form method="POST" action="{{ route('admin.customers.users.password', [$customer, $u]) }}" data-confirm="{{ __('Give :email a new password? The old password stops working.', ['email' => $u->email]) }}">@csrf
+                                <button class="btn btn-sm" type="submit" title="{{ __('New password') }}"><x-icon name="key" /><span class="login-action-label">{{ __('New password') }}</span></button></form>
+                            @if ($u->hasTwoFactor())
+                                <form method="POST" action="{{ route('admin.customers.users.two-factor', [$customer, $u]) }}" data-confirm="{{ __('Turn off two-factor authentication for :email?', ['email' => $u->email]) }}">@csrf
+                                    <button class="btn btn-sm" type="submit" title="{{ __('Turn off 2FA') }}"><x-icon name="lock" /><span class="login-action-label">{{ __('Turn off 2FA') }}</span></button></form>
+                            @endif
+                            <form method="POST" action="{{ route('admin.customers.users.destroy', [$customer, $u]) }}" data-confirm="{{ __('Delete this login?') }}">@csrf @method('DELETE')
+                                <button class="btn btn-sm btn-danger" type="submit" aria-label="{{ __('Delete') }} {{ $u->email }}"><x-icon name="trash" /></button></form>
+                        </span>
                     </div>
                 @empty
                     <p class="small muted">{{ __('No logins yet.') }}</p>
