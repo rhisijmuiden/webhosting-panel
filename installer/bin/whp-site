@@ -27,6 +27,14 @@
 #   whp-site remove <domain> [--keep-files]
 #   whp-site list [--json]
 #   whp-site show <domain>
+#   whp-site alias add <site> <alias> [--redirect] [--no-www] [--no-ssl]
+#                                    (extra domain for an existing site: serves the same
+#                                     files, or 301-redirects to the site with --redirect;
+#                                     own server block and own Let's Encrypt certificate)
+#   whp-site alias mode <site> <alias> serve|redirect
+#   whp-site alias ssl <site> <alias>
+#   whp-site alias remove <site> <alias> [--keep-cert]
+#   whp-site alias list <site>
 set -Eeuo pipefail
 SELF=$(readlink -f "${BASH_SOURCE[0]}")
 INSTALLER_DIR=$(cd "$(dirname "$SELF")/.." && pwd)
@@ -232,6 +240,7 @@ site_apply() {
     SITE_HTTP_BODY=$body
     SITE_HTTPS_SERVER="# HTTPS is added as soon as Let's Encrypt has issued a certificate (SSL: $SITE_SSL)"
   fi
+  SITE_ALIAS_SERVERS=$(alias_servers "$body")
   install -d -m 0755 "/etc/nginx/whp/sites/$SITE_DOMAIN"
   render "$TPL/nginx/site.conf" "/etc/nginx/sites-available/whp-$SITE_DOMAIN.conf"
   ln -sf "../sites-available/whp-$SITE_DOMAIN.conf" "/etc/nginx/sites-enabled/whp-$SITE_DOMAIN.conf"
@@ -259,10 +268,213 @@ nginx_reload_wait() {
   return 0
 }
 
+# ---- Domain aliases -------------------------------------------------------
+# One line per alias in <site>.aliases: "<alias> <serve|redirect> <www yes|no> <ssl>"
+# (ssl: off, pending or active). Every alias gets its own server block and its
+# own certificate (cert name = the alias), so an alias whose DNS does not point
+# here yet never blocks the certificate of the main site.
+
+alias_file() { printf '%s/%s.aliases' "$SITES_DB" "$1"; }
+
+alias_lines() {
+  local f
+  f=$(alias_file "$1")
+  [[ -f $f ]] || return 0
+  grep -E '^[a-z0-9.-]+ (serve|redirect) (yes|no) (off|pending|active)$' "$f" || true
+}
+
+# alias_get <site> <alias>: sets ALIAS_MODE ALIAS_WWW ALIAS_SSL, status 1 when unknown.
+alias_get() {
+  local line
+  line=$(alias_lines "$1" | awk -v a="$2" '$1 == a' | tail -n1)
+  [[ -n $line ]] || return 1
+  read -r _ ALIAS_MODE ALIAS_WWW ALIAS_SSL <<<"$line"
+}
+
+alias_put() {
+  local site=$1 a=$2 f tmp
+  f=$(alias_file "$site")
+  tmp=$(mktemp)
+  { alias_lines "$site" | awk -v a="$a" '$1 != a'; printf '%s %s %s %s\n' "$a" "$ALIAS_MODE" "$ALIAS_WWW" "$ALIAS_SSL"; } | sort >"$tmp"
+  install -m 0640 "$tmp" "$f"
+  rm -f "$tmp"
+}
+
+alias_del() {
+  local site=$1 a=$2 f tmp
+  f=$(alias_file "$site")
+  [[ -f $f ]] || return 0
+  tmp=$(mktemp)
+  alias_lines "$site" | awk -v a="$a" '$1 != a' >"$tmp"
+  if [[ -s $tmp ]]; then install -m 0640 "$tmp" "$f"; else rm -f "$f"; fi
+  rm -f "$tmp"
+}
+
+# Host names of the site's domain aliases (comma separated), for cache purges.
+alias_names() {
+  local a mode www ssl out=''
+  while read -r a mode www ssl; do
+    [[ -n $a ]] || continue
+    out+="${out:+,}$a"
+    [[ $www == yes ]] && out+=",www.$a"
+  done < <(alias_lines "$1")
+  printf '%s' "$out"
+}
+
+# Is this host name served by any site on the server (domain, www alias or domain alias)?
+# Prints the owning site.
+name_owner() {
+  local name=$1 f d al
+  for f in "$SITES_DB"/*.env; do
+    [[ -e $f ]] || continue
+    d=$(env_get "$f" SITE_DOMAIN)
+    al=$(env_get "$f" SITE_ALIASES || true)
+    if [[ $name == "$d" || ",$al," == *",$name,"* || ",$(alias_names "$d")," == *",$name,"* ]]; then
+      printf '%s' "$d"; return 0
+    fi
+  done
+  return 1
+}
+
+# Server blocks for every alias of the loaded site. $1 = the site's location body.
+alias_servers() {
+  local body=$1 a mode www ssl out='' target_scheme=http
+  [[ $SITE_SSL == active || $SITE_SSL == imported ]] && target_scheme=https
+  while read -r a mode www ssl; do
+    [[ -n $a ]] || continue
+    out+=$(
+      ALIAS_DOMAIN=$a ALIAS_MODE=$mode ALIAS_SSL=$ssl
+      ALIAS_NAMES=$a
+      [[ $www == yes ]] && ALIAS_NAMES+=" www.$a"
+      if [[ $mode == redirect ]]; then
+        # shellcheck disable=SC2016 # nginx variables
+        inner="location / { return 301 $target_scheme://$SITE_DOMAIN\$request_uri; }"
+      else
+        inner=$body
+      fi
+      if [[ $ssl == active && -r /etc/letsencrypt/live/$a/fullchain.pem ]]; then
+        # shellcheck disable=SC2016 # nginx variables
+        ALIAS_HTTP_BODY='location / { return 301 https://$host$request_uri; }'
+        if nginx_has_http3; then SITE_QUIC="listen 443 quic;
+    listen [::]:443 quic;"; else SITE_QUIC="# HTTP/3 not available"; fi
+        SITE_NAMES=$ALIAS_NAMES
+        SITE_CERT=/etc/letsencrypt/live/$a/fullchain.pem
+        SITE_KEY=/etc/letsencrypt/live/$a/privkey.pem
+        SITE_BODY=$inner
+        ALIAS_HTTPS_SERVER=$(render_string "$TPL/nginx/site-https.conf")
+      else
+        if [[ $mode == redirect ]]; then ALIAS_HTTP_BODY=$inner; else ALIAS_HTTP_BODY=$body; fi
+        ALIAS_HTTPS_SERVER="# HTTPS for $a is added as soon as Let's Encrypt has issued a certificate (SSL: $ssl)"
+      fi
+      render_string "$TPL/nginx/site-alias.conf"
+    )
+    out+=$'\n'
+  done < <(alias_lines "$SITE_DOMAIN")
+  [[ -n $out ]] || out="# No domain aliases"
+  printf '%s' "$out"
+}
+
+# Request the certificate of one alias; sets ALIAS_SSL.
+alias_cert() {
+  local a=$1 names=()
+  [[ $ALIAS_WWW == yes ]] && names=("www.$a")
+  if "$INSTALLER_DIR/bin/whp-cert" "$a" "${names[@]}" \
+     || { ((${#names[@]})) && "$INSTALLER_DIR/bin/whp-cert" "$a"; }; then
+    ALIAS_SSL=active
+    info "$(t cert_ok "$a")"
+  else
+    ALIAS_SSL=pending
+    warn "No Let's Encrypt certificate for alias $a yet (DNS not pointing here?). Served over HTTP until it is issued; retried every hour."
+  fi
+}
+
+print_aliases() {
+  local site=$1 a mode www ssl out='[]'
+  while read -r a mode www ssl; do
+    [[ -n $a ]] || continue
+    out=$(jq -c --arg a "$a" --arg m "$mode" --arg w "$www" --arg s "$ssl" \
+      '. + [{domain:$a, mode:$m, www:($w=="yes"), ssl:$s, names:([$a] + (if $w=="yes" then ["www."+$a] else [] end))}]' <<<"$out")
+  done < <(alias_lines "$site")
+  printf '%s' "$out"
+}
+
+cmd_alias() {
+  local sub=${1:-} site=${2:-} a=${3:-}
+  [[ -n $sub && -n $site ]] || usage
+  shift 2 || true
+  [[ $sub == list ]] || { [[ -n $a ]] || usage; shift; }
+  site=${site,,}; a=${a,,}; a=${a%.}
+  site_load "$site"
+  case $sub in
+    list)
+      jq -n >&3 --arg d "$site" --argjson al "$(print_aliases "$site")" '{domain:$d, domain_aliases:$al}'
+      return 0 ;;
+    add)
+      valid_domain "$a" || die "$(t bad_hostname "$a")"
+      [[ $a == "$site" || $a == "www.$site" ]] && die "$a is the site itself"
+      local owner want_ssl=$WHP_LETSENCRYPT_DEFAULT
+      ALIAS_MODE=serve ALIAS_WWW=yes
+      [[ $a == www.* ]] && ALIAS_WWW=no
+      while (($#)); do
+        case $1 in
+          --redirect) ALIAS_MODE=redirect ;;
+          --no-www) ALIAS_WWW=no ;;
+          --no-ssl) want_ssl=no ;;
+          --json) ;;
+          *) usage ;;
+        esac
+        shift
+      done
+      if alias_get "$site" "$a"; then die "$a is already an alias of $site"; fi
+      if owner=$(name_owner "$a"); then die "$a is already in use by site $owner"; fi
+      if [[ $ALIAS_WWW == yes ]] && owner=$(name_owner "www.$a"); then die "www.$a is already in use by site $owner"; fi
+      if [[ $want_ssl == yes ]]; then ALIAS_SSL=pending; else ALIAS_SSL=off; fi
+      alias_put "$site" "$a"
+      site_apply
+      if [[ $want_ssl == yes ]]; then
+        alias_cert "$a"
+        alias_put "$site" "$a"
+        [[ $ALIAS_SSL == active ]] && site_apply
+      fi
+      ok "alias $a added to $site ($ALIAS_MODE, SSL $ALIAS_SSL)" ;;
+    mode)
+      local m=${1:-}
+      [[ $m == serve || $m == redirect ]] || usage
+      alias_get "$site" "$a" || die "$a is not an alias of $site"
+      ALIAS_MODE=$m
+      alias_put "$site" "$a"
+      site_apply
+      cache_purge
+      ok "alias $a of $site: $m" ;;
+    ssl)
+      alias_get "$site" "$a" || die "$a is not an alias of $site"
+      alias_cert "$a"
+      alias_put "$site" "$a"
+      site_apply ;;
+    remove)
+      local keep_cert=no
+      [[ ${1:-} == --keep-cert ]] && keep_cert=yes
+      alias_get "$site" "$a" || die "$a is not an alias of $site"
+      cache_purge
+      alias_del "$site" "$a"
+      site_apply
+      if [[ $keep_cert == no ]]; then
+        certbot delete --non-interactive --cert-name "$a" >>"$WHP_INSTALL_LOG" 2>&1 || true
+      fi
+      ok "alias $a removed from $site" ;;
+    *) usage ;;
+  esac
+  if [[ $JSON == yes ]]; then
+    jq -n >&3 --arg d "$site" --argjson al "$(print_aliases "$site")" --arg a "$a" \
+      '{domain:$d, alias:(($al | map(select(.domain==$a)))[0] // {domain:$a, removed:true}), domain_aliases:$al}'
+  fi
+}
+
 # Remove this site's pages from the Nginx page cache (all its host names).
 cache_purge() {
-  local names re
-  names="$SITE_DOMAIN${SITE_ALIASES:+,$SITE_ALIASES}"
+  local names re al
+  al=$(alias_names "$SITE_DOMAIN")
+  names="$SITE_DOMAIN${SITE_ALIASES:+,$SITE_ALIASES}${al:+,$al}"
   re="^KEY: https?(GET|HEAD)($(sed 's/\./\\./g; s/,/|/g' <<<"$names"))/"
   [[ -d /var/cache/nginx/whp ]] || return 0
   # No match is fine: never let grep's exit status trip pipefail or the ERR trap.
@@ -323,10 +535,11 @@ print_site() {
     --argjson res "$(site_resources)" \
     --arg cpu_limit "$SITE_CPU" --arg mem_limit "$SITE_MEM" \
     --arg suspended "${SITE_SUSPENDED:-no}" \
+    --argjson domain_aliases "$(print_aliases "$1")" \
     --arg owner "${SITE_OWNER:-}" --arg slice "$(site_slice)" --arg cgroup "$(site_cgroup)" \
     --arg php_ini "${SITE_PHP_INI:-}" --argjson workers "${SITE_PM_MAX:-10}" \
     --argjson used "$(du -sm --one-file-system "$SITE_ROOT" 2>/dev/null | cut -f1 || echo 0)" \
-    '{domain:$domain, user:$user, php:$php, aliases:($aliases|split(",")|map(select(length>0))),
+    '{domain:$domain, user:$user, php:$php, aliases:($aliases|split(",")|map(select(length>0))), domain_aliases:$domain_aliases,
       cache:($cache=="on"), suspended:($suspended=="yes"), profile:$profile, root:$root, docroot:$docroot, ssl:$ssl,
       socket:$socket, created:$created, unit:$unit,
       owner:(if $owner == "" then null else $owner end), slice:$slice, cgroup:$cgroup,
@@ -342,6 +555,8 @@ cmd_add() {
   domain=${domain,,}
   valid_domain "$domain" || die "$(t bad_hostname "$domain")"
   site_exists "$domain" && die "$(t site_exists "$domain")"
+  local owner
+  if owner=$(name_owner "$domain"); then die "$domain is already served by site $owner (remove the alias first)"; fi
 
   SITE_DOMAIN=$domain SITE_PHP=$(default_php) SITE_ALIASES='' SITE_CACHE=on SITE_PROFILE=php
   SITE_DOCROOT_REL='' SITE_SSL=$WHP_LETSENCRYPT_DEFAULT SITE_QUOTA_MB=0 SITE_CPU='' SITE_MEM='' SITE_SUSPENDED=no
@@ -670,6 +885,20 @@ cmd_ssl() {
       [[ -e $f ]] || continue
       case $(env_get "$f" SITE_SSL) in pending|imported) list+=("$(env_get "$f" SITE_DOMAIN)") ;; esac
     done
+    # Domain aliases still waiting for their certificate.
+    local s a mode www ssl
+    for f in "$SITES_DB"/*.env; do
+      [[ -e $f ]] || continue
+      s=$(env_get "$f" SITE_DOMAIN)
+      while read -r a mode www ssl; do
+        [[ $ssl == pending ]] || continue
+        site_load "$s"
+        ALIAS_MODE=$mode ALIAS_WWW=$www ALIAS_SSL=$ssl
+        alias_cert "$a"
+        alias_put "$s" "$a"
+        [[ $ALIAS_SSL == active ]] && site_apply
+      done < <(alias_lines "$s")
+    done
     # The server hostname itself, when it still runs on a self-signed certificate.
     if [[ -n $WHP_HOSTNAME && ! -e /etc/letsencrypt/live/$WHP_HOSTNAME ]] \
        && [[ $(env_get "$WHP_ETC/installer.env" WHP_LETSENCRYPT 2>/dev/null || echo yes) != no ]]; then
@@ -778,6 +1007,11 @@ cmd_remove() {
     certbot delete --non-interactive --cert-name "$domain" >>"$WHP_INSTALL_LOG" 2>&1 || true
   fi
   rm -rf "$(imported_cert_dir "$domain")"
+  local a _m _w _s
+  while read -r a _m _w _s; do
+    [[ -n $a && $keep == no ]] && { certbot delete --non-interactive --cert-name "$a" >>"$WHP_INSTALL_LOG" 2>&1 || true; }
+  done < <(alias_lines "$domain")
+  rm -f "$(alias_file "$domain")"
   userdel "$SITE_USER" 2>/dev/null || true
   rm -f "$(site_file "$domain")"
   ok "$(t site_removed "$domain")"
@@ -816,5 +1050,6 @@ case $cmd in
   refresh) cmd_refresh "$@" ;;
   list) cmd_list "$@" ;;
   show) print_site "${1:-}" ;;
+  alias) cmd_alias "$@" ;;
   *) usage ;;
 esac

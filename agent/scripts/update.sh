@@ -53,6 +53,9 @@ systemctl reload php8.4-fpm || true
 systemctl restart whp-queue || true
 # Restart the agent last and in the background, so this job can finish writing its result.
 systemd-run --on-active=5 --unit "whp-agent-restart-$(date +%s)" systemctl restart whp-agent >/dev/null 2>&1 || true
+# Then push the login protection settings again, through the restarted agent.
+systemd-run --on-active=20 --unit "whp-security-apply-$(date +%s)" \
+  runuser -u "$PANEL_USER" -- php "$PANEL/artisan" whp:security:apply >/dev/null 2>&1 || true
 
 as_panel php "$PANEL/artisan" up
 echo "==> Done: $(cat "$ROOT/VERSION") ($("${GIT[@]}" rev-parse --short HEAD))"

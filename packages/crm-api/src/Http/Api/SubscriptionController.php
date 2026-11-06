@@ -17,7 +17,7 @@ use Rhis\CrmApi\Support\Resolve;
 
 final class SubscriptionController
 {
-    private const LIMITS = ['disk_mb', 'traffic_gb_month', 'domains', 'subdomains', 'mailboxes', 'mailbox_quota_mb', 'mail_aliases', 'databases', 'ftp_accounts', 'cron_jobs', 'php_workers', 'php_memory_limit_mb'];
+    private const LIMITS = ['disk_mb', 'traffic_gb_month', 'domains', 'domain_aliases', 'subdomains', 'mailboxes', 'mailbox_quota_mb', 'mail_aliases', 'databases', 'ftp_accounts', 'cron_jobs', 'php_workers', 'php_memory_limit_mb'];
 
     private const DOMAIN = '/^(?=.{1,253}$)(?!-)([a-z0-9-]{1,63}(?<!-)\.)+[a-z]{2,63}$/';
 

@@ -21,6 +21,7 @@
     @endif
 
     @includeIf('wordpress::partials.website-card', ['website' => $website])
+    @includeIf('domain-aliases::partials.website-card', ['website' => $website])
     @includeIf('git::partials.website-card', ['website' => $website])
 
     <section class="grid grid-2" style="align-items:start">

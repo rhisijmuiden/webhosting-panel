@@ -33,6 +33,9 @@ install -m 0644 "$PANEL/deploy/systemd/whp-scheduler.timer" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now whp-queue.service whp-scheduler.timer
 
+# Login protection: write the CrowdSec scenarios and profiles (needs the agent).
+as_panel php "$PANEL/artisan" whp:security:apply || echo "Login protection not applied yet (is the agent running?)" >&2
+
 if [ -n "${WHP_ADMIN_EMAIL:-}" ]; then
   as_panel php "$PANEL/artisan" whp:admin "$WHP_ADMIN_EMAIL" ${WHP_ADMIN_PASSWORD:+--password="$WHP_ADMIN_PASSWORD"}
 fi

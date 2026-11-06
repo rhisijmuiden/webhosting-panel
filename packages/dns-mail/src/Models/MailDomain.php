@@ -30,7 +30,7 @@ class MailDomain extends Model
     ];
 
     protected $fillable = [
-        'customer_id', 'website_id', 'domain', 'provider', 'dns_managed', 'proxied', 'cloudflare_zone_id',
+        'customer_id', 'website_id', 'alias_of_id', 'domain', 'provider', 'dns_managed', 'proxied', 'cloudflare_zone_id',
         'dkim_public_key', 'server_sends', 'spf_extra', 'spf_all', 'dmarc_policy', 'dmarc_rua', 'mta_sts_mode',
         'm365_tenant', 'm365_mx_host', 'm365_verification', 'm365_dkim_selector1', 'm365_dkim_selector2', 'm365_intune',
         'dns_status', 'dns_error', 'dns_checked_at', 'dns_check', 'spam_quarantine_score', 'spam_junk', 'bimi_logo_url', 'bimi_vmc_url',
@@ -62,6 +62,18 @@ class MailDomain extends Model
     public function aliases(): HasMany
     {
         return $this->hasMany(MailAlias::class)->orderBy('local_part');
+    }
+
+    /** Mail domain whose mailboxes also receive mail for this domain (domain alias). */
+    public function aliasOf(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'alias_of_id');
+    }
+
+    /** @return HasMany<self, $this> */
+    public function aliasDomains(): HasMany
+    {
+        return $this->hasMany(self::class, 'alias_of_id')->orderBy('domain');
     }
 
     public function onboarding(): HasOne

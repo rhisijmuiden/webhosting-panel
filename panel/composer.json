@@ -16,8 +16,10 @@
         "rhis/backups": "@dev",
         "rhis/crm-api": "@dev",
         "rhis/dns-mail": "@dev",
+        "rhis/domain-aliases": "@dev",
         "rhis/git": "@dev",
         "rhis/migration": "@dev",
+        "rhis/security": "@dev",
         "rhis/vulnerabilities": "@dev",
         "rhis/wordpress": "@dev"
     },
