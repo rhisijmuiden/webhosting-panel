@@ -151,8 +151,8 @@ sudo WHP_TEST_FTPS=user@host:21 WHP_TEST_FTPS_PASSWORD_FILE=pw backup/tests/run.
 ## Customer backups (own locations)
 
 Separate from the server backups above, customers can back up their own
-websites to their own FTP, FTPS or SFTP/SCP server from the client panel
-(Backups → Add backup location). This is done by the agent
+websites to their own FTP, FTPS or SFTP/SCP server, or to their own
+Microsoft OneDrive, from the client panel (Backups → Add backup location). This is done by the agent
 (`agent/whp_agent/actions/client_backup.py`), not by restic: the result is one
 plain zip per backup that the customer can download, keep and upload again,
 also on another server.
@@ -168,6 +168,29 @@ also on another server.
 | `mail/` | `/var/vmail/<domain>` |
 | `databases/<name>.sql` | dump of every database of the website |
 | `whp-backup.json` | manifest: domain, kind, date, base backup, file list |
+
+### OneDrive for customers
+
+Customers connect their OneDrive with a "Connect with Microsoft" button; no
+rclone or token pasting. This needs one Microsoft app for the whole panel,
+registered once by the admin:
+
+1. Microsoft Entra admin center → App registrations → New registration.
+   Supported account types: *Accounts in any organizational directory and
+   personal Microsoft accounts*. Redirect URI: platform **Web**,
+   `https://<panel>/backups/onedrive/callback` (shown on the admin page).
+2. Certificates & secrets → New client secret; copy the *value*.
+3. Panel: Backups → Customer backups → *OneDrive for customers*: fill in the
+   Application (client) ID and the secret.
+
+The panel asks for `offline_access User.Read Files.ReadWrite` (PKCE + state),
+reads the user's drive id, and stores the token encrypted with the location.
+The agent gives rclone the token with the app's client id and secret; rclone
+renews it, and the agent keeps the renewed token in
+`/var/lib/webhosting-panel/client-backups/onedrive/t<id>.json` (0600) for the
+next run. A new connection from the panel (other refresh token) replaces it.
+OneDrive has no streaming upload, so rclone first spools each zip to a
+temporary file on the server.
 
 - **Full and incremental**: an incremental backup holds the files changed
   since the last full backup to the same location, all databases, and the

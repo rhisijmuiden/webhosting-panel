@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Rhis\Backups\Http\ClientBackupController as C;
 use Rhis\Backups\Http\ClientLocationController as L;
+use Rhis\Backups\Http\ClientOneDriveController;
 use Rhis\Backups\Http\ClientUploadController as U;
 
 Route::get('/', [C::class, 'index'])->name('index');
@@ -25,3 +26,6 @@ Route::post('/uploads/{upload}/chunk', [U::class, 'chunk'])->name('uploads.chunk
 Route::post('/uploads/{upload}/inspect', [U::class, 'inspect'])->name('uploads.inspect');
 Route::post('/uploads/{upload}/restore', [U::class, 'restore'])->name('uploads.restore');
 Route::delete('/uploads/{upload}', [U::class, 'destroy'])->name('uploads.destroy');
+
+Route::match(['post', 'put'], '/onedrive/connect', [ClientOneDriveController::class, 'connect'])->name('onedrive.connect');
+Route::get('/onedrive/callback', [ClientOneDriveController::class, 'callback'])->name('onedrive.callback');

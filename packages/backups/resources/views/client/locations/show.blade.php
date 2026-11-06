@@ -4,7 +4,7 @@
 <x-layouts.client :title="$target->name">
     @include('backups::partials.styles')
     <div class="page-head">
-        <div><h1>{{ $target->name }}</h1><p class="sub mono">{{ strtoupper($target->type) }} · {{ $target->location() }}</p></div>
+        <div><h1>{{ $target->name }}</h1><p class="sub mono">{{ $target->type === 'onedrive' ? '' : strtoupper($target->type).' · ' }}{{ $target->location() }}</p></div>
         <div class="actions">
             <form method="POST" action="{{ route('client.backups.locations.test', $target->id) }}">@csrf<x-ui.button icon="refresh">{{ __('Test') }}</x-ui.button></form>
             <x-ui.button :href="route('client.backups.locations.edit', $target->id)" icon="edit">{{ __('Settings') }}</x-ui.button>
