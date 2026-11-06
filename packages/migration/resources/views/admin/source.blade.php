@@ -3,8 +3,13 @@
     $running = $inventoryJob !== null || $items->contains(fn ($i) => $i->status === 'queued' || $i->isActive());
     $statusLabels = ['queued' => __('Queued'), 'preparing' => __('Preparing'), 'copying' => __('Copying'), 'copied' => __('Copied'),
         'syncing' => __('Syncing'), 'live' => __('DNS switched'), 'done' => __('Finished'), 'failed' => __('Failed')];
-    $groups = collect($inv['domains'] ?? [])
+    $show = in_array(request('show'), ['todo', 'started'], true) ? request('show') : 'all';
+    $isStarted = fn ($d) => ($i = $items->get($d['name'])) && $i->status !== 'failed';
+    $allDomains = collect($inv['domains'] ?? []);
+    $startedCount = $allDomains->filter($isStarted)->count();
+    $groups = $allDomains
         ->filter(fn ($d) => $search === '' || str_contains($d['name'], strtolower($search)))
+        ->filter(fn ($d) => match ($show) { 'todo' => ! $isStarted($d), 'started' => $isStarted($d), default => true })
         ->groupBy(fn ($d) => $d['subscription'] ?? $d['name']);
     $owners = collect($inv['owners'] ?? [])->keyBy('id');
 @endphp
@@ -16,7 +21,7 @@
     @endif
     <div class="page-head">
         <div>
-            <div class="crumbs"><a href="{{ route('admin.migration.index') }}">{{ __('Migration') }}</a></div>
+            <div class="crumbs"><a href="{{ route('admin.migration.index') }}">{{ __('Migration') }}</a> / <a href="{{ route('admin.migration.status') }}">{{ __('Status and log') }}</a></div>
             <div class="actions"><h1>{{ $source->name }}</h1>
                 <x-ui.pill :status="['connected' => 'ok', 'error' => 'bad'][$source->status] ?? 'neutral'">{{ __(ucfirst($source->status)) }}</x-ui.pill></div>
             <p class="sub mono">{{ $source->user.'@'.$source->host }}:{{ $source->port }}@if ($source->version) · Plesk {{ $source->version }}@endif @if ($source->hostname) · {{ $source->hostname }}@endif</p>
@@ -53,8 +58,16 @@
         @foreach ($inv['warnings'] ?? [] as $w)<div class="alert alert-warn"><x-icon name="info" />{{ $w }}</div>@endforeach
 
         <div class="page-head" style="margin-top:8px">
-            <div><h2>{{ __('Choose what to migrate') }}</h2></div>
-            <div class="actions"><form class="search" method="GET" role="search"><x-icon name="search" /><input type="search" name="q" value="{{ $search }}" placeholder="{{ __('Domain') }}" aria-label="{{ __('Search') }}"></form></div>
+            <div><h2>{{ __('Choose what to migrate') }}</h2>
+                <p class="sub">{{ __(':done of :total domains of this server are migrated or on their way. The server stays saved here, so you can pick the next ones at any time.', ['done' => $startedCount, 'total' => $allDomains->count()]) }}</p></div>
+            <div class="actions">
+                <nav class="mig-filter" aria-label="{{ __('Filter') }}">
+                    @foreach (['all' => __('All'), 'todo' => __('Not migrated yet'), 'started' => __('Migrated or running')] as $k => $label)
+                        <a href="{{ request()->fullUrlWithQuery(['show' => $k === 'all' ? null : $k]) }}" @class(['is-active' => $show === $k])>{{ $label }}</a>
+                    @endforeach
+                </nav>
+                <form class="search" method="GET" role="search">@if ($show !== 'all')<input type="hidden" name="show" value="{{ $show }}">@endif<x-icon name="search" /><input type="search" name="q" value="{{ $search }}" placeholder="{{ __('Domain') }}" aria-label="{{ __('Search') }}"></form>
+            </div>
         </div>
         <form method="POST" action="{{ route('admin.migration.sources.migrate', $source) }}" class="mig-form" x-data="{ all: false }">
             @csrf
@@ -64,6 +77,7 @@
                         <th style="width:34px"><input class="mig-sel" type="checkbox" aria-label="{{ __('Select all') }}" x-model="all" @change="$root.querySelectorAll('input[name=\'domains[]\']:not(:disabled)').forEach(c => c.checked = all)"></th>
                         <th>{{ __('Domain') }}</th><th>{{ __('Contents') }}</th><th>{{ __('Customer here') }}</th><th>{{ __('Migration') }}</th>
                     </x-slot:head>
+                    @if ($groups->isEmpty())<tr><td></td><td colspan="4" class="muted">{{ $show === 'todo' ? __('Every domain of this server is migrated or on its way.') : __('No domains match.') }}</td></tr>@endif
                     @foreach ($groups as $subscription => $domains)
                         @php $owner = $owners->get($domains->first()['owner_id'] ?? null); @endphp
                         <tr class="mig-group"><td></td><td colspan="4">{{ $subscription }} <span class="muted">· {{ $owner && $owner['kind'] !== 'admin' ? ($owner['company'] ?: $owner['name']).' ('.$owner['email'].')' : __('Owned by the Plesk admin') }}</span></td></tr>

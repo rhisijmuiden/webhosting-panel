@@ -71,6 +71,7 @@ final class Migrator
             foreach ($d['notes'] ?? [] as $n) {
                 $item->addNote($n);
             }
+            $item->log($item->exists ? 'Queued again.' : 'Queued for migration from :source.', ['source' => $source->name]);
             $item->save();
             $items[] = $item;
         }
@@ -91,7 +92,8 @@ final class Migrator
             return;
         }
         foreach (MigrationItem::where('status', 'queued')->orderBy('id')->limit($free)->get() as $item) {
-            $item->update(['status' => 'preparing']);
+            $item->log('Started: creating customer, website and mailboxes.');
+            $item->update(['status' => 'preparing', 'started_at' => $item->started_at ?? now()]);
             PrepareMigration::dispatch($item);
         }
     }
@@ -105,6 +107,7 @@ final class Migrator
         try {
             $customer = $item->customer ?? $this->customer($item);
             $item->customer()->associate($customer);
+            $item->log('Customer: :name.', ['name' => $customer->displayName()]);
 
             $website = $item->website ?? Website::where('domain', $item->domain)->first();
             if ($website && $website->customer_id !== $customer->id) {
@@ -125,15 +128,19 @@ final class Migrator
 
             if ($website->status !== 'active') {
                 $this->provision($item, $website, $customer, $plan);
+            } else {
+                $item->log('Website :domain already exists here and is used as it is.', ['domain' => $website->domain]);
             }
 
             if ($opt['mail'] && ! empty($d['mailboxes']) && class_exists(MailDomain::class)) {
                 $this->mailboxes($item, $customer);
+                $item->log('Mail domain and :count mailboxes are ready.', ['count' => count($d['mailboxes'])])->save();
             }
 
             $this->startTransfer($item, 'initial');
         } catch (Throwable $e) {
             report($e);
+            $item->log(self::errorText($e), [], 'error');
             $item->update(['status' => 'failed', 'error' => self::errorText($e)]);
             ActivityLog::record('migration.failed', $item->domain, ['error' => Str::limit($e->getMessage(), 300)], $item->customer_id);
         }
@@ -149,7 +156,9 @@ final class Migrator
         $existing = collect($this->agent->call('site.list', [], 60)['sites'] ?? [])->firstWhere('domain', $website->domain);
         if ($existing) {
             $site = $this->agent->call('site.show', ['domain' => $website->domain], 60);
+            $item->log('Website :domain was already on the server (earlier attempt) and is reused.', ['domain' => $website->domain]);
         } else {
+            $item->log('Creating website :domain (PHP :php).', ['domain' => $website->domain, 'php' => $website->php_version]);
             $params = array_filter([
                 'domain' => $website->domain, 'php' => $website->php_version, 'profile' => $website->profile,
                 'aliases' => array_values(array_filter($plan['aliases'], fn ($a) => $a !== $website->domain)),
@@ -165,6 +174,7 @@ final class Migrator
                     throw $e;
                 }
                 $item->addNote('PHP :from is not installed on this server, so the website uses PHP :to.', ['from' => $website->php_version, 'to' => '8.4']);
+                $item->log('PHP :from is not installed on this server, so the website uses PHP :to.', ['from' => $website->php_version, 'to' => '8.4'], 'warn');
                 $website->php_version = '8.4';
                 $site = $this->agent->call('site.add', ['php' => '8.4'] + $params, 840);
             }
@@ -173,6 +183,7 @@ final class Migrator
         $website->status = 'active';
         $website->last_error = null;
         $website->save();
+        $item->log('Website created on this server.', [], 'ok')->save();
     }
 
     /** The agent's message plus what the command itself printed (whp-site writes its reason to stderr). */
@@ -212,6 +223,11 @@ final class Migrator
         }
 
         $job = $this->agent->call('migrate.transfer', $params, 120);
+        $item->log(match ($kind) {
+            'sync' => 'Sync started: copying the latest changes.',
+            'late_mail' => 'Fetching mail that still arrived on the old server.',
+            default => 'Copy started: website files, databases, mail and certificate.',
+        });
         $item->update([
             'status' => $kind === 'initial' ? 'copying' : 'syncing',
             'job_kind' => $kind, 'agent_job' => $job['job'] ?? null, 'error' => null,
@@ -226,6 +242,7 @@ final class Migrator
             $job = $this->agent->call('job.status', ['job' => $item->agent_job]);
         } catch (AgentException $e) {
             if ($e->errorCode === 'not_found') {
+                $item->log('The copy job was lost (agent restarted). Start it again.', [], 'error');
                 $item->update(['status' => 'failed', 'error' => __('The copy job was lost (agent restarted). Start it again.')]);
             }
 
@@ -233,12 +250,15 @@ final class Migrator
         }
         if (($job['status'] ?? 'running') === 'running') {
             if (isset($job['started_at']) && $job['started_at'] < now()->subDay()->getTimestamp()) {
+                $item->log('The copy job did not finish within a day.', [], 'error');
                 $item->update(['status' => 'failed', 'error' => __('The copy job did not finish within a day.')]);
             }
 
             return;
         }
+        $item->logAgent($job['log'] ?? [], $job['finished_at'] ?? null);
         if ($job['status'] !== 'succeeded') {
+            $item->log($job['error']['message'] ?? 'The copy job failed.', [], 'error');
             $item->update(['status' => $item->job_kind === 'late_mail' ? 'live' : 'failed', 'error' => $job['error']['message'] ?? __('The copy job failed.')]);
 
             return;
@@ -266,6 +286,8 @@ final class Migrator
                 $item->addNote('The certificate of the old server was not taken over (:reason). Let\'s Encrypt issues one after the DNS switch.', ['reason' => $result['ssl']['reason']]);
             }
             $live = $item->job_kind === 'late_mail';
+            $errors = count($result['errors'] ?? []);
+            $item->log($errors ? 'Copy finished with :count problems.' : 'Copy finished.', ['count' => $errors], $errors ? 'warn' : 'ok');
             $item->fill([
                 'status' => $live ? 'live' : 'copied',
                 'secrets' => $secrets,
