@@ -228,6 +228,37 @@ PY
   check "an address on the site allowlist is not blocked" bash -c '! cscli decisions list --ip 203.0.113.52 -o json | jq -e "length > 0"'
   check "the customer sees the attack on their site" bash -c "agent_call security.site_activity '{\"domain\":\"site.test\"}' | tee /dev/stderr | jq -e '[.data.alerts[].address] | index(\"203.0.113.51\") != null'"
   check "allowlisting by the customer lifts the block" bash -c "agent_call security.site_release '{\"domain\":\"site.test\",\"address\":\"203.0.113.51\"}' | jq -e '.data.released > 0' && ! cscli decisions list --ip 203.0.113.51 -o json | jq -e 'length > 0'"
+  # Real failed mail logins from a public address on loopback (127.0.0.1 is never counted).
+  ip addr add 203.0.113.60/32 dev lo 2>/dev/null || true
+  ip addr add 203.0.113.61/32 dev lo 2>/dev/null || true
+  check "mail threshold lowered for the test" agent_call security.apply '{"services":{"mail":{"temp_after":3,"window_minutes":10,"perm_after":0}}}'
+  sleep 5
+  python3 - <<'PY' || true
+import smtplib, ssl
+ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+for _ in range(4):
+    try:
+        s = smtplib.SMTP("203.0.113.60", 587, source_address=("203.0.113.60", 0), timeout=15)
+        s.starttls(context=ctx); s.login("nobody@example.test", "wrong-password")
+    except Exception as e:
+        print("smtp:", type(e).__name__)
+PY
+  python3 - <<'PY' || true
+import socket, ssl
+ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+for _ in range(4):
+    try:
+        raw = socket.create_connection(("203.0.113.61", 993), timeout=15, source_address=("203.0.113.61", 0))
+        tls = ctx.wrap_socket(raw)
+        tls.recv(4096)
+        tls.sendall(b"a1 LOGIN nobody@example.test wrong-password\r\n")
+        tls.recv(4096)
+        tls.sendall(b"a2 LOGOUT\r\n"); tls.close()
+    except Exception as e:
+        print("imap:", type(e).__name__)
+PY
+  check "failed SMTP logins (submission) get the address blocked" wait_ban 203.0.113.60 whp/mail-bf
+  check "failed IMAP logins get the address blocked" wait_ban 203.0.113.61 whp/mail-bf
   cscli decisions delete --ip 203.0.113.50 >/dev/null 2>&1 || true
   check "panel settings applied again" runuser -u whp -- php /opt/webhosting-panel/panel/artisan whp:security:apply
 fi
