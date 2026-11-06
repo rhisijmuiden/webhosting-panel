@@ -41,12 +41,23 @@ class HostingPackage extends Model
         'db_connections' => ['Database connections per website', null, 1, 10_000],
     ];
 
+    /**
+     * Node.js and Python apps (packages/webapps). Kept apart from the limits above:
+     * a form or API call without them leaves them unlimited.
+     */
+    public const APP_LIMITS = [
+        'max_webapps' => ['Node.js and Python apps', null, 0, 100],
+        'webapp_memory_mb' => ['Memory per app', 'MB', 64, 1_000_000],
+        'webapp_cpu_percent' => ['CPU per app', '%', 10, 10_000],
+    ];
+
     public const TRAFFIC_ACTIONS = ['notify', 'suspend'];
 
     protected $fillable = [
         'name', 'crm_id', 'description', 'disk_mb', 'traffic_gb_month', 'traffic_action', 'max_websites',
         'max_mailboxes', 'max_databases', 'max_cronjobs', 'cpu_percent', 'memory_mb', 'io_mbps',
         'max_processes', 'php_workers', 'db_connections', 'allow_ssh', 'is_active',
+        'max_webapps', 'webapp_memory_mb', 'webapp_cpu_percent',
     ];
 
     protected $attributes = ['traffic_action' => 'notify'];
@@ -64,6 +75,12 @@ class HostingPackage extends Model
     public static function limitKeys(): array
     {
         return array_keys(self::USAGE_LIMITS + self::RESOURCE_LIMITS);
+    }
+
+    /** Whether websites with this package may run Node.js or Python apps. */
+    public function allowsWebapps(): bool
+    {
+        return $this->max_webapps === null || $this->max_webapps > 0;
     }
 
     public function isUnlimited(string $key): bool
@@ -86,9 +103,9 @@ class HostingPackage extends Model
         }
 
         return match ($key) {
-            'disk_mb', 'memory_mb' => Number::fileSize($value * 1024 * 1024),
+            'disk_mb', 'memory_mb', 'webapp_memory_mb' => Number::fileSize($value * 1024 * 1024),
             'traffic_gb_month' => Number::fileSize($value * 1024 ** 3).' / '.__('month'),
-            'cpu_percent' => trans_choice(':percent % (:cores core)|:percent % (:cores cores)', $value / 100, ['percent' => $value, 'cores' => rtrim(rtrim(number_format($value / 100, 1), '0'), '.')]),
+            'cpu_percent', 'webapp_cpu_percent' => trans_choice(':percent % (:cores core)|:percent % (:cores cores)', $value / 100, ['percent' => $value, 'cores' => rtrim(rtrim(number_format($value / 100, 1), '0'), '.')]),
             'io_mbps' => $value.' MB/s',
             default => (string) $value,
         };

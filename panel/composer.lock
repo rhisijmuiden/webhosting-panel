@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ca9d967f57299f7078a5b0dcfc36db01",
+    "content-hash": "347671406b5c330bc169b6f787a55584",
     "packages": [
         {
             "name": "brick/math",
@@ -3307,7 +3307,7 @@
         },
         {
             "name": "rhis/apps",
-            "version": "dev-claude/project-thread-3oea1o",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/apps",
@@ -3340,7 +3340,7 @@
         },
         {
             "name": "rhis/backups",
-            "version": "dev-claude/project-thread-3oea1o",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/backups",
@@ -3373,7 +3373,7 @@
         },
         {
             "name": "rhis/crm-api",
-            "version": "dev-claude/project-thread-3oea1o",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/crm-api",
@@ -3406,7 +3406,7 @@
         },
         {
             "name": "rhis/dns-mail",
-            "version": "dev-claude/project-thread-3oea1o",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/dns-mail",
@@ -3454,7 +3454,7 @@
         },
         {
             "name": "rhis/domain-aliases",
-            "version": "dev-claude/project-thread-3oea1o",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/domain-aliases",
@@ -3487,7 +3487,7 @@
         },
         {
             "name": "rhis/files",
-            "version": "dev-claude/project-thread-3oea1o",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/files",
@@ -3520,7 +3520,7 @@
         },
         {
             "name": "rhis/git",
-            "version": "dev-claude/project-thread-3oea1o",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/git",
@@ -3553,7 +3553,7 @@
         },
         {
             "name": "rhis/migration",
-            "version": "dev-claude/project-thread-3oea1o",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/migration",
@@ -3586,11 +3586,11 @@
         },
         {
             "name": "rhis/monitoring",
-            "version": "dev-claude/project-thread-3oea1o",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/monitoring",
-                "reference": "96371c06d08ffc1f8ece66fb8047bf6554c17f63"
+                "reference": "051721181e7cd82d08cd63be4d2b2975fdc9c7dc"
             },
             "require": {
                 "php": "^8.3"
@@ -3619,7 +3619,7 @@
         },
         {
             "name": "rhis/reports",
-            "version": "dev-claude/project-thread-9rbcxt",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/reports",
@@ -3652,7 +3652,7 @@
         },
         {
             "name": "rhis/security",
-            "version": "dev-claude/project-thread-3oea1o",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/security",
@@ -3685,7 +3685,7 @@
         },
         {
             "name": "rhis/server-admin",
-            "version": "dev-claude/project-thread-3oea1o",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/server-admin",
@@ -3718,7 +3718,7 @@
         },
         {
             "name": "rhis/subdomains",
-            "version": "dev-claude/project-thread-3oea1o",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/subdomains",
@@ -3751,7 +3751,7 @@
         },
         {
             "name": "rhis/vulnerabilities",
-            "version": "dev-claude/project-thread-3oea1o",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/vulnerabilities",
@@ -3783,8 +3783,41 @@
             }
         },
         {
+            "name": "rhis/webapps",
+            "version": "dev-claude/project-thread-32u16i",
+            "dist": {
+                "type": "path",
+                "url": "../packages/webapps",
+                "reference": "5a71aa1f2da28498f181c240697321933edb49bd"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\WebApps\\WebAppsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\WebApps\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Node.js and Python apps for the Webhosting Panel: runtime versions, start command, environment variables, systemd service per app with resource limits, Nginx reverse proxy, logs and restart, Git deploy hook.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "rhis/wordpress",
-            "version": "dev-claude/project-thread-3oea1o",
+            "version": "dev-claude/project-thread-32u16i",
             "dist": {
                 "type": "path",
                 "url": "../packages/wordpress",
@@ -9003,6 +9036,7 @@
         "rhis/server-admin": 20,
         "rhis/subdomains": 20,
         "rhis/vulnerabilities": 20,
+        "rhis/webapps": 20,
         "rhis/wordpress": 20
     },
     "prefer-stable": true,

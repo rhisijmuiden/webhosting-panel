@@ -33,6 +33,7 @@ import time
 
 from .. import paths, wordpress
 from .. import validate as v
+from . import webapps
 from ..jobs import start_job
 from ..registry import ActionError, action
 from ..run import run
@@ -450,6 +451,8 @@ def deploy(p, log):
                 raise _friendly(exc)
             log(f"Checked out {info['short']} into {path}")
             result["steps"] = run_steps(site, p["steps"], target, log)
+            apps = webapps.prepare_deploy(site, path, target, log)
+            webapps.restart_after_deploy(site, apps, log)
         else:
             release = f"{time.strftime('%Y%m%d%H%M%S')}-{sha[:7]}"
             rel_dir = os.path.join(repo_dir(site, rid), "releases", release)
@@ -461,11 +464,14 @@ def deploy(p, log):
                 log(f"Release {release} prepared")
                 _link_shared(site, rid, rel_dir, p["shared"], log)
                 result["steps"] = run_steps(site, p["steps"], rel_dir, log)
+                # Node.js / Python apps in this folder: dependencies and build before the switch.
+                apps = webapps.prepare_deploy(site, path, rel_dir, log)
             except ActionError as exc:
                 as_user(site, ["/usr/bin/rm", "-rf", rel_dir], check=False)
                 log("The website was not changed: it still runs the previous release")
                 raise exc if exc.code != "command_failed" or exc.details.get("steps") else _friendly(exc)
             _switch(site, rid, path, release, log)
+            webapps.restart_after_deploy(site, apps, log)
             _prune(site, rid, p["keep"], release, log)
             result["release"] = release
 

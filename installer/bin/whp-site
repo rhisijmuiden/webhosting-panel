@@ -28,6 +28,10 @@
 #   whp-site suspend <domain> | unsuspend <domain>   (503 page, PHP stopped, SFTP/SSH login locked)
 #   whp-site refresh <domain>|--all  (write pool, unit and vhost again from the saved state,
 #                                     e.g. after an update of the templates)
+#   whp-site proxy <domain> <port>|off
+#                                    (serve the whole site from a Node.js or Python app on
+#                                     127.0.0.1:<port> instead of PHP; the panel's app manager
+#                                     sets this, apps on a sub path use a snippet instead)
 #   whp-site remove <domain> [--keep-files]
 #   whp-site list [--json]
 #   whp-site show <domain>
@@ -89,7 +93,7 @@ site_load() {
   f=$(site_file "$1")
   [[ -f $f ]] || die "$(t site_missing "$1")"
   local k
-  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED SITE_OWNER SITE_PHP_INI SITE_PM_MAX SITE_PARENT; do
+  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED SITE_OWNER SITE_PHP_INI SITE_PM_MAX SITE_PARENT SITE_PROXY; do
     printf -v "$k" '%s' "$(env_get "$f" "$k" || true)"
   done
   SITE_ROOT=$WHP_VHOSTS/$SITE_DOMAIN
@@ -99,7 +103,7 @@ site_save() {
   local f k
   f=$(site_file "$SITE_DOMAIN")
   [[ -f $f ]] || install -m 0640 /dev/null "$f"
-  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED SITE_OWNER SITE_PHP_INI SITE_PM_MAX SITE_PARENT; do
+  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED SITE_OWNER SITE_PHP_INI SITE_PM_MAX SITE_PARENT SITE_PROXY; do
     env_set "$f" "$k" "${!k}"
   done
 }
@@ -235,7 +239,8 @@ site_apply() {
     # Wait for the socket before nginx sends traffic to it.
     local i
     for i in {1..20}; do [[ -S /run/php/site-$SITE_ID.sock ]] && break; sleep 0.25; done
-    body=$(render_string "$TPL/nginx/site-body.conf")
+    if [[ -n ${SITE_PROXY:-} ]]; then body=$(render_string "$TPL/nginx/site-proxy-body.conf")
+    else body=$(render_string "$TPL/nginx/site-body.conf"); fi
   fi
   if [[ $SITE_SSL == active || $SITE_SSL == imported ]]; then
     if [[ $SITE_SSL == imported ]]; then
@@ -554,7 +559,7 @@ print_site() {
     --argjson domain_aliases "$(print_aliases "$1")" \
     --arg owner "${SITE_OWNER:-}" --arg slice "$(site_slice)" --arg cgroup "$(site_cgroup)" \
     --arg php_ini "${SITE_PHP_INI:-}" --argjson workers "${SITE_PM_MAX:-10}" \
-    --arg parent "${SITE_PARENT:-}" --arg children "$(site_children "$1" | xargs)" \
+    --arg parent "${SITE_PARENT:-}" --arg proxy "${SITE_PROXY:-}" --arg children "$(site_children "$1" | xargs)" \
     --argjson used "$(du -sm --one-file-system "$SITE_ROOT" 2>/dev/null | cut -f1 || echo 0)" \
     '{domain:$domain, user:$user, php:$php, aliases:($aliases|split(",")|map(select(length>0))), domain_aliases:$domain_aliases,
       cache:($cache=="on"), suspended:($suspended=="yes"), profile:$profile, root:$root, docroot:$docroot, ssl:$ssl,
@@ -562,7 +567,7 @@ print_site() {
       owner:(if $owner == "" then null else $owner end), slice:$slice, cgroup:$cgroup,
       php_ini:([$php_ini|split(";")[]|select(contains("="))|{key:(split("=")[0]), value:(split("=")[1:]|join("="))}]|from_entries),
       php_workers:$workers,
-      parent:(if $parent == "" then null else $parent end), subdomains:($children|split(" ")|map(select(length>0))),
+      parent:(if $parent == "" then null else $parent end), proxy_port:(if $proxy == "" then null else ($proxy|tonumber) end), subdomains:($children|split(" ")|map(select(length>0))),
       disk:{used_mb:$used, quota_mb:$quota, enforced:($qmode!="none" and $quota>0), mode:$qmode},
       resources:($res + {cpu_limit:$cpu_limit, memory_limit:$mem_limit})}'
 }
@@ -590,7 +595,7 @@ cmd_add() {
 
   SITE_DOMAIN=$domain SITE_PHP=$(default_php) SITE_ALIASES='' SITE_CACHE=on SITE_PROFILE=php
   SITE_DOCROOT_REL='' SITE_SSL=$WHP_LETSENCRYPT_DEFAULT SITE_QUOTA_MB=0 SITE_CPU='' SITE_MEM='' SITE_SUSPENDED=no
-  SITE_OWNER='' SITE_PHP_INI='' SITE_PM_MAX=10 SITE_PARENT=''
+  SITE_OWNER='' SITE_PHP_INI='' SITE_PM_MAX=10 SITE_PARENT='' SITE_PROXY=''
   local alias_set=no
   while (($#)); do
     case $1 in
@@ -944,6 +949,20 @@ cmd_cache() {
   if [[ $JSON == yes ]]; then print_site "$domain"; fi
 }
 
+# The whole site is served by an app on 127.0.0.1:<port> (Node.js, Python), or by PHP again.
+cmd_proxy() {
+  local domain=${1:-} port=${2:-}
+  [[ -n $domain && $port =~ ^(off|[0-9]{4,5})$ ]] || usage
+  if [[ $port != off ]] && (( port < 1024 || port > 65535 )); then die "proxy: port 1024-65535"; fi
+  site_load "$domain"
+  if [[ $port == off ]]; then SITE_PROXY=''; else SITE_PROXY=$port; fi
+  site_save
+  site_apply
+  cache_purge
+  ok "$domain proxy ${SITE_PROXY:-off}"
+  if [[ $JSON == yes ]]; then print_site "$domain"; fi
+}
+
 cmd_ssl() {
   local target=${1:-}
   [[ -n $target ]] || usage
@@ -1123,6 +1142,7 @@ case $cmd in
   owner) cmd_owner "$@" ;;
   slice) cmd_slice "$@" ;;
   phpini) cmd_phpini "$@" ;;
+  proxy) cmd_proxy "$@" ;;
   suspend) cmd_suspend "${1:-}" yes ;;
   unsuspend) cmd_suspend "${1:-}" no ;;
   remove) cmd_remove "$@" ;;
