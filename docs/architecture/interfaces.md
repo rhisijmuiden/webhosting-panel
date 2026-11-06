@@ -217,6 +217,12 @@ Server management (`server.py`, screens in `packages/server-admin`, `Rhis\Server
 `server.cleanup`, `server.php_versions`, `server.php_install`, `server.php_remove`. No shutdown action.
 See `docs/server-management.md`.
 
+Node.js and Python apps (`webapps.py`, screens in `packages/webapps`, `Rhis\WebApps\`, admin `/admin/webapps`,
+client `/webapps`): `runtime.list`, `runtime.install` (job), `runtime.remove`, `webapp.apply`, `webapp.status`,
+`webapp.list`, `webapp.control`, `webapp.logs`, `webapp.install` (job), `webapp.suspend`, `webapp.remove`.
+`whp-site proxy <domain> <port>|off` serves a whole site from an app. Git deployments call
+`webapps.prepare_deploy()` before a release goes live. See `docs/webapps.md`.
+
 ## Release channels
 
 | Channel | Git branch |

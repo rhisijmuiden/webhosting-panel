@@ -39,10 +39,15 @@ final class WebAppsServiceProvider extends ServiceProvider
         Route::middleware(['web', 'auth', 'client'])->prefix('webapps')->name('client.webapps.')
             ->group(__DIR__.'/../routes/client.php');
 
-        Menu::admin()->add('webapps', 'Node.js & Python', 'admin.webapps.index', icon: 'code', section: 'Hosting', order: 36,
+        Menu::admin()->add('webapps', 'Node.js & Python', 'admin.webapps.index', icon: 'runtime', section: 'Hosting', order: 36,
             activePatterns: ['admin.webapps.*']);
-        Menu::client()->add('webapps', 'Node.js & Python', 'client.webapps.index', icon: 'code', order: 18,
+        Menu::client()->add('webapps', 'Node.js & Python', 'client.webapps.index', icon: 'runtime', order: 18,
             activePatterns: ['client.webapps.*'], visible: fn () => self::clientVisible());
+
+        // Team members with access to Git deployments may also manage the apps.
+        if (class_exists(\App\Support\TeamAreas::class)) {
+            \App\Support\TeamAreas::extend('git', ['client.webapps.*']);
+        }
 
         $this->hooks();
     }

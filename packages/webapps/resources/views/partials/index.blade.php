@@ -17,7 +17,7 @@
 
 <x-ui.card :title="__('Apps')" flush>
     @if ($list->isEmpty())
-        <x-ui.empty icon="code">{{ __('No apps yet. An app can serve a whole website or one path of it, like /api.') }}</x-ui.empty>
+        <x-ui.empty icon="runtime">{{ __('No apps yet. An app can serve a whole website or one path of it, like /api.') }}</x-ui.empty>
     @else
     <x-ui.table>
         <x-slot:head>

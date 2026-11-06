@@ -7,6 +7,7 @@
 [data-theme="dark"] .wa-badge.node { color: #8BD07A; } [data-theme="dark"] .wa-badge.python { color: #8DB8E6; }
 .input-group { display: flex; align-items: center; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); padding-left: 12px; }
 .input-group:focus-within { border-color: var(--accent); }
+.input-group > span { white-space: nowrap; }
 .input-group .input { border: 0; background: transparent; padding-left: 2px; }
 .wa-env { display: grid; gap: 8px; }
 .wa-env-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(160px, 2fr) auto; gap: 8px; align-items: center; }

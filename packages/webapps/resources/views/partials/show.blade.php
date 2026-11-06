@@ -71,6 +71,7 @@
                 this.$nextTick(() => { if (this.follow && this.$refs.log) this.$refs.log.scrollTop = this.$refs.log.scrollHeight; });
             } catch (e) {}
         },
+        split(l) { const m = l.match(/^(\S+)\s+(?:whp-webapp-[a-f0-9]+\[\d+\]:\s?)?(.*)$/); return m ? [m[1].replace('T', ' ').slice(0, 19), m[2]] : ['', l]; },
         cls(l) { return /\b(error|exception|traceback|fatal)\b/i.test(l) ? 'err' : (/\bwarn(ing)?\b/i.test(l) ? 'warn' : ''); },
         init() { this.$nextTick(() => { if (this.$refs.log) this.$refs.log.scrollTop = this.$refs.log.scrollHeight; });
                  @if ($app->install_job) this.poll(); @endif
@@ -95,7 +96,7 @@
                 <span class="muted small"><span class="live"></span> {{ __('Output of the app (stdout and stderr), refreshed every 5 seconds') }}</span>
                 <label class="check" style="margin:0"><input type="checkbox" x-model="follow"><span>{{ __('Follow') }}</span></label>
             </div>
-            <pre class="log wa-log" x-ref="log"><template x-for="(l, i) in lines" :key="i"><div :class="cls(l)"><span class="t" x-text="l.slice(0, 25)"></span><span x-text="l.slice(25).replace(/^whp-webapp-[a-f0-9]+\[\d+\]: /, ' ')"></span></div></template><div x-show="!lines.length" class="t">{{ __('No output yet.') }}</div></pre>
+            <pre class="log wa-log" x-ref="log"><template x-for="(l, i) in lines" :key="i"><div :class="cls(l)"><span class="t" x-text="split(l)[0]"></span> <span x-text="split(l)[1]"></span></div></template><div x-show="!lines.length" class="t">{{ __('No output yet.') }}</div></pre>
         </div>
     </x-ui.card>
 </div>
@@ -103,7 +104,7 @@
 <x-ui.card :title="__('Git deployments')">
     <p class="muted small">{{ __('Link a repository under Git and deploy it to the folder :folder. Before a new release goes live the dependencies and the build command run, after the switch the app restarts by itself.', ['folder' => $app->app_root]) }}</p>
     @if (\Illuminate\Support\Facades\Route::has($area.'.git.create') && ($area === 'admin' || config('git.customer_access')))
-        <x-ui.button size="sm" icon="git" :href="route($area.'.git.create', ['website' => $app->website_id])">{{ __('Link a repository') }}</x-ui.button>
+        <div class="actions"><x-ui.button size="sm" icon="git" :href="route($area.'.git.create', ['website' => $app->website_id])">{{ __('Link a repository') }}</x-ui.button></div>
     @endif
 </x-ui.card>
 
