@@ -16,20 +16,47 @@
         <div class="alert alert-warn" role="status"><x-icon name="database" />{{ __('Your package allows no more databases. Remove an app or ask us for a larger package.') }}</div>
     @endif
 
+    @if (count($categories) > 1)
+        <nav class="app-filter" aria-label="{{ __('Categories') }}">
+            <a href="{{ route($area.'.apps.index', $website ? ['website' => $website] : []) }}" @if (! $category) aria-current="page" @endif>{{ __('All apps') }}</a>
+            @foreach ($categories as $key => $label)
+                <a href="{{ route($area.'.apps.index', ['category' => $key] + ($website ? ['website' => $website] : [])) }}" @if ($category === $key) aria-current="page" @endif>{{ __($label) }}</a>
+            @endforeach
+        </nav>
+    @endif
+
     <section class="app-grid" aria-label="{{ __('Available apps') }}">
         @forelse ($catalog as $id => $app)
-            <article class="card app-tile">
+            @php
+                $held = ($app['maintained'] ?? null) === false;
+                $needsDb = $app['database'] ?? true;
+            @endphp
+            <article class="card app-tile @if ($held) app-tile-held @endif">
                 <div class="app-tile-head">
                     <span class="app-logo" style="--app-color: {{ $app['color'] }}" aria-hidden="true">{{ $app['monogram'] }}</span>
-                    <div><h2>{{ $app['name'] }}</h2><p class="small muted">{{ __($app['category']) }}</p></div>
+                    <div><h2>{{ $app['name'] }}</h2><p class="small muted">{{ __(config('apps.categories.'.$app['category'], $app['category'])) }}</p></div>
                 </div>
                 <p class="small">{{ __($app['description']) }}</p>
+                @if ($held)
+                    <p class="small app-held"><x-icon name="shield" />{{ ($app['end_of_life'] ?? false)
+                        ? __('Not offered: this version is end of life.')
+                        : __('Not offered: no release in the last :days days.', ['days' => $maxAge]) }}</p>
+                @endif
+                <ul class="app-facts small muted">
+                    @if (! empty($app['latest_version']))
+                        <li title="{{ __('Latest release') }}">v{{ $app['latest_version'] }}@if (! empty($app['released_at'])) · {{ \Illuminate\Support\Carbon::createFromTimestamp($app['released_at'])->isoFormat('LL') }}@endif</li>
+                    @endif
+                    <li>{{ collect($app['locales'])->map(fn ($l) => strtoupper($l))->implode(' · ') }}</li>
+                    @unless ($needsDb)<li>{{ __('No database') }}</li>@endunless
+                </ul>
                 <div class="app-tile-foot">
-                    <span class="small muted">{{ collect($app['locales'])->map(fn ($l) => strtoupper($l))->implode(' · ') }}</span>
-                    @if ($databasesLeft === 0)
+                    @if ($held || ($needsDb && $databasesLeft === 0))
                         <button class="btn btn-sm" type="button" disabled>{{ __('Install') }}</button>
                     @else
                         <x-ui.button variant="primary" size="sm" icon="plus" :href="route($area.'.apps.create', ['app' => $id] + ($website ? ['website' => $website] : []))">{{ __('Install') }}</x-ui.button>
+                    @endif
+                    @if (! empty($app['homepage']))
+                        <a class="small muted" href="{{ $app['homepage'] }}" target="_blank" rel="noopener">{{ parse_url($app['homepage'], PHP_URL_HOST) }}</a>
                     @endif
                 </div>
             </article>
@@ -37,6 +64,8 @@
             <x-ui.card><x-ui.empty icon="apps">{{ __('No apps are available on this server.') }}</x-ui.empty></x-ui.card>
         @endforelse
     </section>
+
+    <p class="small muted app-policy"><x-icon name="shield" />{{ __('Only apps that are actively maintained are offered: every app must have had a release in the last :days days. Installed apps show when an update is out.', ['days' => $maxAge]) }}</p>
 
     <x-ui.card :title="__('Installed apps')" flush>
         @if ($installations->isEmpty())
@@ -53,7 +82,11 @@
                         <td><a href="{{ route($area.'.apps.show', $i) }}" class="app-name"><span class="app-logo app-logo-sm" style="--app-color: {{ $i->meta()['color'] }}" aria-hidden="true">{{ $i->meta()['monogram'] }}</span>{{ $i->meta()['name'] }}</a></td>
                         <td class="mono small">{{ $i->location() }}</td>
                         @if ($area === 'admin')<td class="small">{{ $i->website?->customer?->displayName() }}</td>@endif
-                        <td class="small">{{ $i->version ?? '–' }}</td>
+                        <td class="small">{{ $i->version ?? '–' }}
+                            @if ($updates[$i->id]['update_available'] ?? false)
+                                <x-ui.pill status="warn">{{ __('Update: :v', ['v' => $updates[$i->id]['latest_version']]) }}</x-ui.pill>
+                            @endif
+                        </td>
                         <td><x-ui.pill :status="$statusPill[$i->status] ?? 'neutral'">{{ $statusLabel[$i->status] ?? $i->status }}</x-ui.pill></td>
                         <td class="num">
                             @if ($i->status === 'installed' && $i->admin_url)
