@@ -44,6 +44,9 @@ Usage: install.sh [options]
   --crowdsec-enroll KEY    Enroll this engine in the CrowdSec console
   --lang en|nl             Language of the installer messages
   -y, --yes                Non-interactive: use options and defaults, no questions
+  --upgrade                Bring an installed server up to date with this code: saved
+                           answers, no questions, no full-upgrade, reload instead of
+                           restart where possible. The panel updater runs this.
   --force                  Continue on failed checks (not recommended)
   -h, --help               This help
 EOF
@@ -99,6 +102,7 @@ while (($#)); do
     --crowdsec-enroll) WHP_CROWDSEC_ENROLL=$2; shift ;;
     --lang) WHP_LANG=$2; shift ;;
     -y|--yes) WHP_INTERACTIVE=no; CONFIRM=yes ;;
+    --upgrade) WHP_UPGRADE=yes; WHP_INTERACTIVE=no; CONFIRM=yes ;;
     --force) FORCE=yes ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'Unknown option: %s\n' "$1" >&2; usage >&2; exit 2 ;;
@@ -109,6 +113,15 @@ done
 load_lang "$INSTALLER_DIR/lang"
 install -d -m 0750 "$WHP_LOG_DIR"
 trap 'die "line $LINENO: $BASH_COMMAND"' ERR
+
+# On --upgrade every saved choice wins over the defaults (also --no-mail and the like).
+if [[ $WHP_UPGRADE == yes ]]; then
+  [[ -r $WHP_ETC/installer.env ]] || die "--upgrade: $WHP_ETC/installer.env not found (server not installed?)"
+  for k in FIREWALL CROWDSEC MAIL LETSENCRYPT CLAMAV QUOTA_DEVICE REQUIRE_QUOTA; do
+    v="WHP_$k"
+    if prev=$(env_get "$WHP_ETC/installer.env" "$v"); then printf -v "$v" '%s' "$prev"; fi
+  done
+fi
 
 # Previous answers are reused on a re-run.
 if [[ -r $WHP_ETC/installer.env ]]; then
@@ -179,11 +192,16 @@ save_answers() {
   local f=$WHP_ETC/installer.env
   [[ -f $f ]] || install -m 0640 /dev/null "$f"
   local k
-  for k in HOSTNAME EMAIL RELAY_HOST RELAY_PORT RELAY_USER PHP TZ CHANNEL SSH_PORT SSH_HARDEN LETSENCRYPT; do
+  for k in HOSTNAME EMAIL RELAY_HOST RELAY_PORT RELAY_USER PHP TZ CHANNEL SSH_PORT SSH_HARDEN LETSENCRYPT \
+           FIREWALL CROWDSEC MAIL CLAMAV QUOTA_DEVICE REQUIRE_QUOTA; do
     local v="WHP_$k"
     env_set "$f" "$v" "${!v:-}"
   done
-  env_set "$f" WHP_INSTALLED_AT "$(date -u +%FT%TZ)"
+  if [[ $WHP_UPGRADE == yes ]]; then
+    env_set "$f" WHP_UPGRADED_AT "$(date -u +%FT%TZ)"
+  else
+    env_set "$f" WHP_INSTALLED_AT "$(date -u +%FT%TZ)"
+  fi
   [[ -n $WHP_RELAY_PASS ]] && env_set "$WHP_ETC/secrets.env" RELAY_PASS "$WHP_RELAY_PASS"
   return 0
 }
@@ -212,4 +230,5 @@ if [[ $WHP_MAIL == yes ]]; then step "$(t step_mail)"; module_mail; fi
 step "$(t step_antivirus)"; module_antivirus
 if [[ $WHP_CROWDSEC == yes ]]; then step "$(t step_crowdsec)"; module_crowdsec; fi
 step "$(t step_panel)";     module_panel
+step "$(t step_migrations)"; module_migrations
 step "$(t step_finish)";    module_finish

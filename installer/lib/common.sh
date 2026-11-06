@@ -79,6 +79,7 @@ load_lang() {
 # ---------------------------------------------------------------- prompts
 
 WHP_INTERACTIVE=${WHP_INTERACTIVE:-auto}
+WHP_UPGRADE=${WHP_UPGRADE:-no}
 
 _tty() { [[ $WHP_INTERACTIVE != no ]] && { : </dev/tty; } 2>/dev/null; }
 
@@ -115,7 +116,11 @@ is_container() { systemd-detect-virt --container --quiet 2>/dev/null; }
 virt_type()    { systemd-detect-virt 2>/dev/null || echo none; }
 
 svc_enable() { run systemctl enable --now "$@"; }
-svc_restart() { run systemctl restart "$@"; }
+# On --upgrade (run by the panel updater) services are reloaded where they can be,
+# so customer sites and mail keep running; only services without reload restart.
+svc_restart() {
+  if [[ ${WHP_UPGRADE:-no} == yes ]]; then run systemctl reload-or-restart "$@"; else run systemctl restart "$@"; fi
+}
 svc_reload() {
   local s
   for s in "$@"; do

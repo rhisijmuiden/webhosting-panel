@@ -18,5 +18,9 @@ systemd-tmpfiles --create /etc/tmpfiles.d/whp-files.conf || true
 install -m 0644 "$ROOT/agent/systemd/whp-agent.service" /etc/systemd/system/whp-agent.service
 systemctl daemon-reload
 systemctl enable --now whp-agent
-systemctl restart whp-agent
+# During a panel update the agent runs the updater itself: the updater restarts
+# it at the end, a restart here would cut the update off.
+if [ "${WHP_UPGRADE:-no}" != yes ]; then
+  systemctl restart whp-agent
+fi
 echo "whp-agent installed"

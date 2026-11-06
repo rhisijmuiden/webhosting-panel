@@ -137,7 +137,7 @@ module_panel() {
       if [[ $c == panel/deploy/install.sh && ! -e $WHP_STATE/panel/.admin-created ]]; then
         admin=(WHP_ADMIN_EMAIL="$WHP_EMAIL" WHP_ADMIN_PASSWORD="$(secret PANEL_ADMIN_PASS 24)")
       fi
-      run_secret "bash $c" env WHP_HOSTNAME="$WHP_HOSTNAME" WHP_CHANNEL="$WHP_CHANNEL" WHP_ETC="$WHP_ETC" \
+      run_secret "bash $c" env WHP_HOSTNAME="$WHP_HOSTNAME" WHP_CHANNEL="$WHP_CHANNEL" WHP_ETC="$WHP_ETC" WHP_UPGRADE="$WHP_UPGRADE" \
         "${admin[@]}" bash "$WHP_CODE_DIR/$c"
       if ((${#admin[@]})); then touch "$WHP_STATE/panel/.admin-created"; fi
     else
