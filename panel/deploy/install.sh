@@ -24,6 +24,8 @@ chown "$PANEL_USER:$PANEL_USER" "$PANEL"
 (cd "$PANEL" && as_panel composer install --no-dev --no-interaction --optimize-autoloader)
 as_panel php "$PANEL/artisan" migrate --force
 as_panel php "$PANEL/artisan" optimize
+# Resource jail and PHP settings of every customer (after an update of the limits code).
+as_panel php "$PANEL/artisan" whp:limits:apply >/dev/null 2>&1 || echo "whp:limits:apply reported errors: see the activity log" >&2
 
 install -m 0644 "$PANEL/deploy/systemd/whp-queue.service" /etc/systemd/system/
 install -m 0644 "$PANEL/deploy/systemd/whp-scheduler.service" /etc/systemd/system/

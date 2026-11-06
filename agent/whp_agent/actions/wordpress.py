@@ -388,7 +388,7 @@ def _write_cron_units(domain, path, interval):
         "[Service]\n"
         "Type=oneshot\n"
         f"User={site['user']}\nGroup={site['user']}\n"
-        "Slice=whp-sites.slice\n"
+        f"Slice={site.get('slice') or 'whp-sites.slice'}\n"
         "UMask=0022\nNice=10\nIOSchedulingClass=idle\n"
         "NoNewPrivileges=yes\nPrivateTmp=yes\nProtectSystem=full\nProtectHome=yes\n"
         "TimeoutStartSec=15min\nMemoryMax=1G\n"
