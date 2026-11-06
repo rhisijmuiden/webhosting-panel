@@ -171,6 +171,9 @@ PY
   app_params() { printf '{"domain":"%s","app":"%s","path":"%s","title":"Smoke","admin_user":"smoke","admin_email":"smoke@example.test","admin_password":"Smoke-test-pass-123","locale":"%s"}' "$@"; }
 
   export -f agent app_params
+  check "mail log: smoke message is in the journal, delivered locally" bash -c 'agent mail.log_read "{\"since_hours\":1}" | jq -e "[.events[] | select(.kind == \"delivery\" and .to == \"info@example.test\" and .status == \"sent\" and .local)] | length > 0"'
+  check "mail log: long queue ids and a cursor" bash -c 'agent mail.log_read "{\"since_hours\":1}" | jq -e "(.cursor | length > 0) and ([.events[] | select(.kind == \"pickup\") | .qid | length > 12] | length > 0)"'
+  check "mail log: rspamd history has the scan" bash -c 'agent mail.spam_history | jq -e ".rows | length > 0"'
   check "app catalog" bash -c 'agent apps.catalog | jq -e "[.apps[].id] == [\"wordpress\",\"joomla\",\"nextcloud\"]"'
   check "add a site for the app installer" whp-site add appwp.test --php 8.4 --no-ssl --json
   check "install WordPress (nl) through the agent" agent_job apps.install "$(app_params appwp.test wordpress '' nl)"
