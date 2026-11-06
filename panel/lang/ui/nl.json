@@ -13,5 +13,6 @@
     "Administrator": "Beheerder",
     "Mail log": "Maillog",
     "Git deploy": "Git-deploy",
-    "Files": "Bestanden"
+    "Files": "Bestanden",
+    "Attack blocking": "Aanvalsblokkering"
 }
