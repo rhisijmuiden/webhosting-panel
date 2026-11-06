@@ -221,6 +221,15 @@ class BackupRestoreTestsTest extends TestCase
         $this->assertStringContainsString('Website nieuw.nl', $html);
     }
 
+    public function test_engine_details_are_translated_with_readable_sizes(): void
+    {
+        $d = \Rhis\Backups\RestoreTests\Labels::detail('restored 118 of 120 files, 4400000 of 4500000 bytes');
+        $this->assertSame('only 118 of 120 files (4.2 MB of 4.3 MB) restored', $d);
+        app()->setLocale('nl');
+        $this->assertSame('dump gedownload en ontsleuteld (19.5 KB)', \Rhis\Backups\RestoreTests\Labels::detail('dump downloaded and decrypted (20000 bytes)'));
+        $this->assertSame('something new', \Rhis\Backups\RestoreTests\Labels::detail('something new'));
+    }
+
     public function test_command_is_scheduled(): void
     {
         $this->artisan('schedule:list')->expectsOutputToContain('backups:restore-test-tick')->assertSuccessful();

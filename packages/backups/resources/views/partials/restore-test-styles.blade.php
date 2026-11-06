@@ -35,5 +35,6 @@
     .rt-list { list-style: none; margin: 0; padding: 0; }
     .rt-list li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line-soft); font-size: 14px; }
     .rt-list li:first-child { border-top: 0; }
+    .rt-state .ring-label strong { font-size: 26px; }
     .rt-form h3 { font-size: 14px; margin: 8px 0 4px; }
 </style>

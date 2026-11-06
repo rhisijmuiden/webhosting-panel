@@ -21,7 +21,7 @@
 **{{ __('Problems') }}**
 
 @foreach ($bad as $item)
-- **{{ Labels::scope($item['scope']) }}** ({{ $item['target'] }}, {{ Labels::kind($item['kind'] ?? null) }} {{ \Illuminate\Support\Carbon::parse($item['time'])->isoFormat('lll') }}): {{ collect($item['checks'] ?? [])->where('result', '!=', 'ok')->map(fn ($c) => Labels::check($c['check']).': '.$c['detail'])->implode('; ') }}
+- **{{ Labels::scope($item['scope']) }}** ({{ $item['target'] }}, {{ Labels::kind($item['kind'] ?? null) }} {{ \Illuminate\Support\Carbon::parse($item['time'])->isoFormat('lll') }}): {{ collect($item['checks'] ?? [])->where('result', '!=', 'ok')->map(fn ($c) => Labels::check($c['check']).': '.Labels::detail($c['detail']))->implode('; ') }}
 @endforeach
 @endif
 

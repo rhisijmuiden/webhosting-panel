@@ -74,7 +74,7 @@
                 <ul class="checks">
                     @foreach ($item['checks'] ?? [] as $c)
                         <li class="{{ ['ok' => 'is-ok', 'warning' => 'is-warn'][$c['result']] ?? 'is-bad' }}">
-                            <x-icon :name="$c['result'] === 'ok' ? 'check' : 'info'" />{{ Labels::check($c['check']) }}<small>{{ $c['detail'] }}</small>
+                            <x-icon :name="$c['result'] === 'ok' ? 'check' : 'info'" />{{ Labels::check($c['check']) }}<small>{{ Labels::detail($c['detail']) }}</small>
                         </li>
                     @endforeach
                 </ul>

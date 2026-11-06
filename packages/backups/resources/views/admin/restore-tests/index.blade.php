@@ -50,13 +50,13 @@
                     <p>{{ __(':n restore points were downloaded, restored in an isolated test location, checked and removed again.', ['n' => $last->tested]) }}</p>
                 @elseif ($last->status === 'warning')
                     <h2>{{ __('Restorable, with warnings') }}</h2>
-                    <p>{{ __(':n points need attention. Open the report to see what.', ['n' => $last->problems]) }}</p>
+                    <p>{{ __('Points that need attention: :n. Open the report to see what.', ['n' => $last->problems]) }}</p>
                 @elseif ($last->status === 'error')
                     <h2>{{ __('The restore test could not run') }}</h2>
                     <p>{{ $last->error }}</p>
                 @else
                     <h2>{{ __('Some backups cannot be restored') }}</h2>
-                    <p>{{ __(':n problems found. The administrators were mailed.', ['n' => $last->problems]) }}</p>
+                    <p>{{ __('Problems found: :n. The administrators were mailed.', ['n' => $last->problems]) }}</p>
                 @endif
                 @if ($last)
                     <div class="rt-meta">
