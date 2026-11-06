@@ -18,10 +18,6 @@
         </x-ui.card>
         <x-ui.card :title="__('Hosting')">
             <div class="form-grid">
-                <x-ui.field name="hosting_package_id" type="select" :label="__('Package')">
-                    <option value="">{{ __('No package') }}</option>
-                    @foreach ($packages as $p)<option value="{{ $p->id }}" @selected(old('hosting_package_id', $customer->hosting_package_id) == $p->id)>{{ $p->name }}</option>@endforeach
-                </x-ui.field>
                 <x-ui.field name="status" type="select" :label="__('Status')" :help="__('A suspended customer cannot log in.')">
                     <option value="active" @selected(old('status', $customer->status) === 'active')>{{ __('Active') }}</option>
                     <option value="suspended" @selected(old('status', $customer->status) === 'suspended')>{{ __('Suspended') }}</option>

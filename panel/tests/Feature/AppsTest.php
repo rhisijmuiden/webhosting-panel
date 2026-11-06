@@ -123,9 +123,9 @@ class AppsTest extends TestCase
     public function test_client_installs_only_into_own_sites_within_the_package(): void
     {
         $package = HostingPackage::create(['name' => 'Start', 'max_databases' => 1]);
-        $mine = Customer::create(['name' => 'Mine', 'email' => 'mine@klant.test', 'hosting_package_id' => $package->id]);
+        $mine = Customer::create(['name' => 'Mine', 'email' => 'mine@klant.test']);
         $other = Customer::create(['name' => 'Other', 'email' => 'other@klant.test']);
-        $site = $this->site($mine);
+        $site = $this->withPackage($this->site($mine), $package);
         $foreign = $this->site($other, 'ander.test');
         $this->site($mine, 'nieuw.test', 'provisioning');
         $user = User::factory()->create(['customer_id' => $mine->id]);
@@ -204,8 +204,8 @@ class AppsTest extends TestCase
     public function test_app_without_database_ignores_the_database_limit(): void
     {
         $package = HostingPackage::create(['name' => 'Start', 'max_databases' => 0]);
-        $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@klant.test', 'hosting_package_id' => $package->id]);
-        $site = $this->site($customer);
+        $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@klant.test']);
+        $site = $this->withPackage($this->site($customer), $package);
         $this->actingAs(User::factory()->create(['customer_id' => $customer->id]));
         $this->get('/apps')->assertOk()->assertSee(route('client.apps.create', 'dokuwiki'), false)
             ->assertDontSee(route('client.apps.create', 'wordpress'), false);

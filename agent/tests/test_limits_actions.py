@@ -22,7 +22,7 @@ class SiteLimitsTest(unittest.TestCase):
             return run.call_args[0][0]
 
     def test_registered(self):
-        for name in ["site.owner", "customer.limits", "site.php_settings", "db.limits", "traffic.report",
+        for name in ["site.owner", "customer.limits", "subscription.limits", "site.php_settings", "db.limits", "traffic.report",
                      "php.extensions.list", "php.extensions.install", "php.extensions.toggle"]:
             self.assertIn(name, ACTIONS)
 
@@ -37,6 +37,21 @@ class SiteLimitsTest(unittest.TestCase):
         from whp_agent.actions import sites
         self.assertEqual(self.run_site(sites.site_owner, {"domain": "a.nl", "customer_id": 3})[1:4], ["owner", "a.nl", "c3"])
         self.assertEqual(self.run_site(sites.site_owner, {"domain": "a.nl", "customer_id": None})[1:4], ["owner", "a.nl", "-"])
+        self.assertEqual(self.run_site(sites.site_owner, {"domain": "a.nl", "subscription_id": 9})[1:4], ["owner", "a.nl", "s9"])
+        self.assertEqual(self.run_site(sites.site_owner, {"domain": "a.nl"})[1:4], ["owner", "a.nl", "-"])
+
+    def test_add_with_subscription(self):
+        from whp_agent.actions import sites
+        argv = self.run_site(sites.site_add, {"domain": "a.nl", "subscription_id": 4, "customer_id": 12})
+        self.assertEqual(argv[argv.index("--owner") + 1], "s4")
+
+    def test_subscription_limits(self):
+        from whp_agent.actions import sites
+        argv = self.run_site(sites.subscription_limits, {"subscription_id": 5, "max_processes": 256})
+        self.assertEqual(argv[1:3], ["slice", "s5"])
+        self.assertEqual(argv[argv.index("--tasks") + 1], "256")
+        with self.assertRaises(ActionError):
+            sites.subscription_limits({"subscription_id": 0})
 
     def test_customer_limits(self):
         from whp_agent.actions import sites

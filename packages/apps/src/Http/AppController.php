@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rhis\Apps\Http;
 
 use App\Http\Controllers\Controller;
+use App\Models\Website;
 use App\Services\Agent\AgentException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -33,6 +34,12 @@ abstract class AppController extends Controller
     protected function databasesLeft(Request $request): ?int
     {
         return null;
+    }
+
+    /** Whether the package of this website allows one more database (admins are not limited). */
+    protected function hasDatabaseRoom(Website $website): bool
+    {
+        return true;
     }
 
     public function index(Request $request): View
@@ -95,7 +102,7 @@ abstract class AppController extends Controller
                 : __('Use letters, digits, dots, @, - and _ only.'),
         ]);
         $website = $this->websites($request)->where('status', 'active')->findOrFail($data['website']);
-        if (($meta['database'] ?? true) && ($left = $this->databasesLeft($request)) !== null && $left < 1) {
+        if (($meta['database'] ?? true) && ! $this->hasDatabaseRoom($website)) {
             return back()->withInput()->withErrors(['agent' => __('Your package allows no more databases. Remove an app or ask us for a larger package.')]);
         }
         $data['path'] = trim((string) ($data['path'] ?? ''), '/');

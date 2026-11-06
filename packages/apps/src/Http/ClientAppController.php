@@ -37,4 +37,11 @@ final class ClientAppController extends AppController
 
         return $customer ? $this->installer->databasesLeft($customer) : 0;
     }
+
+    protected function hasDatabaseRoom(Website $website): bool
+    {
+        $left = $this->installer->databasesLeftFor($website);
+
+        return $left === null || $left > 0;
+    }
 }

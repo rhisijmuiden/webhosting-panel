@@ -73,7 +73,7 @@ class PhpSettings
 
     public function workers(Website $website): int
     {
-        return $website->customer?->package?->php_workers ?? $this->server()['workers'];
+        return $website->package?->php_workers ?? $this->server()['workers'];
     }
 
     /** Write the effective settings to the server (pool, Nginx upload size and timeouts). */

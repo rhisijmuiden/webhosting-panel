@@ -35,11 +35,13 @@ final class RestoreSubscription implements ShouldQueue
 
         try {
             $job->step('Recreating website', 10);
-            $s->customer->update(['hosting_package_id' => $s->hosting_package_id]);
-            $website = $s->customer->websites()->create([
+            $website = $s->customer->websites()->make([
                 'domain' => $s->primary_domain, 'php_version' => $s->php_version, 'status' => 'provisioning',
                 'ssl_status' => 'pending', 'disk_quota_mb' => $s->limit_overrides['disk_mb'] ?? $s->package?->disk_mb,
             ]);
+            // The panel subscription of the website gets the plan again.
+            $website->initialPackageId = $s->hosting_package_id;
+            $website->save();
             $s->update(['website_id' => $website->id]);
             (new ProvisionWebsite($website))->handle($agent);
             if ($website->fresh()->status !== 'active') {

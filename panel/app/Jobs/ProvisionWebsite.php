@@ -27,17 +27,11 @@ class ProvisionWebsite implements ShouldQueue
         $limits ??= app(ResourceLimits::class);
         $php ??= app(PhpSettings::class);
         $w = $this->website;
-        $customer = $w->customer;
+        $subscription = $w->effectiveSubscription();
         try {
-            // The customer's resource jail first, so the site starts inside it.
-            if ($customer) {
-                $agent->call('customer.limits', [
-                    'customer_id' => $customer->id,
-                    'cpu_percent' => $customer->package?->cpu_percent,
-                    'memory_mb' => $customer->package?->memory_mb,
-                    'io_mbps' => $customer->package?->io_mbps,
-                    'max_processes' => $customer->package?->max_processes,
-                ], 120);
+            // The subscription's resource jail first, so the site starts inside it.
+            if ($subscription) {
+                $limits->slice($subscription);
             }
             $site = $agent->call('site.add', array_filter([
                 'domain' => $w->domain,
@@ -47,7 +41,7 @@ class ProvisionWebsite implements ShouldQueue
                 'ssl' => $this->ssl,
                 'no_alias' => ! $this->wwwAlias,
                 'quota_mb' => $w->disk_quota_mb,
-                'customer_id' => $customer?->id,
+                'subscription_id' => $subscription?->id,
                 'php_workers' => $php->workers($w),
             ], fn ($v) => $v !== null), 840);
             $w->fillFromAgent($site);

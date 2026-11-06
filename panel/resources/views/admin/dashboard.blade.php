@@ -144,12 +144,11 @@
                 </x-ui.empty>
             @else
             <x-ui.table>
-                <x-slot:head><th>{{ __('Customer') }}</th><th>{{ __('Package') }}</th><th class="num">{{ __('Websites') }}</th><th>{{ __('Status') }}</th></x-slot:head>
+                <x-slot:head><th>{{ __('Customer') }}</th><th class="num">{{ __('Subscriptions') }}</th><th>{{ __('Status') }}</th></x-slot:head>
                 @foreach ($latestCustomers as $c)
                     <tr>
                         <td><div class="who"><span class="avatar avatar-soft" aria-hidden="true">{{ collect(preg_split('/\s+/', trim($c->displayName())))->filter()->take(2)->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))->join('') }}</span>
                             <span><a class="strong" href="{{ route('admin.customers.show', $c) }}">{{ $c->displayName() }}</a><small class="muted">{{ $c->email }}</small></span></div></td>
-                        <td>{{ $c->package?->name ?? '–' }}</td>
                         <td class="num">{{ $c->websites_count }}</td>
                         <td><x-ui.pill :status="$c->status">{{ __(ucfirst($c->status)) }}</x-ui.pill></td>
                     </tr>

@@ -10,6 +10,7 @@ use App\Models\HostingPackage;
 use App\Models\Website;
 use App\Services\Agent\AgentClient;
 use App\Services\Agent\AgentException;
+use App\Services\SubscriptionManager;
 use App\Services\WebsiteManager;
 use Illuminate\Support\Facades\DB;
 use Rhis\CrmApi\Jobs\ApplyPlan;
@@ -39,7 +40,6 @@ final class Subscriptions
         }
 
         [$subscription, $job] = DB::transaction(function () use ($customer, $plan, $data) {
-            $customer->update(['hosting_package_id' => $plan->id]);
             $subscription = Subscription::create([
                 'external_id' => $data['external_id'], 'customer_id' => $customer->id, 'hosting_package_id' => $plan->id,
                 'primary_domain' => $data['primary_domain'], 'status' => 'provisioning',
@@ -53,9 +53,9 @@ final class Subscriptions
 
         $profile = ($data['install']['app'] ?? null) === 'wordpress' ? 'wordpress' : 'php';
         // ProvisionWebsite runs on the queue; SubscriptionObserver finishes the job when the site is active or failed.
-        $website = $this->websites->create($customer->fresh('package'), [
+        $website = $this->websites->create($customer, [
             'domain' => $data['primary_domain'], 'php_version' => $subscription->php_version, 'profile' => $profile,
-            'ssl' => true, 'www_alias' => true,
+            'ssl' => true, 'www_alias' => true, 'hosting_package_id' => $plan->id,
         ]);
         if ($quota = ($data['limit_overrides']['disk_mb'] ?? null)) {
             $website->updateQuietly(['disk_quota_mb' => $quota]);
@@ -174,10 +174,20 @@ final class Subscriptions
         if (! $website) {
             return;
         }
-        $website->update(['status' => $state === 'suspend' ? 'suspended' : 'active']);
+        $panel = $website->subscription;
         try {
-            $this->agent->call("site.{$state}", ['domain' => $website->domain], 120);
+            if ($panel) {
+                // The panel subscription follows (status, reason and the suspension page).
+                $state === 'suspend'
+                    ? app(SubscriptionManager::class)->suspend($panel, 'Suspended by the CRM: '.($s->suspension['reason'] ?? 'other'))
+                    : app(SubscriptionManager::class)->activate($panel);
+            } else {
+                $website->update(['status' => $state === 'suspend' ? 'suspended' : 'active']);
+                $this->agent->call("site.{$state}", ['domain' => $website->domain], 120);
+            }
         } catch (AgentException $e) {
+            $website->update(['status' => $state === 'suspend' ? 'suspended' : 'active']);
+            $panel?->update(['status' => $state === 'suspend' ? 'suspended' : 'active']);
             // The login is blocked either way; the server side is retried by the admin.
             ActivityLog::record('crm.site_state_not_applied', $website->domain, ['state' => $state, 'error' => $e->getMessage()], $s->customer_id);
         }
