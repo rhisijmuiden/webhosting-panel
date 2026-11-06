@@ -7,6 +7,7 @@ use App\Models\Website;
 use App\Services\Agent\AgentException;
 use App\Services\PhpSettings;
 use App\Services\WebsiteManager;
+use App\Support\SiteOverview;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -24,8 +25,10 @@ class WebsiteController extends Controller
     public function show(Request $request, Website $website): View
     {
         $this->authorizeSite($request, $website);
+        $website->loadMissing('customer.package');
+        $overview = new SiteOverview($website);
 
-        return view('client.websites.show', compact('website'));
+        return view('client.websites.show', ['o' => $overview, 'tab' => $overview->tab(is_string($t = $request->query('tab')) ? $t : null)]);
     }
 
     public function update(Request $request, Website $website): RedirectResponse

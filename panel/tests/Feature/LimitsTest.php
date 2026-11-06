@@ -107,7 +107,7 @@ class LimitsTest extends TestCase
         $user = User::factory()->create(['customer_id' => $c->id, 'role' => User::ROLE_CLIENT]);
         $site = Website::create(['customer_id' => $c->id, 'domain' => 'jan.nl', 'status' => 'active']);
         $this->actingAs($user);
-        $this->get("/websites/{$site->id}")->assertOk()->assertSee('PHP settings');
+        $this->get("/websites/{$site->id}?tab=hosting")->assertOk()->assertSee('PHP settings');
 
         $this->put("/websites/{$site->id}/php", ['php' => ['memory_limit' => 2048]])->assertSessionHasErrors('php.memory_limit');
         $this->put("/websites/{$site->id}/php", ['php' => ['memory_limit' => 384, 'upload_max_filesize' => 256, 'display_errors' => 'on']])

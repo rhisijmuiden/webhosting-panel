@@ -48,7 +48,7 @@ class DomainAliasesTest extends TestCase
         $main->mailboxes()->create(['local_part' => 'info', 'password_hash' => Mailbox::hashPassword('een-lang-wachtwoord')]);
         $main->aliases()->create(['local_part' => 'sales', 'targets' => ['info@klant.nl']]);
 
-        $this->actingAs($user)->get("/websites/{$site->id}")->assertOk()->assertSee(__('Domain aliases'))->assertSee(__('Add alias'));
+        $this->actingAs($user)->get("/websites/{$site->id}?tab=hosting")->assertOk()->assertSee(__('Domain aliases'))->assertSee(__('Add alias'));
         $this->addAlias($user, $site, ['domain' => 'https://Klant.BE/'])->assertRedirect()->assertSessionHasNoErrors();
 
         $alias = DomainAlias::sole();
@@ -81,7 +81,7 @@ class DomainAliasesTest extends TestCase
         $this->addAlias($user, $site)->assertSessionHasNoErrors();
         $this->addAlias($user, $site, ['domain' => 'klant.de'])->assertSessionHasErrors('domain');
         $this->addAlias($user, $site, ['domain' => 'klant.be'])->assertSessionHasErrors('domain');
-        $this->actingAs($user)->get("/websites/{$site->id}")->assertSee('1 of 1 used');
+        $this->actingAs($user)->get("/websites/{$site->id}?tab=hosting")->assertSee('1 of 1 used');
 
         // Admins are not bound to the package limit.
         $this->actingAsAdmin();
@@ -123,7 +123,7 @@ class DomainAliasesTest extends TestCase
         $this->addAlias($user, $site);
         $alias = DomainAlias::sole();
         $this->assertSame('failed', $alias->status);
-        $this->actingAs($user)->get("/websites/{$site->id}")->assertSee('already in use by site x.nl');
+        $this->actingAs($user)->get("/websites/{$site->id}?tab=hosting")->assertSee('already in use by site x.nl');
 
         $this->agent()->respond('site.alias_remove', new AgentException('command_failed', 'klant.be is not an alias of klant.nl'));
         $this->actingAs($user)->delete("/domain-aliases/{$alias->id}")->assertSessionHasNoErrors();
