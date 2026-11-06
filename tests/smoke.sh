@@ -150,7 +150,8 @@ PY
   AUTH_LOG=/var/log/webhosting-panel/auth.log
   SITE_LOG=/var/www/vhosts/site.test/logs/access.log
   check "panel applies login protection" runuser -u whp -- php /opt/webhosting-panel/panel/artisan whp:security:apply
-  check "crowdsec has the panel scenarios" bash -c 'cscli scenarios list -a -o raw | grep -q "whp/wordpress-bf"'
+  # Local scenarios do not show up in "cscli scenarios list"; the ban checks below prove they are loaded.
+  check "crowdsec accepts the generated configuration" bash -c 'grep -q "whp/wordpress-bf" /etc/crowdsec/scenarios/whp-login.yaml && crowdsec -c /etc/crowdsec/config.yaml -t'
   check "agent applies allowlists and per-site settings (crowdsec -t passes)" agent_call security.apply \
     '{"allowlist":[{"address":"198.51.100.0/24","comment":"ci"}],"sites":[{"domain":"site.test","allowlist":["203.0.113.52"]},{"domain":"off.test","enabled":false,"wordpress":false}]}'
   check "an invalid setting is refused" bash -c '! agent_call security.apply "{\"services\":{\"ssh\":{\"temp_after\":9,\"perm_after\":3}}}"'
