@@ -4,14 +4,14 @@
     @include('client.websites.overview.tile', ['href' => $o->mailLink('dns'), 'icon' => 'globe', 'label' => __('DNS records'),
         'sub' => match ($dns) { 'ok' => __('All records are correct'), 'warn' => __('Some records need attention'), 'bad' => __('There is a DNS problem'), null => null, default => __('Not checked yet') },
         'tone' => in_array($dns, ['ok', 'warn', 'bad'], true) ? $dns : null])
-    @if ($o->has('client.domain-aliases.index'))
+    @if ($o->has('domain-aliases.index'))
         @include('client.websites.overview.tile', ['href' => '#domain-aliases', 'icon' => 'link', 'label' => __('Domain aliases'), 'sub' => __('Extra domains for this website')])
     @endif
 </div>
 
 <section class="grid grid-2" style="align-items:start" id="php">
     <x-ui.card :title="__('PHP version')">
-        <form method="POST" action="{{ route('client.websites.update', $site) }}" class="form">
+        <form method="POST" action="{{ $o->url('websites.update', $site) }}" class="form">
             @csrf @method('PUT')
             <p class="muted small">{{ __('Only versions that still get security updates are offered. Switching takes a few seconds, without downtime.') }}</p>
             <div class="seg" role="radiogroup" aria-label="{{ __('PHP version') }}">
@@ -23,7 +23,7 @@
         </form>
     </x-ui.card>
     <x-ui.card :title="__('Speed & caching')" id="cache">
-        <form method="POST" action="{{ route('client.websites.update', $site) }}" class="form">
+        <form method="POST" action="{{ $o->url('websites.update', $site) }}" class="form">
             @csrf @method('PUT')
             <p class="muted small">{{ __('Pages are served straight from the server cache. Logged-in visitors and shopping carts are skipped automatically.') }}</p>
             <input type="hidden" name="page_cache" value="0">
@@ -47,8 +47,10 @@
             <p class="muted small">{{ __('This website has no database yet. The app installer creates one for you.') }}</p>
         @endforelse
     </x-ui.card>
-    @includeIf('security::client.site-card', ['website' => $site])
+    @unless ($o->isAdmin())
+        @includeIf('security::client.site-card', ['website' => $site])
+    @endunless
 </section>
-@include('partials.website-php', ['website' => $site, 'action' => route('client.websites.php', $site)])
+@include('partials.website-php', ['website' => $site, 'action' => $o->url('websites.php', $site)])
 @includeIf('domain-aliases::partials.website-card', ['website' => $site])
 @includeIf('subdomains::partials.website-card', ['website' => $site])

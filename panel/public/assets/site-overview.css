@@ -1,14 +1,14 @@
 /* Client domain page (client.websites.show): own file so app.css stays untouched. */
 .site-page { display: grid; gap: 18px; align-items: start; grid-template-columns: 290px minmax(0, 1fr) 270px; grid-template-areas: "side main rail"; }
 .site-side { grid-area: side; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.site-main { grid-area: main; padding: 0; gap: 0; }
+.site-main { grid-area: main; padding: 0; gap: 0; min-width: 0; }
 .site-rail { grid-area: rail; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 @media (max-width: 1320px) {
-  .site-page { grid-template-columns: 280px minmax(0, 1fr); grid-template-areas: "side main" "rail main"; }
+  .site-page { grid-template-columns: 280px minmax(0, 1fr); grid-template-rows: auto 1fr; grid-template-areas: "side main" "rail main"; }
   .site-rail { grid-row: 2; }
 }
 @media (max-width: 900px) {
-  .site-page { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "side" "rail"; }
+  .site-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "main" "side" "rail"; }
   .site-rail { grid-row: auto; }
 }
 
@@ -61,3 +61,16 @@
 .wp-grid form { margin: 0; }
 .site-rail .kv-tight dd .pill { margin-left: auto; }
 .site-rail .btn { max-width: 100%; white-space: normal; text-align: left; }
+
+/* Admin side of the domain page: the admin sidebar is wider, so drop to two columns sooner,
+   let the extra Administration tab wrap instead of hiding it, and break long paths. */
+.site-page.is-admin .site-tabs { flex-wrap: wrap; }
+.site-page .kv dd.mono { overflow-wrap: anywhere; }
+@media (max-width: 1560px) {
+  .site-page.is-admin { grid-template-columns: 280px minmax(0, 1fr); grid-template-rows: auto 1fr; grid-template-areas: "side main" "rail main"; }
+  .site-page.is-admin .site-rail { grid-row: 2; }
+}
+@media (max-width: 900px) {
+  .site-page.is-admin { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "main" "side" "rail"; }
+  .site-page.is-admin .site-rail { grid-row: auto; }
+}

@@ -245,7 +245,7 @@ class DomainAliasesTest extends TestCase
 
         $this->get('/admin/domain-aliases')->assertOk()->assertSee('klant.be')->assertSee('Jan');
         $this->get('/admin')->assertSee(route('admin.domain-aliases.index'), false);
-        $this->get("/admin/websites/{$site->id}")->assertOk()->assertSee('klant.be');
+        $this->get("/admin/websites/{$site->id}?tab=hosting")->assertOk()->assertSee('klant.be');
         $this->get("/admin/domain-aliases/{$alias->id}/convert")->assertOk()->assertSee(__('Convert now'));
         $this->post("/admin/domain-aliases/{$alias->id}/convert", ['confirm' => 'klant.be'])->assertRedirect();
         $this->assertTrue(Website::where('domain', 'klant.be')->exists());

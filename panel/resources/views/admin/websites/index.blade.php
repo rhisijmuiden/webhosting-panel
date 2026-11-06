@@ -113,8 +113,8 @@
                                 @if ($x['mail'] && Route::has('admin.mail.domains.index'))
                                     <a href="{{ route('admin.mail.domains.index') }}" title="{{ __('Mail & DNS') }}" aria-label="{{ __('Mail & DNS') }} {{ $w->domain }}"><x-icon name="mail" /></a>
                                 @endif
-                                <a href="{{ route('admin.websites.show', $w) }}#databases" title="{{ __('Databases') }}" aria-label="{{ __('Databases') }} {{ $w->domain }}"><x-icon name="database" /></a>
-                                <a href="{{ route('admin.websites.show', $w) }}" title="{{ __('Settings') }}" aria-label="{{ __('Settings') }} {{ $w->domain }}"><x-icon name="tools" /></a>
+                                <a href="{{ route('admin.websites.show', [$w, 'tab' => 'hosting']) }}#databases" title="{{ __('Databases') }}" aria-label="{{ __('Databases') }} {{ $w->domain }}"><x-icon name="database" /></a>
+                                <a href="{{ route('admin.websites.show', [$w, 'tab' => 'hosting']) }}" title="{{ __('Settings') }}" aria-label="{{ __('Settings') }} {{ $w->domain }}"><x-icon name="tools" /></a>
                             </div>
                         </td>
                     </tr>

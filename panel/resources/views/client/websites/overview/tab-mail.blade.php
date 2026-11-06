@@ -18,7 +18,7 @@
     </div>
 @else
     <x-ui.empty icon="mail">{{ __('Email is not set up for this domain yet.') }}</x-ui.empty>
-    @if ($o->has('client.mail.domains.index'))
-        <div><a class="btn btn-primary" href="{{ route('client.mail.domains.index') }}"><x-icon name="mail" />{{ __('Set up email') }}</a></div>
+    @if ($o->has('mail.domains.index'))
+        <div><a class="btn btn-primary" href="{{ $o->url('mail.domains.index') }}"><x-icon name="mail" />{{ __('Set up email') }}</a></div>
     @endif
 @endif

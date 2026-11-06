@@ -9,6 +9,7 @@ use App\Models\Website;
 use App\Services\Agent\AgentException;
 use App\Services\PhpSettings;
 use App\Services\WebsiteManager;
+use App\Support\SiteOverview;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -81,9 +82,13 @@ class WebsiteController extends Controller
         return redirect()->route('admin.websites.show', $website)->with('status', __('The website is being set up.'));
     }
 
-    public function show(Website $website): View
+    /** The client's domain page, seen from the admin panel (admin sidebar, admin routes, extra Administration tab). */
+    public function show(Request $request, Website $website): View
     {
-        return view('admin.websites.show', ['website' => $website->load('customer', 'subscription.package', 'databases')]);
+        $website->load('customer', 'subscription.package', 'databases');
+        $overview = new SiteOverview($website, 'admin');
+
+        return view('admin.websites.show', ['o' => $overview, 'tab' => $overview->tab(is_string($t = $request->query('tab')) ? $t : null)]);
     }
 
     public function update(Request $request, Website $website): RedirectResponse
