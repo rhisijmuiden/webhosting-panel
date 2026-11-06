@@ -378,6 +378,7 @@ def _units(domain, path):
 
 def _write_cron_units(domain, path, interval):
     site, d = wordpress.require_install(domain, path)
+    wordpress.ensure_cli()
     name, service, timer = _units(domain, path)
     service.write_text(
         "# Managed by whp-agent (WordPress toolkit). WP-cron for "

@@ -19,6 +19,8 @@ from whp_agent import jobs, paths, wordpress  # noqa: E402
 from whp_agent.actions import wordpress as wpa  # noqa: E402
 from whp_agent.registry import ActionError  # noqa: E402
 
+REAL_ENSURE_CLI = wordpress.ensure_cli
+
 
 def make_wp(d, version="6.6.2"):
     (d / "wp-includes").mkdir(parents=True)
@@ -95,6 +97,7 @@ class WordPressTest(unittest.TestCase):
             mock.patch.object(wordpress, "SITES_DB", str(root / "sites")),
             mock.patch.dict(os.environ, {"WHP_VHOSTS": str(root / "vhosts")}),
             mock.patch.object(wordpress, "run", self.fake),
+            mock.patch.object(wordpress, "ensure_cli", lambda: wordpress.WP_CLI),
             mock.patch.object(wpa, "run", self.fake),
             mock.patch.object(wpa, "STATE", root / "state/wordpress"),
             mock.patch.object(wpa, "SNAPSHOTS", root / "state/wordpress/snapshots"),
@@ -280,6 +283,50 @@ class WordPressTest(unittest.TestCase):
         mu = [c for c in self.fake.calls if "/bin/sh" in c["argv"]][0]
         self.assertIn("whp_sso", mu["input"])
         self.assertIn("--uid=s_klant_nl", mu["argv"])
+
+    def test_failures_show_the_real_reason_not_the_exit_code(self):
+        cases = [
+            ("Failed to start transient service unit: Unit whp-sites-c3.slice has a bad unit file setting.\n", "",
+             "systemd-run: Failed to start transient service unit: Unit whp-sites-c3.slice has a bad unit file setting."),
+            ("Error: Error establishing a database connection. This either means that the username and password "
+             "information in your <code>wp-config.php</code> file is incorrect.\n", "",
+             "Error: Error establishing a database connection. This either means that the username and password "
+             "information in your wp-config.php file is incorrect."),
+            ("PHP Warning:  require_once(/var/www/vhosts/klant.nl/public/wp-config.php): Failed to open stream: Permission denied\n"
+             "PHP Fatal error:  Uncaught Error: Failed opening required 'wp-config.php'\n", "",
+             "wp-config.php): Failed to open stream: Permission denied"),
+            ("", "", "exit code 1, no output"),
+        ]
+        for stderr, stdout, expected in cases:
+            with self.subTest(expected=expected[:40]):
+                proc = SimpleNamespace(stdout=stdout, stderr=stderr, returncode=1)
+                with mock.patch.object(wordpress, "run", return_value=proc), self.assertRaises(ActionError) as e:
+                    wpa.wp_login_link({"domain": "klant.nl"})
+                self.assertEqual("command_failed", e.exception.code)
+                self.assertIn(expected, e.exception.message)
+                self.assertNotIn("systemd-run exited", e.exception.message)
+                self.assertEqual(1, e.exception.details["exit_code"])
+
+    def test_missing_wp_cli_is_installed_with_checksum_check(self):
+        import hashlib
+        phar = b"<?php // fake phar"
+        target = self.root / "bin/wp"
+        target.parent.mkdir()
+
+        def opener(sums):
+            def urlopen(req, timeout):
+                body = sums if req.full_url.endswith(".sha512") else phar
+                return mock.MagicMock(__enter__=lambda s: mock.MagicMock(read=lambda n: body), __exit__=lambda *a: False)
+            return urlopen
+
+        with mock.patch.object(wordpress, "WP_CLI", str(target)):
+            with mock.patch("urllib.request.urlopen", opener(b"0" * 128)), self.assertRaises(ActionError):
+                REAL_ENSURE_CLI()
+            self.assertFalse(target.exists())
+            with mock.patch("urllib.request.urlopen", opener(hashlib.sha512(phar).hexdigest().encode() + b"  wp-cli.phar")):
+                self.assertEqual(str(target), REAL_ENSURE_CLI())
+            self.assertEqual(phar, target.read_bytes())
+            self.assertEqual(0o755, target.stat().st_mode & 0o777)
 
     def test_mu_plugin_is_valid_php(self):
         import shutil
