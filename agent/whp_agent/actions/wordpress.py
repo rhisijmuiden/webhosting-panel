@@ -391,7 +391,7 @@ def _write_cron_units(domain, path, interval):
         "Slice=whp-sites.slice\n"
         "UMask=0022\nNice=10\nIOSchedulingClass=idle\n"
         "NoNewPrivileges=yes\nPrivateTmp=yes\nProtectSystem=full\nProtectHome=yes\n"
-        "RuntimeMaxSec=15min\nMemoryMax=1G\n"
+        "TimeoutStartSec=15min\nMemoryMax=1G\n"
         f"WorkingDirectory={d}\n"
         f"Environment=HOME={site['root']} TMPDIR={site['root']}/tmp WP_CLI_CACHE_DIR={site['root']}/tmp/wp-cli-cache"
         " WP_CLI_DISABLE_AUTO_CHECK_UPDATE=1\n"

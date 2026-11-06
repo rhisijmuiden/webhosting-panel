@@ -130,6 +130,8 @@ def wp_argv(site, wp_dir, args, timeout=300, memory="512M"):
     tmp = os.path.join(site["root"], "tmp")
     return [
         SYSTEMD_RUN, "--quiet", "--wait", "--pipe", "--collect",
+        # Pass the arguments literally: no $VAR expansion (wp eval code contains $).
+        "--expand-environment=no",
         f"--uid={site['user']}", f"--gid={site['user']}",
         "--slice=whp-sites.slice",
         f"--working-directory={wp_dir}",

@@ -144,6 +144,7 @@ class WordPressTest(unittest.TestCase):
         self.assertIn("--uid=s_klant_nl", argv)
         self.assertIn("--slice=whp-sites.slice", argv)
         self.assertIn("UMask=0022", argv)
+        self.assertIn("--expand-environment=no", argv)  # wp eval code has $variables
         self.assertIn("/usr/bin/php8.4", argv)
         self.assertIn(f"--path={self.docroot}", argv)
         self.assertEqual(["--skip-plugins", "--skip-themes"], argv[-2:])
