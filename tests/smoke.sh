@@ -90,6 +90,9 @@ check "smtps 465 TLS" bash -c "echo QUIT | timeout 5 openssl s_client -quiet -co
 check "imaps 993 TLS" bash -c "echo 'a logout' | timeout 5 openssl s_client -quiet -connect 127.0.0.1:993 2>/dev/null | grep -q '^\* OK'"
 check "imap login over TLS" bash -c "printf 'a login info@example.test Test-1234-pass\r\nb logout\r\n' | timeout 5 openssl s_client -quiet -connect 127.0.0.1:993 2>/dev/null | grep -q '^a OK'"
 check "managesieve 4190" bash -c 'exec 3<>/dev/tcp/127.0.0.1/4190; read -t 5 l <&3; [[ $l == *IMPLEMENTATION* ]]'
+check "doveconf accepts the spam sieve_script" bash -c "doveconf -n | grep -q whp_spam && [[ -f /var/lib/webhosting-panel/mail/sieve/before.svbin ]]"
+check "hostname certificate keeps its key (DANE)" grep -q -- "--reuse-key" /usr/local/sbin/whp-cert
+check "rspamd adds X-Spam-Level for the quarantine rules" grep -q x-spam-level /etc/rspamd/local.d/milter_headers.conf
 printf 'Subject: smoke\nFrom: root@%s\nTo: info@example.test\n\nhello\n' "$HOST" | sendmail -t -i
 for i in $(seq 1 30); do
   compgen -G '/var/vmail/example.test/info/Maildir/new/*' >/dev/null && break

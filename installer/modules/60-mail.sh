@@ -137,7 +137,14 @@ mail_dovecot() {
   backup_once /etc/dovecot/dovecot.conf
   render "$TPL/dovecot/dovecot.conf" /etc/dovecot/dovecot.conf
   [[ -f /etc/dovecot/users ]] || install -m 0640 -o root -g dovecot /dev/null /etc/dovecot/users
+
+  # Spam routing script: shipped once, afterwards owned by the panel agent.
+  local sieve_dir=/var/lib/webhosting-panel/mail/sieve src=$REPO_DIR/mail/antispam/before.sieve
+  [[ -f $src ]] || src=$TPL/dovecot/before.sieve
+  install -d -m 0755 "$sieve_dir"
+  [[ -f $sieve_dir/before.sieve ]] || install -m 0644 "$src" "$sieve_dir/before.sieve"
   run doveconf -n
+  run sievec "$sieve_dir/before.sieve"
   svc_enable dovecot
   svc_restart dovecot
   ok "dovecot $(dovecot --version | cut -d' ' -f1)"
