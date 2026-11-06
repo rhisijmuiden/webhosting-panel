@@ -168,6 +168,10 @@ vhost and its own certificate (cert name = alias). `whp-site show` returns
 `domain_aliases`. Mail: `mail_domains.alias_of_id` (dns-mail) makes `MailPusher` add
 `user@alias -> user@main` for every mailbox and alias. See `packages/domain-aliases/README.md`.
 
+Git deployments (`git.py`, screens in `packages/git`, `Rhis\Git\`, admin `/admin/git`, client `/git`,
+public webhook `POST /git/webhook/<uuid>`): `git.key`, `git.check`, `git.fetch`, `git.status`,
+`git.rollback`, `git.remove`, `git.tools` and the job `git.deploy`. See `docs/git.md`.
+
 ## Release channels
 
 | Channel | Git branch |

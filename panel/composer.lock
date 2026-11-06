@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ba123a18ed9de6946b6a38729c427d47",
+    "content-hash": "50eccc8e886a74e4a12f2bef6d9fa743",
     "packages": [
         {
             "name": "brick/math",
@@ -3480,6 +3480,39 @@
                 "proprietary"
             ],
             "description": "Domain aliases for the Webhosting Panel: extra domains on a hosting package (web, SSL, DNS, mail), convertible into a website of their own via the RHIS CRM.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/git",
+            "version": "dev-claude/project-thread-6er7hu",
+            "dist": {
+                "type": "path",
+                "url": "../packages/git",
+                "reference": "38281de17096fa05bbc601ae231c691fcc09f327"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Git\\GitServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Git\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Git deployments for the Webhosting Panel: link a GitHub, GitLab, Bitbucket or Gitea repository to a website, deploy on push through a webhook, build steps and zero-downtime releases.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8763,6 +8796,7 @@
         "rhis/crm-api": 20,
         "rhis/dns-mail": 20,
         "rhis/domain-aliases": 20,
+        "rhis/git": 20,
         "rhis/migration": 20,
         "rhis/vulnerabilities": 20,
         "rhis/wordpress": 20
