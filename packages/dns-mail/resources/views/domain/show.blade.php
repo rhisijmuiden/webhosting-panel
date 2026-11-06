@@ -1,8 +1,8 @@
 @php
     $r = fn (string $name, array $extra = []) => route($area . '.mail.domains.' . $name, [$domain->id, ...$extra]);
-    $tabs = ['mail' => __('Mail settings'), 'mailboxes' => __('Mailboxes'), 'spam' => __('Spam & quarantine'), 'dns' => __('DNS records')];
+    $tabs = ['mail' => __('Mail settings'), 'mailboxes' => __('Mailboxes'), 'spam' => __('Spam & quarantine'), 'import' => __('Import mail'), 'dns' => __('DNS records')];
     if (! $domain->hasLocalMail()) {
-        unset($tabs['spam']);
+        unset($tabs['spam'], $tabs['import']);
     }
 @endphp
 <x-dynamic-component :component="'layouts.' . $area" :title="$domain->domain">

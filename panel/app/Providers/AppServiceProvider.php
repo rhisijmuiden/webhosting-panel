@@ -121,6 +121,7 @@ class AppServiceProvider extends ServiceProvider
                 'subscriptions' => ['section' => 'Hosting services', 'order' => 120],
                 'packages' => ['section' => 'Hosting services', 'order' => 130, 'label' => 'Service plans', 'badge' => $count(\App\Models\HostingPackage::class)],
                 'domains' => ['section' => 'Hosting services', 'order' => 140, 'label' => 'Mail & DNS'],
+                'mail-imports' => ['section' => 'Hosting services', 'order' => 145],
                 'domain-aliases' => ['section' => 'Hosting services', 'order' => 150],
                 'migration' => ['section' => 'Hosting services', 'order' => 160, 'label' => 'Migrations'],
                 'wordpress' => ['section' => 'Additional services', 'order' => 200],
