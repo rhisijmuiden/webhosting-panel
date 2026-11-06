@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Rhis\Backups\Http\AdminBackupController as C;
 use Rhis\Backups\Http\AdminBrowserController as B;
+use Rhis\Backups\Http\AdminOneDriveController;
 
 Route::get('/', [C::class, 'index'])->name('index');
 Route::post('/run', [C::class, 'run'])->name('run');
@@ -18,3 +19,4 @@ Route::get('/jobs/{job}', [C::class, 'job'])->name('jobs.show');
 Route::get('/browse', [B::class, 'index'])->name('browse');
 Route::post('/browse/restore', [B::class, 'restore'])->name('browse.restore');
 Route::get('/customers', [B::class, 'customers'])->name('customers');
+Route::put('/onedrive', [AdminOneDriveController::class, 'update'])->name('onedrive.update');
