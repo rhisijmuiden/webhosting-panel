@@ -70,6 +70,8 @@ jobs:
             --no-letsencrypt --clamav
       - name: Smoke tests
         run: docker exec whp bash /root/src/tests/smoke.sh
+      - name: Backup engine tests (backups, restores, restore tests with MariaDB)
+        run: docker exec -e WHP_TEST_DB=1 whp bash /root/src/backup/tests/run.sh
       - name: Second run (idempotent)
         run: |
           docker exec whp /root/src/installer/install.sh -y --no-letsencrypt
