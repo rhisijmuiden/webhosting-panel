@@ -77,6 +77,8 @@ step("deploy key made as the site user", key["public_key"].startswith("ssh-ed255
 state = deploy(steps=[{"type": "command", "command": "id -un > whoami.txt"}], allow_commands=True)
 step("first deploy", state["status"] == "succeeded", str(state.get("error")) + "\n".join(state["log"][-10:]))
 step("docroot is a link to the release", os.path.islink(site["docroot"]))
+probe = subprocess.run(["runuser", "-u", "www-data", "--", "test", "-r", os.path.join(site["docroot"], "index.php")])
+step("nginx user can read the release", probe.returncode == 0)
 step("nginx serves release 1", "git-release-1" in page(), page()[:200])
 with open(os.path.join(site["docroot"], "whoami.txt")) as fh:
     step("build steps run as the site user", fh.read().strip() == site["user"])

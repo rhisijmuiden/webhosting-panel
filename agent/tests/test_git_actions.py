@@ -142,6 +142,9 @@ class GitDeployTest(unittest.TestCase):
         self.assertEqual(first, g.key(self.params()))
         self.assertNotEqual(first["public_key"], g.key(self.params(rotate=True))["public_key"])
         self.assertEqual(0o600, (self.site_root / "git/repo-0001/deploy_key").stat().st_mode & 0o777)
+        # Nginx is not in the site's group: it must be able to pass through to the releases.
+        for d in ["git/repo-0001", "git/repo-0001/releases", "git/repo-0001/shared"]:
+            self.assertEqual(0o711, (self.site_root / d).stat().st_mode & 0o777, d)
 
     def test_check_lists_branches_with_the_default_first(self):
         sh(GIT, "branch", "develop", cwd=self.remote)

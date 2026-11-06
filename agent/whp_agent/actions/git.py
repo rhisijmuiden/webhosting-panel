@@ -240,7 +240,9 @@ def _friendly(exc):
 def ensure_repo(site, rid):
     """Create git/<id>/ and the bare repository (as the site user)."""
     d = repo_dir(site, rid)
-    as_user(site, ["/usr/bin/mkdir", "-p", "-m", "0700", d, f"{d}/releases", f"{d}/shared"])
+    # 0711: Nginx (www-data, not in the site's group) must reach the release files, but may not list
+    # the folder; the deploy key itself is 0600.
+    as_user(site, ["/usr/bin/mkdir", "-p", "-m", "0711", d, f"{d}/releases", f"{d}/shared"])
     if not os.path.isfile(os.path.join(d, "repo.git", "HEAD")):
         as_user(site, [GIT, "init", "--quiet", "--bare", f"{d}/repo.git"], env={"GIT_CONFIG_NOSYSTEM": "1"})
 
