@@ -17,6 +17,7 @@
     "Every website is a subscription: one domain on one hosting package, with an owner, a setup date and an optional expiry date. The limits of the package apply to that website alone.": "Elke website is een abonnement: één domein op één hostingpakket, met een abonnementhouder, een datum van instellen en eventueel een verloopdatum. De limieten van het pakket gelden alleen voor die website.",
     "Expiry date": "Verloopdatum",
     "Filtered": "Gefilterd",
+    "Hosting packages with the limits per website (subscription). Prices and invoices live in the CRM.": "Hostingpakketten met de limieten per website (abonnement). Prijzen en facturen staan in het CRM.",
     "inactive": "inactief",
     "Items per page": "Aantal per pagina",
     "New owner": "Nieuwe abonnementhouder",

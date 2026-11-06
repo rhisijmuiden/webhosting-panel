@@ -26,7 +26,7 @@ class CustomerController extends Controller
                 ->orWhereHas('websites', fn ($w) => $w->where('domain', 'like', "%{$search}%"))))
             ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
             // Customers with at least one subscription on this package.
-            ->when($request->query('package'), fn ($q, $p) => $q->whereHas('websites.subscription', fn ($s) => $s->where('hosting_package_id', $p)))
+            ->when($request->integer('package'), fn ($q, $p) => $q->whereHas('websites.subscription', fn ($s) => $s->where('hosting_package_id', $p)))
             ->orderBy('name')
             ->paginate(25)->withQueryString();
 

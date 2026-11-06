@@ -13,9 +13,34 @@ use Illuminate\View\View;
 
 class PackageController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        return view('admin.packages.index', ['packages' => HostingPackage::withCount('subscriptions')->orderBy('name')->get()]);
+        $tab = in_array($request->query('tab'), ['active', 'inactive'], true) ? $request->query('tab') : 'all';
+        $search = trim((string) $request->query('q'));
+        $packages = HostingPackage::withCount('subscriptions')
+            ->when($tab !== 'all', fn ($q) => $q->where('is_active', $tab === 'active'))
+            ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%"))
+            ->orderBy('name')->get();
+
+        return view('admin.packages.index', [
+            'packages' => $packages,
+            'tab' => $tab,
+            'search' => $search,
+            'counts' => ['all' => HostingPackage::count(), 'active' => HostingPackage::where('is_active', true)->count(), 'inactive' => HostingPackage::where('is_active', false)->count()],
+        ]);
+    }
+
+    /** A copy of a package to start a new one from; it is inactive and has no CRM link yet. */
+    public function duplicate(HostingPackage $package): RedirectResponse
+    {
+        $copy = $package->replicate(['subscriptions_count']);
+        $copy->name = __(':name (copy)', ['name' => $package->name]);
+        $copy->crm_id = null;
+        $copy->is_active = false;
+        $copy->save();
+        ActivityLog::record('package.created', $copy->name);
+
+        return redirect()->route('admin.packages.edit', $copy)->with('status', __('Package copied. Check the name and limits, then activate it.'));
     }
 
     public function create(): View
