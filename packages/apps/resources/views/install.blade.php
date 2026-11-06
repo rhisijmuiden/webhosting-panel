@@ -47,7 +47,7 @@
                     <input type="hidden" name="locale" value="{{ $meta['locales'][0] }}">
                 @endif
                 <x-ui.field name="admin_user" :label="__('Admin username')" :value="old('admin_user', $defaults['admin_user'])" required autocomplete="off" spellcheck="false"
-                    :help="__('Avoid admin: it is the first name attackers try.')" />
+                    :help="isset($meta['admin_user_hint']) ? __($meta['admin_user_hint']).' '.__('Avoid admin: it is the first name attackers try.') : __('Avoid admin: it is the first name attackers try.')" />
                 <x-ui.field name="admin_email" type="email" :label="__('Admin e-mail address')" :value="old('admin_email', $defaults['admin_email'])" required />
                 <div class="field" style="grid-column: 1 / -1">
                     <label for="f-admin_password">{{ __('Admin password') }} <span aria-hidden="true">*</span></label>

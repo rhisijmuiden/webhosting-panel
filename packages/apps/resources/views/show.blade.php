@@ -37,16 +37,35 @@
         </div>
     @else
         @if ($installation->error)<div class="alert alert-warn" role="alert"><x-icon name="info" />{{ $installation->error }}</div>@endif
+        @php
+            $wordpressBased = in_array($installation->app, ['wordpress', 'woocommerce'], true) && \Illuminate\Support\Facades\Route::has($area.'.wordpress.index');
+        @endphp
+        @if ($update['update_available'] ?? false)
+            <div class="alert alert-warn" role="status"><x-icon name="refresh" />
+                <div><strong>{{ __(':app :new is available (installed: :old).', ['app' => $meta['name'], 'new' => $update['latest_version'], 'old' => $installation->version ?? '–']) }}</strong>
+                <p class="small">{{ $wordpressBased
+                    ? __('Update it with the WordPress tools: a snapshot is made first, so you can go back.')
+                    : __('Update it from the admin screen of :app. Make a backup of the website first.', ['app' => $meta['name']]) }}</p></div>
+                @if ($wordpressBased)
+                    <a class="btn btn-sm" href="{{ route($area.'.wordpress.index') }}">{{ __('WordPress tools') }}</a>
+                @else
+                    <a class="btn btn-sm" href="{{ $installation->admin_url }}" target="_blank" rel="noopener">{{ __('Open :app', ['app' => $meta['name']]) }}<x-icon name="external" /></a>
+                @endif
+            </div>
+        @endif
         <x-ui.card :title="__('Details')">
             <dl class="kv">
                 <dt>{{ __('Address') }}</dt><dd><a href="{{ $installation->url }}" target="_blank" rel="noopener">{{ $installation->url }}</a></dd>
                 <dt>{{ __('Admin') }}</dt><dd><a href="{{ $installation->admin_url }}" target="_blank" rel="noopener">{{ $installation->admin_url }}</a></dd>
                 <dt>{{ __('Admin username') }}</dt><dd class="mono">{{ $installation->admin_user }}</dd>
-                <dt>{{ __('Version') }}</dt><dd>{{ $installation->version ?? '–' }}</dd>
+                <dt>{{ __('Version') }}</dt><dd>{{ $installation->version ?? '–' }}
+                    @if ($update && ! $update['update_available'] && $update['latest_version'])<x-ui.pill status="ok">{{ __('Up to date') }}</x-ui.pill>@endif</dd>
                 <dt>{{ __('Database') }}</dt><dd class="mono">{{ $installation->database ?? '–' }}</dd>
                 <dt>{{ __('Installed') }}</dt><dd>{{ $installation->installed_at?->isoFormat('LLL') ?? '–' }}</dd>
             </dl>
-            <p class="small muted">{{ __('Updates of :app itself are done from its own admin screen. Backups of the files and the database are part of the nightly website backup.', ['app' => $meta['name']]) }}</p>
+            <p class="small muted">{{ in_array($installation->app, ['wordpress', 'woocommerce'], true)
+                ? __('Updates of :app run through the WordPress tools (with a snapshot first) or WordPress itself. Backups of the files and the database are part of the nightly website backup.', ['app' => $meta['name']])
+                : __('Updates of :app itself are done from its own admin screen. Backups of the files and the database are part of the nightly website backup.', ['app' => $meta['name']]) }}</p>
         </x-ui.card>
     @endif
 

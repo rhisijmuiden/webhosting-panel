@@ -39,13 +39,24 @@ abstract class AppController extends Controller
     {
         $installations = $this->installations($request)->with('website')->latest()->get();
         $this->installer->syncAll($installations->filter->busy());
+        $installations = $this->installations($request)->with('website.customer')->latest()->get();
+
+        // The admin also sees the apps that are held back (and why); a customer only what can be installed.
+        $catalog = $this->area === 'admin' ? $this->installer->catalog() : $this->installer->offered();
+        $categories = collect(config('apps.categories', []))
+            ->filter(fn ($label, $key) => collect($catalog)->contains('category', $key))->all();
+        $category = array_key_exists((string) $request->query('category'), $categories) ? (string) $request->query('category') : null;
 
         return view('apps::index', [
             'area' => $this->area,
-            'catalog' => $this->installer->catalog(),
-            'installations' => $this->installations($request)->with('website.customer')->latest()->get(),
+            'catalog' => $category ? array_filter($catalog, fn ($a) => $a['category'] === $category) : $catalog,
+            'categories' => $categories,
+            'category' => $category,
+            'installations' => $installations,
+            'updates' => $this->installer->refreshVersions($installations),
             'website' => $request->integer('website') ?: null,
             'databasesLeft' => $this->databasesLeft($request),
+            'maxAge' => $this->installer->maxAge(),
         ]);
     }
 
@@ -58,7 +69,7 @@ abstract class AppController extends Controller
         return view('apps::install', [
             'area' => $this->area, 'app' => $app, 'meta' => $meta, 'websites' => $websites,
             'selected' => $request->integer('website') ?: $websites->first()?->id,
-            'databasesLeft' => $left,
+            'databasesLeft' => ($meta['database'] ?? true) ? $left : null,
             'defaults' => $this->defaults($request),
         ]);
     }
@@ -71,16 +82,20 @@ abstract class AppController extends Controller
             'path' => array_filter(['nullable', 'string', 'max:170', 'regex:#^/?[a-z0-9][a-z0-9_-]{0,39}(/[a-z0-9][a-z0-9_-]{0,39}){0,3}/?$#',
                 $meta['subdir'] ? null : 'prohibited']),
             'title' => ['required', 'string', 'max:100', 'not_regex:/[\r\n]/'],
-            'admin_user' => ['required', 'string', 'min:3', 'max:60', 'regex:/^[A-Za-z0-9][A-Za-z0-9._@-]{2,59}$/'],
+            'admin_user' => ['required', 'string', 'min:3', 'max:60', 'regex:/^[A-Za-z0-9][A-Za-z0-9._@-]{2,59}$/',
+                ...($this->userPattern($meta) ? ['regex:/^'.$this->userPattern($meta).'$/'] : [])],
             'admin_email' => ['required', 'email', 'max:254'],
             'admin_password' => ['required', 'string', 'min:12', 'max:128', 'not_regex:/[\r\n]/'],
             'locale' => ['required', Rule::in($meta['locales'])],
         ], [
             'path.regex' => __('Use lowercase letters, digits, - and _ only, for example blog or shop.'),
             'path.prohibited' => __(':app can only be installed in the root of a website.', ['app' => $meta['name']]),
+            'admin_user.regex' => isset($meta['admin_user_hint'])
+                ? __($meta['admin_user_hint'])
+                : __('Use letters, digits, dots, @, - and _ only.'),
         ]);
         $website = $this->websites($request)->where('status', 'active')->findOrFail($data['website']);
-        if (($left = $this->databasesLeft($request)) !== null && $left < 1) {
+        if (($meta['database'] ?? true) && ($left = $this->databasesLeft($request)) !== null && $left < 1) {
             return back()->withInput()->withErrors(['agent' => __('Your package allows no more databases. Remove an app or ask us for a larger package.')]);
         }
         $data['path'] = trim((string) ($data['path'] ?? ''), '/');
@@ -104,9 +119,12 @@ abstract class AppController extends Controller
                 ->with('status', __(':app was removed.', ['app' => $installation->meta()['name']]));
         }
 
+        $installation = $installation->fresh(['website']) ?? $installation;
+
         return view('apps::show', [
-            'area' => $this->area, 'installation' => $installation->fresh(['website']) ?? $installation,
+            'area' => $this->area, 'installation' => $installation,
             'job' => $job, 'showLog' => $this->area === 'admin',
+            'update' => $this->installer->refreshVersions([$installation])[$installation->id] ?? null,
         ]);
     }
 
@@ -154,9 +172,17 @@ abstract class AppController extends Controller
         ];
     }
 
+    /** The agent's stricter rule for admin names of this app (simple character classes only). */
+    protected function userPattern(array $meta): ?string
+    {
+        $p = $meta['admin_user_pattern'] ?? null;
+
+        return is_string($p) && preg_match('#^[A-Za-z0-9\[\]\-._@{},]+$#', $p) ? $p : null;
+    }
+
     protected function message(AgentException $e): string
     {
-        return in_array($e->errorCode, ['conflict', 'invalid_params', 'not_found'], true)
+        return in_array($e->errorCode, ['conflict', 'invalid_params', 'not_found', 'forbidden'], true)
             ? $e->getMessage()
             : __('The server could not start the installation. Please try again later.');
     }

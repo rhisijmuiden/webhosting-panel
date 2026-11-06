@@ -18,27 +18,108 @@ final class AppInstaller
 {
     public function __construct(private readonly AgentClient $agent) {}
 
-    /** Catalog entries that both the panel and this server's agent know. */
+    /**
+     * Every app that both the panel and this server's agent know, with the agent's
+     * release information: latest_version, released_at (epoch) and maintained
+     * (false = not offered, no release in max_release_age_days or end of life).
+     */
     public function catalog(): array
     {
-        $known = Cache::remember('apps.agent-catalog', 600, function () {
+        $maxAge = $this->maxAge();
+        $agent = Cache::remember('apps.agent-catalog.'.$maxAge, 600, function () use ($maxAge) {
             try {
-                return collect($this->agent->call('apps.catalog')['apps'] ?? [])->pluck('id')->all();
+                return collect($this->agent->call('apps.catalog', ['max_age_days' => $maxAge], 60)['apps'] ?? [])
+                    ->keyBy('id')->all();
             } catch (AgentException) {
                 return null;
             }
         });
         $catalog = config('apps.catalog', []);
-        if (is_array($known)) {
-            $catalog = array_intersect_key($catalog, array_flip($known));
+        if (! is_array($agent)) {
+            return $catalog;
+        }
+        $out = [];
+        foreach ($catalog as $id => $meta) {
+            if (! isset($agent[$id])) {
+                continue;
+            }
+            $a = $agent[$id];
+            $out[$id] = $meta + [
+                'latest_version' => $a['latest_version'] ?? null,
+                'released_at' => isset($a['released_at']) ? (int) $a['released_at'] : null,
+                'maintained' => $a['maintained'] ?? null,
+                'end_of_life' => (bool) ($a['end_of_life'] ?? false),
+                'admin_user_pattern' => $a['admin_user_pattern'] ?? null,
+            ];
         }
 
-        return $catalog;
+        return $out;
+    }
+
+    /** The apps that can be installed now (maintained ones). */
+    public function offered(): array
+    {
+        return array_filter($this->catalog(), fn (array $app) => ($app['maintained'] ?? null) !== false);
     }
 
     public function app(string $id): ?array
     {
-        return $this->catalog()[$id] ?? null;
+        return $this->offered()[$id] ?? null;
+    }
+
+    public function maxAge(): int
+    {
+        return max(30, min(3650, (int) config('apps.max_release_age_days', 365)));
+    }
+
+    /**
+     * The version on disk and whether a newer release is out, per agent install id
+     * (apps update themselves, so the version recorded at install time gets old).
+     *
+     * @return array<string, array{version: ?string, latest_version: ?string, update_available: bool}>
+     */
+    public function versions(): array
+    {
+        try {
+            $rows = $this->agent->call('apps.list', [], 30)['apps'] ?? [];
+        } catch (AgentException) {
+            return [];
+        }
+        $out = [];
+        foreach ($rows as $row) {
+            if (isset($row['id'])) {
+                $out[$row['id']] = [
+                    'version' => $row['version'] ?? null,
+                    'latest_version' => $row['latest_version'] ?? null,
+                    'update_available' => (bool) ($row['update_available'] ?? false),
+                ];
+            }
+        }
+
+        return $out;
+    }
+
+    /** Keep the recorded versions in step with the server and return the update info per installation id. */
+    public function refreshVersions(iterable $installations): array
+    {
+        $versions = null;
+        $info = [];
+        foreach ($installations as $installation) {
+            if ($installation->status !== 'installed' || ! $installation->agent_id) {
+                continue;
+            }
+            $versions ??= $this->versions();
+            $row = $versions[$installation->agent_id] ?? null;
+            if ($row === null) {
+                continue;
+            }
+            if ($row['version'] && $row['version'] !== $installation->version) {
+                $installation->update(['version' => $row['version']]);
+            }
+            $info[$installation->id] = $row;
+        }
+
+        return $info;
     }
 
     /** How many more apps with a database the customer's package allows (null = no limit). */
@@ -64,7 +145,8 @@ final class AppInstaller
             'domain' => $website->domain, 'app' => $app, 'path' => $data['path'],
             'title' => $data['title'], 'admin_user' => $data['admin_user'], 'admin_email' => $data['admin_email'],
             'admin_password' => $data['admin_password'], 'locale' => $data['locale'],
-        ], 60);
+            'max_age_days' => $this->maxAge(),
+        ], 90);
 
         $installation = AppInstallation::create([
             'website_id' => $website->id, 'customer_id' => $website->customer_id, 'app' => $app,
