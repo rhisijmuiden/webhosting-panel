@@ -138,6 +138,13 @@ def render(plan: dict) -> dict[str, str]:
             logins.setdefault(addr, set()).add(email)
     for src, targets in sorted(plan["aliases"].items()):
         aliases.append(f"{src} {','.join(targets)}\n")
+    # Postfix reads virtual_alias_maps before the mailboxes, so a catch-all
+    # ("@domain") would also take the mail of every existing mailbox. An
+    # identity entry per mailbox keeps their mail where it belongs.
+    catch_all = {src[1:] for src in plan["aliases"] if src.startswith("@")}
+    for email in sorted(plan["mailboxes"]):
+        if email.split("@", 1)[1] in catch_all and email not in plan["aliases"]:
+            aliases.append(f"{email} {email}\n")
     sender = [HEADER] + [f"{addr} {','.join(sorted(who))}\n" for addr, who in sorted(logins.items())]
     return {
         "dovecot_users": "".join(users),
