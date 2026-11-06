@@ -82,7 +82,7 @@ Actions added by phase 2:
 | `service.list`, `service.status`, `service.restart` | systemd services |
 | `firewall.list`, `firewall.add`, `firewall.delete` | Panel rules, see below |
 | `crowdsec.decisions`, `crowdsec.metrics`, `crowdsec.ban`, `crowdsec.unban` | Through `/usr/bin/cscli` |
-| `site.list`, `site.add`, `site.show`, `site.php`, `site.cache`, `site.ssl`, `site.quota`, `site.remove` | Through the installer's `whp-site … --json` |
+| `site.list`, `site.add`, `site.show`, `site.php`, `site.cache`, `site.ssl`, `site.quota`, `site.remove`, `site.suspend`, `site.unsuspend` | Through the installer's `whp-site … --json` |
 | `stats.sample` | Server and per-site usage, rates since the previous call |
 | `panel.version`, `panel.check_update`, `panel.update`, `panel.set_channel` | Updates and release channel |
 

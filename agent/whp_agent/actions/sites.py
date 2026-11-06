@@ -81,3 +81,14 @@ def site_remove(params):
     if v.boolean(params, "keep_files", required=False, default=False):
         argv.append("--keep-files")
     return _site(argv, timeout=300)
+
+
+@action("site.suspend")
+def site_suspend(params):
+    """Show a 503 page and close SFTP for the site (used when a customer is suspended)."""
+    return _site(["suspend", v.domain(params, "domain")], timeout=120)
+
+
+@action("site.unsuspend")
+def site_unsuspend(params):
+    return _site(["unsuspend", v.domain(params, "domain")], timeout=120)

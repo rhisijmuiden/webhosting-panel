@@ -90,6 +90,18 @@ class SitesTest(unittest.TestCase):
             self.assertEqual(argv[-1], "--json")
             self.assertEqual(out["ssl"], "pending")
 
+    def test_suspend_and_unsuspend(self):
+        from whp_agent.actions import sites
+
+        with mock.patch.object(sites, "run") as run:
+            run.return_value = mock.Mock(stdout='{"domain": "a.nl", "suspended": true}')
+            sites.site_suspend({"domain": "A.nl"})
+            self.assertEqual(run.call_args[0][0], [sites.WHP_SITE, "suspend", "a.nl", "--json"])
+            sites.site_unsuspend({"domain": "a.nl"})
+            self.assertEqual(run.call_args[0][0], [sites.WHP_SITE, "unsuspend", "a.nl", "--json"])
+            with self.assertRaises(ActionError):
+                sites.site_suspend({"domain": "a.nl; reboot"})
+
     def test_docroot_traversal(self):
         from whp_agent.actions import sites
 
