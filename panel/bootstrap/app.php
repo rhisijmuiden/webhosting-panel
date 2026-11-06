@@ -16,8 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
         then: function () {
+            // routes/admin-<feature>.php files join the admin routes, so features
+            // do not all have to edit routes/admin.php.
             Route::middleware(['web', 'auth', 'can:admin'])->prefix('admin')->name('admin.')
-                ->group(base_path('routes/admin.php'));
+                ->group([base_path('routes/admin.php'), ...(glob(base_path('routes/admin-*.php')) ?: [])]);
             Route::middleware(['web', 'auth', 'client'])->name('client.')
                 ->group(base_path('routes/client.php'));
         },
