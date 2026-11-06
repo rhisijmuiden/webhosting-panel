@@ -48,7 +48,7 @@ class DashboardController extends Controller
             'points' => $points,
             'posture' => $this->posture(),
             'attention' => $this->attention($services, $agentError),
-            'latestCustomers' => Customer::with('package')->withCount('websites')->latest()->limit(6)->get(),
+            'latestCustomers' => Customer::withCount('websites')->latest()->limit(6)->get(),
         ]);
     }
 

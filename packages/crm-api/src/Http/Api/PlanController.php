@@ -60,7 +60,7 @@ final class PlanController
     public function destroy(string $id): JsonResponse
     {
         $plan = Resolve::plan($id);
-        if (Subscription::where('hosting_package_id', $plan->id)->whereNot('status', 'terminated')->exists() || $plan->customers()->exists()) {
+        if (Subscription::where('hosting_package_id', $plan->id)->whereNot('status', 'terminated')->exists() || $plan->subscriptions()->exists()) {
             throw ApiError::conflict('This plan is still in use');
         }
         $plan->delete();

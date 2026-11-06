@@ -51,3 +51,9 @@ Route::get('php/extensions/search', [Admin\PhpController::class, 'search'])->nam
 Route::post('php/extensions', [Admin\PhpController::class, 'install'])->name('php.extensions.install');
 Route::delete('php/extensions', [Admin\PhpController::class, 'remove'])->name('php.extensions.remove');
 Route::post('php/extensions/toggle', [Admin\PhpController::class, 'toggle'])->name('php.extensions.toggle');
+
+// Subscriptions: one website on one hosting package (Plesk-style).
+Route::get('subscriptions', [Admin\SubscriptionController::class, 'index'])->name('subscriptions.index');
+Route::post('subscriptions/bulk', [Admin\SubscriptionController::class, 'bulk'])->name('subscriptions.bulk');
+Route::get('subscriptions/{subscription}/edit', [Admin\SubscriptionController::class, 'edit'])->name('subscriptions.edit');
+Route::put('subscriptions/{subscription}', [Admin\SubscriptionController::class, 'update'])->name('subscriptions.update');

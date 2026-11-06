@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Models\HostingPackage;
 use App\Models\Website;
 use App\Services\Agent\AgentException;
 use App\Services\PhpSettings;
@@ -20,7 +21,7 @@ class WebsiteController extends Controller
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('q'));
-        $websites = Website::with('customer')
+        $websites = Website::with('customer', 'subscription.package')
             ->when($search, fn ($q) => $q->where('domain', 'like', "%{$search}%"))
             ->when($request->query('php'), fn ($q, $v) => $q->where('php_version', $v))
             ->orderBy('domain')->paginate(25)->withQueryString();
@@ -32,6 +33,7 @@ class WebsiteController extends Controller
     {
         return view('admin.websites.create', [
             'customers' => Customer::orderBy('name')->get(),
+            'packages' => HostingPackage::where('is_active', true)->orderBy('name')->get(),
             'selectedCustomer' => $request->query('customer'),
         ]);
     }
@@ -43,6 +45,8 @@ class WebsiteController extends Controller
             'domain' => ['required', 'string', 'max:253', 'regex:/^(?!-)([a-z0-9-]{1,63}(?<!-)\.)+[a-z]{2,63}$/i', 'unique:websites,domain'],
             'profile' => ['required', Rule::in(Website::PROFILES)],
             'php_version' => ['required', Rule::in(Website::PHP_VERSIONS)],
+            'hosting_package_id' => ['nullable', 'exists:hosting_packages,id'],
+            'expires_on' => ['nullable', 'date', 'after:today'],
         ]);
         $data['domain'] = strtolower($data['domain']);
         $data['page_cache'] = $request->boolean('page_cache');
@@ -50,9 +54,6 @@ class WebsiteController extends Controller
         $data['www_alias'] = $request->boolean('www_alias');
 
         $customer = Customer::findOrFail($data['customer_id']);
-        if (! $customer->canAddWebsite()) {
-            return back()->withInput()->withErrors(['domain' => __('The package of this customer has no room for another website.')]);
-        }
         $website = $this->manager->create($customer, $data);
 
         return redirect()->route('admin.websites.show', $website)->with('status', __('The website is being set up.'));
@@ -60,7 +61,7 @@ class WebsiteController extends Controller
 
     public function show(Website $website): View
     {
-        return view('admin.websites.show', ['website' => $website->load('customer.package', 'databases')]);
+        return view('admin.websites.show', ['website' => $website->load('customer', 'subscription.package', 'databases')]);
     }
 
     public function update(Request $request, Website $website): RedirectResponse

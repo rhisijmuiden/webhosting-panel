@@ -44,8 +44,8 @@ class DnsOnboardingTest extends TestCase
     private function setUpCustomer(): array
     {
         $package = HostingPackage::create(['name' => 'Start', 'max_mailboxes' => 10]);
-        $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test', 'hosting_package_id' => $package->id]);
-        Website::create(['customer_id' => $customer->id, 'domain' => 'klant.nl', 'status' => 'active']);
+        $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test']);
+        $this->withPackage(Website::create(['customer_id' => $customer->id, 'domain' => 'klant.nl', 'status' => 'active']), $package);
         $domain = MailDomain::where('domain', 'klant.nl')->firstOrFail();
         $user = User::factory()->create(['customer_id' => $customer->id, 'role' => User::ROLE_CLIENT, 'is_active' => true]);
         $this->dns->delegate('klant.nl', 'ns1.oldhost.nl', 'ns2.oldhost.nl');

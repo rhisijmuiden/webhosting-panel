@@ -25,9 +25,9 @@ final class ClientFileController extends FileController
         return $request->user()->customer->websites()->orderBy('domain')->get();
     }
 
-    /** Only when the customer's hosting package allows SSH. */
+    /** Only when the package of this website's subscription allows SSH. */
     protected function terminalAllowed(Request $request, Website $website): bool
     {
-        return (bool) $request->user()->customer?->package?->allow_ssh && $this->files->terminalAvailable();
+        return (bool) $website->package?->allow_ssh && $this->files->terminalAvailable();
     }
 }

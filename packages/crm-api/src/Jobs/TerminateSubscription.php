@@ -50,9 +50,6 @@ final class TerminateSubscription implements ShouldQueue
         }
 
         $s->update(['status' => 'terminated', 'terminated_at' => now(), 'keep_backup_until' => now()->addDays($this->keepBackupDays)]);
-        if (! Subscription::where('customer_id', $s->customer_id)->whereIn('status', ['active', 'suspended', 'provisioning'])->exists()) {
-            $s->customer->update(['hosting_package_id' => null]);
-        }
         $job->succeed();
         ActivityLog::record('crm.subscription_terminated', $s->primary_domain, ['keep_backup_days' => $this->keepBackupDays], $s->customer_id);
         $webhooks->dispatch('subscription.terminated', ['subscription' => Present::subscription($s->fresh())]);

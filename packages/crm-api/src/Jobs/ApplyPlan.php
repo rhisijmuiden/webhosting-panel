@@ -7,6 +7,7 @@ namespace Rhis\CrmApi\Jobs;
 use App\Models\ActivityLog;
 use App\Models\HostingPackage;
 use App\Services\Agent\AgentClient;
+use App\Services\SubscriptionManager;
 use App\Services\WebsiteManager;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -27,7 +28,7 @@ final class ApplyPlan implements ShouldQueue
 
     public function __construct(public string $subscriptionId, public string $jobId, public array $data) {}
 
-    public function handle(AgentClient $agent, WebsiteManager $websites, Webhooks $webhooks): void
+    public function handle(AgentClient $agent, WebsiteManager $websites, Webhooks $webhooks, SubscriptionManager $subscriptions): void
     {
         $job = CrmJob::findOrFail($this->jobId);
         $s = Subscription::findOrFail($this->subscriptionId);
@@ -36,7 +37,6 @@ final class ApplyPlan implements ShouldQueue
             $changes = [];
             if (isset($this->data['plan_id'])) {
                 $s->hosting_package_id = (int) $this->data['plan_id'];
-                $s->customer->update(['hosting_package_id' => $s->hosting_package_id]);
                 $changes['plan_id'] = $this->data['plan_id'];
             }
             if (array_key_exists('limit_overrides', $this->data)) {
@@ -49,6 +49,10 @@ final class ApplyPlan implements ShouldQueue
             $s->save();
 
             $website = $s->website;
+            if ($website && isset($changes['plan_id']) && $website->subscription) {
+                // The panel subscription of the website follows the plan (the quota is set below).
+                $subscriptions->changePackage($website->subscription, HostingPackage::find($s->hosting_package_id), quota: false);
+            }
             if ($website) {
                 $disk = $s->limit_overrides['disk_mb'] ?? HostingPackage::find($s->hosting_package_id)?->disk_mb;
                 if ($disk !== null && (int) $disk !== (int) $website->disk_quota_mb) {

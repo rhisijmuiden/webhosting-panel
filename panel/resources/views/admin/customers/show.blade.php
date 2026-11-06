@@ -11,30 +11,29 @@
         </div>
     </div>
 
-    @if ($customer->websites->where('status', 'suspended')->where('last_error', \App\Services\Traffic::SUSPENDED)->isNotEmpty())
-        <div class="alert alert-warn" role="status"><x-icon name="info" /><div><strong>{{ __('The websites of this customer are suspended: the data traffic limit of the package is reached.') }}</strong>
+    @if ($customer->websites->filter(fn ($w) => $w->subscription?->suspended_reason === \App\Services\Traffic::SUSPENDED)->isNotEmpty())
+        <div class="alert alert-warn" role="status"><x-icon name="info" /><div><strong>{{ __('Websites of this customer are suspended: the data traffic limit of their package is reached.') }}</strong>
             <p class="small">{{ __('They come back online automatically on the first day of next month.') }}</p></div>
             <form method="POST" action="{{ route('admin.customers.traffic-unsuspend', $customer) }}">@csrf<button class="btn btn-sm" type="submit">{{ __('Put online now') }}</button></form></div>
     @endif
     <section class="grid grid-stats">
-        <div class="card stat"><span class="label">{{ __('Package') }}</span><strong class="value" style="font-size:24px">{{ $customer->package?->name ?? '–' }}</strong></div>
-        <div class="card stat"><span class="label">{{ __('Websites') }}</span><strong class="value">{{ $customer->websites->count() }}@if ($customer->package)<span class="muted" style="font-size:16px"> / {{ $customer->package->limitLabel('max_websites') }}</span>@endif</strong></div>
-        <div class="card stat"><span class="label">{{ __('Disk') }}</span><strong class="value" style="font-size:24px">{{ \Illuminate\Support\Number::fileSize($customer->diskUsedMb() * 1024 * 1024) }}</strong>
-            @if ($customer->package)<x-ui.meter label="" :percent="$customer->package->disk_mb ? $customer->diskUsedMb() / $customer->package->disk_mb * 100 : 0" />@endif</div>
-        <div class="card stat"><span class="label">{{ __('Data traffic this month') }}</span><strong class="value" style="font-size:24px">{{ \Illuminate\Support\Number::fileSize($customer->trafficBytes(), 1) }}</strong>
-            @if ($customer->package?->traffic_gb_month)<span class="hint">{{ __('of :size', ['size' => $customer->package->limitLabel('traffic_gb_month')]) }}</span><x-ui.meter label="" :percent="$customer->trafficPercent()" />@endif</div>
+        <div class="card stat"><span class="label">{{ __('Subscriptions') }}</span><strong class="value"><a href="{{ route('admin.subscriptions.index', ['customer' => $customer->id]) }}">{{ $customer->websites->count() }}</a></strong></div>
+        <div class="card stat"><span class="label">{{ __('Disk') }}</span><strong class="value" style="font-size:24px">{{ \Illuminate\Support\Number::fileSize($customer->diskUsedMb() * 1024 * 1024) }}</strong></div>
+        <div class="card stat"><span class="label">{{ __('Data traffic this month') }}</span><strong class="value" style="font-size:24px">{{ \Illuminate\Support\Number::fileSize($customer->trafficBytes(), 1) }}</strong></div>
         <div class="card stat"><span class="label">CRM</span><strong class="value mono" style="font-size:18px">{{ $customer->crm_id ?? '–' }}</strong></div>
     </section>
 
-    <x-ui.card :title="__('Websites')" flush>
+    <x-ui.card :title="__('Subscriptions')" flush>
         @if ($customer->websites->isEmpty())
             <x-ui.empty icon="globe">{{ __('This customer has no websites yet.') }}</x-ui.empty>
         @else
         <x-ui.table>
-            <x-slot:head><th>{{ __('Domain') }}</th><th>PHP</th><th>{{ __('Type') }}</th><th>SSL</th><th>{{ __('Status') }}</th></x-slot:head>
+            <x-slot:head><th>{{ __('Domain') }}</th><th>{{ __('Package') }}</th><th>{{ __('Expiry date') }}</th><th>PHP</th><th>{{ __('Type') }}</th><th>SSL</th><th>{{ __('Status') }}</th></x-slot:head>
             @foreach ($customer->websites as $w)
                 <tr>
                     <td><a class="strong" href="{{ route('admin.websites.show', $w) }}">{{ $w->domain }}</a></td>
+                    <td>{{ $w->subscription?->package?->name ?? __('No package') }}</td>
+                    <td>{{ $w->subscription?->expires_on?->toDateString() ?? '–' }}</td>
                     <td>{{ $w->php_version }}</td><td>{{ __(ucfirst($w->profile)) }}</td>
                     <td><x-ui.pill :status="$w->ssl_status">{{ __(ucfirst($w->ssl_status)) }}</x-ui.pill></td>
                     <td><x-ui.pill :status="$w->status">{{ __(ucfirst($w->status)) }}</x-ui.pill></td>

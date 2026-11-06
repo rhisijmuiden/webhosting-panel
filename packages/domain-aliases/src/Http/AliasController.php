@@ -115,7 +115,7 @@ abstract class AliasController
         $this->authorizeAlias($request, $alias);
 
         return view('domain-aliases::convert', [
-            'area' => $this->area, 'alias' => $alias->load('website.customer.package'),
+            'area' => $this->area, 'alias' => $alias->load('website.customer', 'website.subscription.package'),
             'direct' => $this->area === 'admin' || $this->manager->canConvertDirectly($alias),
             'products' => $this->manager->upgradeProducts(),
             'order' => $alias->upgradeOrder(),

@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\ApplyCustomerLimits;
+use App\Jobs\ApplySubscriptionLimits;
 use App\Models\ActivityLog;
 use App\Models\HostingPackage;
 use Illuminate\Http\RedirectResponse;
@@ -15,7 +15,7 @@ class PackageController extends Controller
 {
     public function index(): View
     {
-        return view('admin.packages.index', ['packages' => HostingPackage::withCount('customers')->orderBy('name')->get()]);
+        return view('admin.packages.index', ['packages' => HostingPackage::withCount('subscriptions')->orderBy('name')->get()]);
     }
 
     public function create(): View
@@ -42,8 +42,8 @@ class PackageController extends Controller
         $package->update($this->validated($request, $package));
         ActivityLog::record('package.updated', $package->name);
         if ($package->wasChanged(['cpu_percent', 'memory_mb', 'io_mbps', 'max_processes', 'php_workers', 'db_connections'])) {
-            foreach ($package->customers as $customer) {
-                ApplyCustomerLimits::dispatch($customer);
+            foreach ($package->subscriptions as $subscription) {
+                ApplySubscriptionLimits::dispatch($subscription);
             }
         }
 
@@ -52,7 +52,7 @@ class PackageController extends Controller
 
     public function destroy(HostingPackage $package): RedirectResponse
     {
-        if ($package->customers()->exists()) {
+        if ($package->subscriptions()->exists()) {
             return back()->withErrors(['package' => __('This package is still in use.')]);
         }
         ActivityLog::record('package.deleted', $package->name);
