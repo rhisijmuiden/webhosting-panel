@@ -235,7 +235,7 @@ cmd_add() {
   site_exists "$domain" && die "$(t site_exists "$domain")"
 
   SITE_DOMAIN=$domain SITE_PHP=$(default_php) SITE_ALIASES='' SITE_CACHE=on SITE_PROFILE=php
-  SITE_DOCROOT_REL='' SITE_SSL=$WHP_LETSENCRYPT_DEFAULT SITE_QUOTA_MB=0 SITE_CPU='' SITE_MEM=''
+  SITE_DOCROOT_REL='' SITE_SSL=$WHP_LETSENCRYPT_DEFAULT SITE_QUOTA_MB=0 SITE_CPU='' SITE_MEM='' SITE_SUSPENDED=no
   local alias_set=no
   while (($#)); do
     case $1 in
