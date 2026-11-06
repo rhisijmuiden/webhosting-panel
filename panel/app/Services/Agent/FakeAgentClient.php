@@ -109,6 +109,7 @@ class FakeAgentClient implements AgentClient
             'php.extensions.install', 'php.extensions.remove' => ['job' => (string) Str::uuid()],
             'php.extensions.toggle' => ['php' => $params['php'], 'name' => $params['name'], 'enabled' => (bool) $params['enabled']],
             'stats.sample' => $this->statsSample(),
+            'traffic.history' => $this->trafficHistory((int) ($params['since'] ?? 0)),
             'backup.status' => [
                 'version' => 'fake', 'running' => false,
                 'targets' => [['name' => 'nas', 'type' => 'sftp', 'host' => 'nas.example.test', 'port' => '22', 'user' => 'backup', 'path' => 'whp/web01', 'enabled' => true, 'created' => '2026-11-01T10:00:00Z']],
@@ -260,6 +261,34 @@ class FakeAgentClient implements AgentClient
                 'memory_bytes' => (int) ((300 / ($i + 1)) * 1024 ** 2), 'io_read_bps' => 20000, 'io_write_bps' => 9000,
             ])->all(),
         ];
+    }
+
+    /** Visitors per site per hour/day, shaped like whp_agent/visits.py history(). */
+    private function trafficHistory(int $since): array
+    {
+        $domains = Website::pluck('domain')->values();
+        $make = function (int $start, float $scale) use ($domains) {
+            $sites = [];
+            $total = ['requests' => 0, 'pageviews' => 0, 'bots' => 0, 'bytes' => 0, 'visitors' => 0];
+            foreach ($domains as $i => $d) {
+                $v = (int) round(120 / ($i + 1) * $scale);
+                $row = ['visitors' => $v, 'pageviews' => $v * 3, 'requests' => $v * 40, 'bots' => $v * 6, 'bytes' => $v * 2_500_000];
+                $sites[$d] = $row;
+                foreach ($row as $k => $n) {
+                    $total[$k] += $n;
+                }
+            }
+            $total['visitors'] = (int) round($total['visitors'] * 0.9);
+
+            return ['start' => $start, 'sites' => $sites + ['*' => $total]];
+        };
+        $hours = [];
+        for ($h = max($since, time() - 3 * 3600); $h <= time(); $h += 3600) {
+            $hours[] = $make(intdiv($h, 3600) * 3600, 1);
+        }
+        $day = now()->startOfDay()->getTimestamp();
+
+        return ['hours' => $hours, 'days' => [['day' => now()->format('Y-m-d')] + $make($day, 10)]];
     }
 
     private function firewallAdd(array $params): array

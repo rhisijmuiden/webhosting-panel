@@ -70,6 +70,7 @@ check "per-site PHP settings as php_admin_value" bash -c "whp-site phpini site.t
 check "nginx upload size follows PHP" bash -c "grep -q 'client_max_body_size 300m' /etc/nginx/whp/sites/site.test/10-php-limits.conf"
 check "invalid PHP setting refused" bash -c "! whp-site phpini site.test --set disable_functions=x"
 check "traffic log format defined once" bash -c "[[ \$(nginx -T 2>/dev/null | grep -c 'log_format whp_traffic') == 1 ]]"
+check "traffic log format has visitor fields" bash -c "nginx -T 2>/dev/null | grep 'log_format whp_traffic' | grep -q 'http_user_agent'"
 check "whp-site restores a missing traffic log format" bash -c "rm -f /etc/nginx/conf.d/whp-traffic.conf && whp-site refresh site.test && nginx -t && [[ -f /etc/nginx/conf.d/whp-traffic.conf ]]"
 check "traffic is logged per site" bash -c "sleep 1; nginx -s reopen; sleep 1; grep -q '^site.test ' /var/log/nginx/whp-traffic.log || (sleep 65; grep -q '^site.test ' /var/log/nginx/whp-traffic.log)"
 check "site back to the shared slice" bash -c "whp-site phpini site.test --reset --json >/dev/null && whp-site owner site.test - --json | jq -e '.slice == \"whp-sites.slice\"' >/dev/null"
