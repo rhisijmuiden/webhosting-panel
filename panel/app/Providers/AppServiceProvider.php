@@ -122,6 +122,7 @@ class AppServiceProvider extends ServiceProvider
                 'firewall' => ['section' => 'Server', 'order' => 410],
                 'backups' => ['section' => 'Server', 'order' => 420],
                 'statistics' => ['section' => 'Server', 'order' => 430],
+                'php' => ['section' => 'Server', 'order' => 440, 'label' => 'PHP settings'],
                 'mail-settings' => ['section' => 'System', 'order' => 500],
                 'dns-mail-settings' => ['section' => 'System', 'order' => 510],
                 'crm-api' => ['section' => 'System', 'order' => 520],
