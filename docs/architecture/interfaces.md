@@ -172,7 +172,7 @@ Actions added by the app installer (`databases.py`, `apps.py`, see `packages/app
 | Action | What |
 | --- | --- |
 | `db.list`, `db.create`, `db.drop` | MariaDB database + user per site (root over the unix socket, SQL on stdin). Ownership is kept in `/var/lib/webhosting-panel/databases.json`; a site can only drop its own databases. `db.create` returns the password once. |
-| `apps.catalog`, `apps.list` | Installable apps and installed apps (state in `/var/lib/webhosting-panel/apps/<domain>.json`) |
+| `apps.catalog`, `apps.list` | Installable apps with latest release and `maintained` (`max_age_days`), installed apps with version on disk and `update_available` (state in `/var/lib/webhosting-panel/apps/<domain>.json`) |
 | `apps.install` | Job: `{domain, app, path, title, admin_user, admin_email, admin_password, locale}`. Empty folder only, runs as the site user, rolls back on failure. Result: `id, version, url, admin_url, database, page_cache_disabled` |
 | `apps.remove` | Job: `{domain, id}` removes files, database and the Nginx snippet `/etc/nginx/whp/sites/<domain>/app-<id>.conf` |
 

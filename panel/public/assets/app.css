@@ -334,6 +334,16 @@ dialog.modal::backdrop { background: rgba(14, 22, 38, .55); }
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / .15);
 }
 .app-logo-sm { width: 26px; height: 26px; border-radius: 7px; font-size: 13px; }
+.app-filter { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
+.app-filter a { display: inline-flex; align-items: center; min-height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-muted); font-size: 14px; font-weight: 600; text-decoration: none; }
+.app-filter a:hover { border-color: var(--ink-muted); color: var(--ink); }
+.app-filter a[aria-current="page"] { background: var(--nav-active-bg); color: var(--nav-active-ink); border-color: transparent; }
+.app-filter a:focus-visible { outline: 2px solid var(--lucht); outline-offset: 2px; }
+.app-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; list-style: none; margin: 0; padding: 0; }
+.app-tile-held { opacity: .75; }
+.app-held { display: flex; gap: 6px; align-items: center; color: var(--warn-ink, var(--ink-muted)); }
+.app-held svg, .app-policy svg { width: 16px; height: 16px; flex: none; }
+.app-policy { display: flex; gap: 6px; align-items: center; margin: 16px 0; }
 .app-name { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; }
 
 /* Limits (packages, PHP settings): number with unit and an "unlimited" switch */
