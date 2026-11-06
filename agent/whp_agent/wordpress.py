@@ -20,6 +20,9 @@ from .run import run
 WP_CLI = os.environ.get("WHP_WP_CLI", "/usr/local/bin/wp")
 SITES_DB = os.environ.get("WHP_SITES_DB", os.path.join(paths.STATE_DIR, "sites"))
 SYSTEMD_RUN = "/usr/bin/systemd-run"
+# Same pinned release as installer/modules/50-php.sh.
+WP_CLI_VERSION = "2.12.0"
+WP_CLI_URL = f"https://github.com/wp-cli/wp-cli/releases/download/v{WP_CLI_VERSION}/wp-cli-{WP_CLI_VERSION}.phar"
 _VERSION_RE = re.compile(r"^\$wp_version\s*=\s*'([0-9A-Za-z.\-]+)'\s*;", re.M)
 _PATH_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}(/[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}){0,3}$")
 # Folders in the docroot that never hold a separate WordPress install.
@@ -160,15 +163,75 @@ def wp_argv(site, wp_dir, args, timeout=300, memory="512M"):
     ]
 
 
+def ensure_cli():
+    """Install WP-CLI when it is missing (servers installed before the toolkit existed
+    never ran that installer step). Pinned release, checked against its sha512."""
+    if os.path.isfile(WP_CLI):
+        return WP_CLI
+    import hashlib
+    import tempfile
+    import urllib.request
+
+    def fetch(url, limit):
+        req = urllib.request.Request(url, headers={"User-Agent": "webhosting-panel-agent"})
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                return resp.read(limit)
+        except OSError as exc:
+            raise ActionError("command_failed", f"WP-CLI is not installed and could not be downloaded: {exc}")
+
+    expected = re.search(rb"[0-9a-f]{128}", fetch(WP_CLI_URL + ".sha512", 4096))
+    data = fetch(WP_CLI_URL, 50_000_000)
+    if not expected or hashlib.sha512(data).hexdigest() != expected.group(0).decode():
+        raise ActionError("command_failed", "WP-CLI download does not match its published checksum")
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(WP_CLI), prefix=".wp-cli.")
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(data)
+    os.chmod(tmp, 0o755)
+    os.replace(tmp, WP_CLI)
+    return WP_CLI
+
+
 def wp(domain, args, path="", input_text=None, timeout=300, check=True, plugins=False):
     """Run WP-CLI for an install. plugins=False adds --skip-plugins --skip-themes, so a
     broken plugin cannot stop the toolkit from listing or updating it."""
     if not all(isinstance(a, str) for a in args):
         raise ActionError("internal", "WP-CLI arguments must be strings")
     site, d = require_install(domain, path)
+    ensure_cli()
     extra = [] if plugins else ["--skip-plugins", "--skip-themes"]
-    return run(wp_argv(site, d, [*args, *extra], timeout=timeout), timeout=timeout + 15,
-               check=check, input_text=input_text)
+    proc = run(wp_argv(site, d, [*args, *extra], timeout=timeout), timeout=timeout + 15,
+               check=False, input_text=input_text)
+    if check and proc.returncode != 0:
+        raise failure(f"wp {' '.join(args[:2])}", proc)
+    return proc
+
+
+# Lines from systemd-run itself (the command never started) and from WP-CLI/PHP.
+_SYSTEMD_RUN_ERR = re.compile(r"^(Failed to .*|Job for .* failed.*|Invalid .*|Unknown .*)$", re.M)
+_WP_ERR = re.compile(r"^(?:PHP )?(Error: .*|Fatal error: .*|Parse error: .*|Warning: .*(?:Failed opening|Permission denied).*)$", re.M)
+
+
+def explain(proc):
+    """The useful line of a failed WP-CLI run, instead of "systemd-run exited with code 1"."""
+    text = "\n".join(x for x in ((proc.stderr or ""), (proc.stdout or "")) if x)
+    m = _SYSTEMD_RUN_ERR.search(text)
+    if m:
+        return "systemd-run: " + m.group(1).strip()
+    found = _WP_ERR.findall(text)
+    if found:
+        # "Error establishing a database connection" and friends come as HTML in WP-CLI output.
+        return re.sub(r"<[^>]+>", "", found[0]).strip()[:500]
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if lines:
+        return re.sub(r"<[^>]+>", "", lines[-1])[:500]
+    return f"exit code {proc.returncode}, no output"
+
+
+def failure(what, proc):
+    return ActionError("command_failed", f"WordPress ({what}) failed: {explain(proc)}",
+                       {"exit_code": proc.returncode, "stderr": (proc.stderr or "")[-2000:],
+                        "stdout": (proc.stdout or "")[-2000:]})
 
 
 def wp_json(domain, args, path="", timeout=300, plugins=False):
@@ -193,4 +256,7 @@ def as_user(site, argv, cwd, input_text=None, timeout=300, check=True):
     """Run any command (argv list, no shell) as the site user, like wp() does for WP-CLI."""
     base = wp_argv(site, cwd, [], timeout=timeout)
     prefix = base[:base.index(f"/usr/bin/php{site['php']}")]
-    return run([*prefix, *argv], timeout=timeout + 15, check=check, input_text=input_text)
+    proc = run([*prefix, *argv], timeout=timeout + 15, check=False, input_text=input_text)
+    if check and proc.returncode != 0:
+        raise failure(os.path.basename(argv[0]), proc)
+    return proc

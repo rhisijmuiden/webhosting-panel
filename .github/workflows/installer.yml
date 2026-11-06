@@ -1,7 +1,10 @@
 name: Installer
 
 on:
+  # Feature branches are tested through their pull request; push only runs for
+  # the release branches, so a PR no longer runs the full install twice.
   push:
+    branches: [test, main]
     paths: ["installer/**", "tests/**", "agent/**", "panel/deploy/**", "webmail/**", "backup/**", "mail/**", ".github/workflows/installer.yml", ".shellcheckrc"]
   pull_request:
     paths: ["installer/**", "tests/**", "agent/**", "panel/deploy/**", "webmail/**", "backup/**", "mail/**", ".github/workflows/installer.yml", ".shellcheckrc"]
@@ -9,6 +12,11 @@ on:
 
 permissions:
   contents: read
+
+# A new push to the same PR or branch cancels the run that is still going.
+concurrency:
+  group: installer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   shellcheck:
@@ -31,13 +39,22 @@ jobs:
         # Ubuntu 24.04 runners block unprivileged user namespaces through AppArmor;
         # Debian 13 allows them, and the web terminal sandbox (bubblewrap) needs them.
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Restore apt package cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/apt-cache
+          key: apt-trixie-${{ github.run_id }}
+          restore-keys: apt-trixie-
       - name: Build Debian 13 image with systemd
-        run: docker build -t whp-trixie tests/
+        run: |
+          mkdir -p ~/apt-cache
+          du -sh ~/apt-cache
+          docker build -t whp-trixie tests/
       - name: Boot container
         run: |
           docker run -d --name whp --privileged --cgroupns=host \
             -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock \
-            -v "$PWD:/src:ro" --hostname panel.example.test whp-trixie
+            -v "$PWD:/src:ro" -v "$HOME/apt-cache:/var/cache/apt/archives" --hostname panel.example.test whp-trixie
           for i in $(seq 1 30); do
             state=$(docker exec whp systemctl is-system-running 2>/dev/null || true)
             [[ $state == running || $state == degraded ]] && break
@@ -86,3 +103,16 @@ jobs:
         if: failure()
         run: |
           docker exec whp bash -c 'systemctl --failed; journalctl -p warning -n 150 --no-pager; echo ===== install.log; tail -n 120 /var/log/webhosting-panel/install.log' || true
+      - name: Prepare apt package cache
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/test'
+        run: |
+          docker exec whp bash -c 'rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock'
+          sudo chown -R "$(id -u):$(id -g)" ~/apt-cache
+          du -sh ~/apt-cache
+      - name: Save apt package cache
+        # Saved from the test branch only; pull requests into test read it.
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/test'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/apt-cache
+          key: apt-trixie-${{ github.run_id }}
