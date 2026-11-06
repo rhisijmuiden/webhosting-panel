@@ -16,4 +16,11 @@ return [
     'client_parallel' => (int) env('WHP_BACKUP_CUSTOMER_PARALLEL', 3),
     // Where uploads wait for the agent; the agent reads the same folder (WHP_UPLOAD_DIR).
     'upload_dir' => env('WHP_UPLOAD_DIR', '/var/lib/webhosting-panel/uploads'),
+
+    // OneDrive for customers: the Microsoft app (Entra app registration). Normally set by
+    // the admin under Backups > Customer backups; these are only the defaults.
+    'onedrive' => [
+        'client_id' => env('WHP_ONEDRIVE_CLIENT_ID', ''),
+        'client_secret' => env('WHP_ONEDRIVE_CLIENT_SECRET', ''),
+    ],
 ];

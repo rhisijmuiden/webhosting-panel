@@ -2,6 +2,8 @@
     $bytes = function ($b) { if ($b === null) return '–'; $u = ['B', 'KB', 'MB', 'GB', 'TB']; $i = 0; while ($b >= 1024 && $i < 4) { $b /= 1024; $i++; } return round($b, $i ? 1 : 0).' '.$u[$i]; };
     $pill = ['succeeded' => 'ok', 'failed' => 'bad', 'running' => 'warn'];
     $schedules = ['off' => __('Off'), 'daily' => __('Daily'), 'weekly' => __('Weekly')];
+    $typeLabels = ['sftp' => 'SFTP', 'scp' => 'SCP', 'ftps' => 'FTPS', 'ftp' => 'FTP', 'onedrive' => 'OneDrive'];
+    $onedrive = app(\Rhis\Backups\OneDrive::class);
 @endphp
 <x-layouts.admin :title="__('Customer backups')">
     <div class="page-head">
@@ -19,7 +21,7 @@
                 <tr>
                     <td>{{ $t->customer?->displayName() }}</td>
                     <td><strong>{{ $t->name }}</strong></td>
-                    <td>{{ strtoupper($t->type) }}</td>
+                    <td>{{ $typeLabels[$t->type] ?? $t->type }}</td>
                     <td class="small mono">{{ $t->location() }}</td>
                     <td class="small">{{ $schedules[$t->schedule] ?? $t->schedule }}@if ($t->schedule !== 'off') · {{ $t->schedule_time }}@endif</td>
                     <td>@if ($t->last_error)<x-ui.pill status="bad">{{ __('Error') }}</x-ui.pill> <span class="small muted">{{ \Illuminate\Support\Str::limit($t->last_error, 80) }}</span>@else<x-ui.pill status="ok">{{ __('Ok') }}</x-ui.pill>@endif</td>
@@ -58,6 +60,29 @@
                 @if ($records->nextPageUrl())<a class="btn btn-sm" href="{{ $records->nextPageUrl() }}">{{ __('Older') }}</a>@endif
             </div>
         @endif
+        @endif
+    </x-ui.card>
+
+    <x-ui.card :title="__('OneDrive for customers')" style="margin-top: 24px">
+        <p class="small muted">{{ __('Customers can use their own OneDrive as a backup location after the panel is registered once as an app at Microsoft. In the Microsoft Entra admin center: App registrations > New registration, choose "Accounts in any organizational directory and personal Microsoft accounts", platform Web, and the redirect URI below. Then make a client secret under Certificates & secrets and fill in both values here.') }}</p>
+        <p class="small">{{ __('Redirect URI') }}: <span class="mono">{{ $onedrive->redirectUri() }}</span></p>
+        <form method="POST" action="{{ route('admin.backups.onedrive.update') }}" class="form">
+            @csrf @method('PUT')
+            <div class="form-grid">
+                <x-ui.field name="client_id" :label="__('Application (client) ID')" :value="$onedrive->clientId()" placeholder="00000000-0000-0000-0000-000000000000" required />
+                <x-ui.field name="client_secret" type="password" :label="__('Client secret (value)')" autocomplete="new-password"
+                    :help="$onedrive->configured() ? __('Leave empty to keep the current secret.') : null" />
+            </div>
+            <div class="actions">
+                <button type="submit" class="btn btn-dark"><x-icon name="check" />{{ __('Save') }}</button>
+                @if ($onedrive->configured())<x-ui.pill status="ok">{{ __('Active') }}</x-ui.pill>@endif
+            </div>
+        </form>
+        @if ($onedrive->configured())
+            <form method="POST" action="{{ route('admin.backups.onedrive.update') }}" data-confirm="{{ __('Turn off OneDrive for customers? Existing OneDrive locations stop working.') }}" style="margin-top: 12px">
+                @csrf @method('PUT')<input type="hidden" name="remove" value="1">
+                <button type="submit" class="btn btn-danger"><x-icon name="trash" />{{ __('Turn off') }}</button>
+            </form>
         @endif
     </x-ui.card>
 </x-layouts.admin>
