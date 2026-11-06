@@ -53,6 +53,11 @@ final class HealthCheck
         return __(':ok of :n websites answer, :svc services down', ['ok' => $sites - $down, 'n' => $sites, 'svc' => $svc]);
     }
 
+    public static function monitoringAlerts(): bool
+    {
+        return class_exists(\Rhis\Monitoring\Options::class) && (bool) app(\Rhis\Monitoring\Options::class)->get('enabled');
+    }
+
     /** The hourly task: mail when something new is down, and once more when it is fine again. */
     public function scheduled(ServerTaskRun $run): array
     {
@@ -67,7 +72,10 @@ final class HealthCheck
         $alerted = $this->options->state('health_alerted', ['sites' => [], 'services' => []]);
         $new = ['sites' => array_values(array_diff($down['sites'], $alerted['sites'] ?? [])),
             'services' => array_values(array_diff($down['services'], $alerted['services'] ?? []))];
-        if ($new['sites'] || $new['services']) {
+        // The monitoring package (rhis/monitoring) checks every few minutes and sends these alerts itself.
+        if (self::monitoringAlerts()) {
+            $run->appendLog(__('Alerts are sent by Monitoring.'));
+        } elseif ($new['sites'] || $new['services']) {
             $this->notifier->problem(__('Websites or services are down'), array_merge(
                 array_map(fn ($d) => __('Website :domain does not answer', ['domain' => $d]), $new['sites']),
                 array_map(fn ($s) => __('Service :service is not running', ['service' => $s]), $new['services']),
