@@ -27,12 +27,22 @@ running until you switch DNS per domain, so visitors notice nothing.
      file), or the stored `$6$` hash is used as `{SHA512-CRYPT}`;
    - files: `rsync` of the Plesk web directory (`httpdocs`, or the subdomain
      directory) into the site's `public/` (or `app/` when the docroot was deeper,
-     e.g. Laravel `httpdocs/public` becomes `app/public`), owned by the site user;
+     e.g. Laravel `httpdocs/public` becomes `app/public`), owned by the site user,
+     directories 0755 and files 0644 (`--perms`, so the agent's umask does not
+     make them unreadable for Nginx);
    - databases: `mysqldump --single-transaction` streamed over SSH straight into
      MariaDB (DEFINER clauses and MySQL 8 collations are rewritten). Database
      users get their original `mysql_native_password` hash, so `wp-config.php`
      and other configs keep working. When the hash cannot be copied, a new
      password is shown on the migration page;
+   - WordPress (every install found in the docroot): `wp-config.php` gets
+     `DB_HOST` localhost and, when a database user got a new password, that
+     password; the old Plesk docroot (`/var/www/vhosts/<domain>/httpdocs`) is
+     replaced by the new one in `wp-config.php`, `.htaccess`, `.user.ini`,
+     `php.ini`, `wordfence-waf.php`, cache configs and `wp-content/wflogs/*.php`,
+     and in the database with `wp search-replace --precise --skip-columns=guid`
+     (WP-CLI as the site user). Runs again after every sync; the button
+     **Fix WordPress settings** (`migrate.wordpress_fix`) runs it on its own;
    - mail: `rsync` of every Maildir (Dovecot uidlist kept, indexes rebuilt);
    - SSL: the certificate Plesk uses is installed with
      `whp-site ssl <domain> --import-cert … --import-key …` (state `imported`)
@@ -48,6 +58,9 @@ running until you switch DNS per domain, so visitors notice nothing.
 7. **Late mail.** After the switch, **Fetch late mail** copies messages that
    still arrived on Plesk (only new files, nothing is deleted here).
 8. **Finish.** Removes the stored temporary database passwords.
+
+Progress and the log of every step are on **Migration → Status and log**; the
+log is stored per domain (`migration_items.log`) and stays after the migration.
 
 ## Not migrated (shown as a note on the domain)
 

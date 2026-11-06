@@ -1,48 +1,130 @@
-<x-layouts.client :title="$website->domain">
+@php
+    /** @var \App\Support\SiteOverview $o */
+    $site = $o->website;
+    [$from, $to] = $o->hues();
+    $wp = $o->wordpress->first();
+    $pkg = $site->customer?->package;
+    $tabs = $o->tabs();
+@endphp
+<x-layouts.client :title="$site->domain">
+    <link rel="stylesheet" href="{{ asset('assets/site-overview.css') }}?v={{ @filemtime(public_path('assets/site-overview.css')) }}">
     <div class="page-head">
         <div>
-            <div class="crumbs"><a href="{{ route('client.websites.index') }}">{{ __('Websites') }}</a> / {{ $website->domain }}</div>
-            <div class="actions"><h1>{{ $website->domain }}</h1>
-                <x-ui.pill :status="$website->status">{{ $website->status === 'active' ? __('Online') : __(ucfirst($website->status)) }}</x-ui.pill>
-                <x-ui.pill :status="$website->ssl_status">{{ $website->ssl_status === 'active' ? __('SSL valid') : __('SSL :status', ['status' => __($website->ssl_status)]) }}</x-ui.pill></div>
+            <div class="crumbs"><a href="{{ route('client.websites.index') }}">{{ __('Websites') }}</a> / {{ $site->domain }}</div>
+            <div class="actions"><h1>{{ $site->domain }}</h1>
+                <x-ui.pill :status="$site->status">{{ $site->status === 'active' ? __('Online') : __(ucfirst($site->status)) }}</x-ui.pill>
+                <x-ui.pill :status="$site->ssl_status">{{ $site->ssl_status === 'active' ? __('SSL valid') : __('SSL :status', ['status' => __($site->ssl_status)]) }}</x-ui.pill></div>
         </div>
-        <a class="btn btn-primary" href="https://{{ $website->domain }}" target="_blank" rel="noopener">{{ __('Visit website') }}<x-icon name="external" /></a>
+        <div class="actions">
+            @if ($o->has('client.files.browse'))
+                <a class="btn" href="{{ route('client.files.browse', $site) }}">@include('client.websites.overview.icon', ['name' => 'folder']){{ __('Files') }}</a>
+            @endif
+            <a class="btn btn-primary" href="https://{{ $site->domain }}" target="_blank" rel="noopener">{{ __('Visit website') }}<x-icon name="external" /></a>
+        </div>
     </div>
-    <section class="grid grid-2" style="align-items:start">
-        <x-ui.card :title="__('PHP version')">
-            <form method="POST" action="{{ route('client.websites.update', $website) }}" class="form">
-                @csrf @method('PUT')
-                <p class="muted small">{{ __('Only versions that still get security updates are offered. Switching takes a few seconds, without downtime.') }}</p>
-                <div class="seg" role="radiogroup" aria-label="{{ __('PHP version') }}">
-                    @foreach (\App\Models\Website::PHP_VERSIONS as $v)
-                        <label><input type="radio" name="php_version" value="{{ $v }}" @checked($website->php_version === $v)><span>PHP {{ $v }}</span></label>
+
+    <div class="site-page">
+        {{-- Left: what the website is --}}
+        <aside class="site-side">
+            <div class="card site-card">
+                <a class="site-preview" href="https://{{ $site->domain }}" target="_blank" rel="noopener" style="--from: {{ $from }}; --to: {{ $to }}" aria-label="{{ __('Visit website') }}">
+                    <span class="site-preview-nav"><i></i><i></i><i></i><i></i></span>
+                    <span class="site-preview-letter">{{ mb_strtoupper(mb_substr($site->domain, 0, 1)) }}</span>
+                    <span class="site-preview-bar"></span><span class="site-preview-bar short"></span>
+                    <span class="site-preview-open"><x-icon name="external" />{{ __('Open website') }}</span>
+                </a>
+                <div class="site-body">
+                    <dl class="kv kv-tight">
+                        <dt>{{ __('Type') }}</dt><dd>{{ $site->profile === 'wordpress' ? 'WordPress' : __(ucfirst($site->profile ?? 'php')) }}</dd>
+                        <dt>PHP</dt><dd>{{ $site->php_version }}</dd>
+                        <dt>{{ __('Page cache') }}</dt><dd>{{ $site->page_cache ? __('On') : __('Off') }}</dd>
+                    </dl>
+                </div>
+            </div>
+
+            @if ($wp)
+                <div class="card">
+                    <div class="card-head"><h2>{{ __('Log in to WordPress') }}</h2></div>
+                    <p class="muted small">{{ __('Straight into the dashboard of :site, without a password.', ['site' => $wp->label()]) }}</p>
+                    <div class="actions">
+                        <form method="POST" action="{{ route('client.wordpress.login', $wp) }}" target="_blank">@csrf
+                            <button class="btn btn-primary" type="submit"><x-icon name="wordpress" />{{ __('WP admin') }}</button></form>
+                        <a class="btn btn-ghost" href="{{ route('client.wordpress.show', $wp) }}">{{ __('Settings') }}</a>
+                    </div>
+                </div>
+            @endif
+
+            <div class="card">
+                <div class="card-head"><h2>{{ __('Usage') }}</h2></div>
+                <div class="usage">
+                    <div><span>{{ __('Disk space') }}</span><strong>{{ \Illuminate\Support\Number::fileSize($site->disk_used_mb * 1024 * 1024) }}@if ($o->diskQuotaMb()) / {{ \Illuminate\Support\Number::fileSize($o->diskQuotaMb() * 1024 * 1024) }}@endif</strong></div>
+                    @if ($o->diskPercent() !== null)<x-ui.meter label="" :percent="$o->diskPercent()" />@endif
+                    <div><span>{{ __('Data traffic this month') }}</span><strong>{{ \Illuminate\Support\Number::fileSize($site->trafficBytes(), 1) }}</strong></div>
+                    <div><span>{{ __('Databases') }}</span><strong>{{ $site->databases()->count() }}</strong></div>
+                    @if ($o->mailDomain && $o->hasLocalMail())
+                        <div><span>{{ __('Mailboxes') }}</span><strong>{{ $o->mailDomain->mailboxes_count }}</strong></div>
+                    @endif
+                </div>
+            </div>
+        </aside>
+
+        {{-- Middle: tabs --}}
+        <section class="card site-main">
+            <nav class="site-tabs" aria-label="{{ __('Sections') }}">
+                @foreach ($tabs as $key => $label)
+                    <a href="{{ route('client.websites.show', [$site, 'tab' => $key]) }}" @class(['is-active' => $tab === $key]) @if ($tab === $key) aria-current="page" @endif>{{ $label }}</a>
+                @endforeach
+            </nav>
+            <div class="site-tab">
+                @include('client.websites.overview.tab-'.$tab)
+            </div>
+            <footer class="site-foot">
+                <span>{{ __('Website in') }} <code>{{ $site->document_root ? \Illuminate\Support\Str::afterLast(rtrim($site->document_root, '/'), '/') : 'public_html' }}</code></span>
+                @if ($o->serverIp)<span>{{ __('IP address') }} <code>{{ $o->serverIp }}</code></span>@endif
+                @if ($site->system_user)<span>{{ __('System user') }} <code>{{ $site->system_user }}</code></span>@endif
+            </footer>
+        </section>
+
+        {{-- Right: shortcuts and package --}}
+        <aside class="site-rail">
+            <div class="card">
+                <div class="card-head"><h2>{{ __('Quick links') }}</h2></div>
+                <div class="quick-links">
+                    @foreach (array_filter([
+                        $o->has('client.backups.index') ? [route('client.backups.index'), 'backup', __('Backups')] : null,
+                        $o->has('client.files.browse') ? [route('client.files.browse', $site), 'folder', __('File manager')] : null,
+                        $wp ? [route('client.wordpress.show', $wp), 'wordpress', 'WordPress'] : null,
+                        $o->mailDomain ? [$o->mailLink('mailboxes'), 'mail', __('Mailboxes')] : null,
+                        $o->mailDomain ? [$o->mailLink('dns'), 'globe', __('DNS records')] : null,
+                        $o->has('client.protection.show') ? [route('client.protection.show', $site), 'shield', __('Protection and allowlist')] : null,
+                        $o->has('client.git.index') && config('git.customer_access') ? [route('client.git.index'), 'git', __('Git deployments')] : null,
+                    ]) as [$href, $icon, $label])
+                        <a href="{{ $href }}"><span class="kpi-icon">@include('client.websites.overview.icon', ['name' => $icon])</span>{{ $label }}<x-icon name="chevron" /></a>
                     @endforeach
                 </div>
-                <div><button type="submit" class="btn btn-dark">{{ __('Save') }}</button></div>
-            </form>
-        </x-ui.card>
-        <x-ui.card :title="__('Speed & caching')">
-            <form method="POST" action="{{ route('client.websites.update', $website) }}" class="form">
-                @csrf @method('PUT')
-                <p class="muted small">{{ __('Pages are served straight from the server cache. Logged-in visitors and shopping carts are skipped automatically.') }}</p>
-                <input type="hidden" name="page_cache" value="0">
-                <label class="check"><input type="checkbox" name="page_cache" value="1" @checked($website->page_cache)><span>{{ __('Page cache') }}</span></label>
-                <div><button type="submit" class="btn btn-dark">{{ __('Save') }}</button></div>
-            </form>
-        </x-ui.card>
-        @includeIf('security::client.site-card', ['website' => $website])
-        <x-ui.card :title="__('Details')">
-            <dl class="kv">
-                <dt>{{ __('Type') }}</dt><dd>{{ __(ucfirst($website->profile)) }}</dd>
-                <dt>{{ __('Also reachable as') }}</dt><dd>{{ $website->aliases ? implode(', ', $website->aliases) : '–' }}</dd>
-                <dt>{{ __('Disk') }}</dt><dd>{{ $website->disk_used_mb }} MB</dd>
-                <dt>{{ __('Data traffic this month') }}</dt><dd>{{ \Illuminate\Support\Number::fileSize($website->trafficBytes(), 1) }}</dd>
-                <dt>{{ __('SFTP user') }}</dt><dd class="mono">{{ $website->system_user ?? '–' }}</dd>
-            </dl>
-        </x-ui.card>
-    </section>
-    @include('partials.website-php', ['website' => $website, 'action' => route('client.websites.php', $website)])
-    @includeIf('wordpress::partials.website-card', ['website' => $website])
-    @includeIf('domain-aliases::partials.website-card', ['website' => $website])
-    @includeIf('git::partials.website-card', ['website' => $website])
+            </div>
+
+            <div class="card">
+                <div class="card-head"><h2>{{ __('Subscription') }}</h2></div>
+                <dl class="kv kv-tight">
+                    <dt>{{ __('Package') }}</dt><dd>{{ $pkg?->name ?? '–' }}</dd>
+                    <dt>{{ __('Status') }}</dt><dd><x-ui.pill :status="$site->status">{{ $site->status === 'active' ? __('Active') : __(ucfirst($site->status)) }}</x-ui.pill></dd>
+                    <dt>{{ __('Holder') }}</dt><dd>{{ $site->customer?->displayName() }}</dd>
+                </dl>
+                @if ($site->customer)
+                    @php $c = $site->customer; @endphp
+                    <div class="usage">
+                        <div><span>{{ __('Disk space') }}</span><strong>{{ \Illuminate\Support\Number::fileSize($c->diskUsedMb() * 1024 * 1024) }} / {{ $pkg ? $pkg->limitLabel('disk_mb') : __('Unlimited') }}</strong></div>
+                        @if ($pkg?->disk_mb)<x-ui.meter label="" :percent="$c->diskUsedMb() / $pkg->disk_mb * 100" />@endif
+                        <div><span>{{ __('Data traffic') }}</span><strong>{{ \Illuminate\Support\Number::fileSize($c->trafficBytes(), 1) }} / {{ $pkg ? $pkg->limitLabel('traffic_gb_month') : __('Unlimited') }}</strong></div>
+                        @if ($c->trafficPercent() !== null)<x-ui.meter label="" :percent="$c->trafficPercent()" />@endif
+                        <div><span>{{ __('Websites') }}</span><strong>{{ $c->websites()->count() }} / {{ $pkg ? $pkg->limitLabel('max_websites') : __('Unlimited') }}</strong></div>
+                    </div>
+                @endif
+                @if ($o->has('client.shop.index'))
+                    <a class="btn btn-sm" href="{{ route('client.shop.index') }}" style="align-self:flex-start">{{ __('More space? Upgrade your package') }}</a>
+                @endif
+            </div>
+        </aside>
+    </div>
 </x-layouts.client>

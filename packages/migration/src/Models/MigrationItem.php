@@ -224,6 +224,8 @@ class MigrationItem extends Model
                 $current = __('Copying website files');
             } elseif (preg_match('/^database (\S+) -> /', $line, $m)) {
                 $current = __('Copying database :name', ['name' => $m[1]]);
+            } elseif (str_starts_with($line, 'wordpress ')) {
+                $current = __('Updating the WordPress configuration');
             } elseif (preg_match('/^mail (\S+): start/', $line, $m)) {
                 $current = __('Copying mailbox :box', ['box' => $m[1]]);
             }
