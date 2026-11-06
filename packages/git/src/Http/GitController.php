@@ -58,7 +58,7 @@ abstract class GitController extends Controller
             ->when($this->customerId($request), fn ($q, $id) => $q->forCustomer($id))
             ->get()->sortBy(fn ($r) => $r->label())->values();
         $recent = GitDeployment::with('repository.website')
-            ->whereIn('git_repository_id', $repos->pluck('id'))->latest('id')->limit(10)->get();
+            ->whereIn('git_repository_id', $repos->pluck('id'))->latest()->latest('id')->limit(10)->get();
 
         return view("git::{$this->area}.index", ['repos' => $repos, 'recent' => $recent, 'area' => $this->area]);
     }

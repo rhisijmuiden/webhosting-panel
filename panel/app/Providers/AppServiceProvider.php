@@ -136,6 +136,7 @@ class AppServiceProvider extends ServiceProvider
                 'websites' => ['section' => 'Websites', 'order' => 100],
                 'wordpress' => ['section' => 'Websites', 'order' => 110],
                 'apps' => ['section' => 'Websites', 'order' => 120],
+                'git' => ['section' => 'Websites', 'order' => 125],
                 'security-alerts' => ['section' => 'Websites', 'order' => 130, 'label' => 'Security'],
                 'mail' => ['section' => 'Email & domains', 'order' => 200],
                 'backups' => ['section' => 'Files & data', 'order' => 300],
