@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8bc1d5567fdc636f3d0755a1132667ae",
+    "content-hash": "9ad879686ab321a6743a0df9b4b216fa",
     "packages": [
         {
             "name": "brick/math",
@@ -3307,7 +3307,7 @@
         },
         {
             "name": "rhis/apps",
-            "version": "dev-claude/project-thread-9o1zwr",
+            "version": "dev-claude/project-thread-nqaa7a",
             "dist": {
                 "type": "path",
                 "url": "../packages/apps",
@@ -3340,7 +3340,7 @@
         },
         {
             "name": "rhis/backups",
-            "version": "dev-claude/project-thread-9o1zwr",
+            "version": "dev-claude/project-thread-nqaa7a",
             "dist": {
                 "type": "path",
                 "url": "../packages/backups",
@@ -3373,7 +3373,7 @@
         },
         {
             "name": "rhis/crm-api",
-            "version": "dev-claude/project-thread-9o1zwr",
+            "version": "dev-claude/project-thread-nqaa7a",
             "dist": {
                 "type": "path",
                 "url": "../packages/crm-api",
@@ -3406,7 +3406,7 @@
         },
         {
             "name": "rhis/dns-mail",
-            "version": "dev-claude/project-thread-9o1zwr",
+            "version": "dev-claude/project-thread-nqaa7a",
             "dist": {
                 "type": "path",
                 "url": "../packages/dns-mail",
@@ -3454,7 +3454,7 @@
         },
         {
             "name": "rhis/migration",
-            "version": "dev-claude/project-thread-9o1zwr",
+            "version": "dev-claude/project-thread-nqaa7a",
             "dist": {
                 "type": "path",
                 "url": "../packages/migration",
@@ -3480,6 +3480,39 @@
                 "proprietary"
             ],
             "description": "Server migration for the Webhosting Panel: move websites, databases, mailboxes, certificates and DNS from a Plesk server.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/wordpress",
+            "version": "dev-claude/project-thread-nqaa7a",
+            "dist": {
+                "type": "path",
+                "url": "../packages/wordpress",
+                "reference": "71ee75a967512e4773a834e67d43b279568f58d4"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\WordPress\\WordPressServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\WordPress\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "WordPress toolkit for the Webhosting Panel: one-click updates, WP-cron takeover, admin passwords and one-click login, outdated plugins in the security screen.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8663,7 +8696,8 @@
         "rhis/backups": 20,
         "rhis/crm-api": 20,
         "rhis/dns-mail": 20,
-        "rhis/migration": 20
+        "rhis/migration": 20,
+        "rhis/wordpress": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

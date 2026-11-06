@@ -115,6 +115,24 @@ temporary files), `backup.target_test`, `backup.target_remove`,
 `backup.check`, `backup.prune`. The screens live in `packages/backups`
 (`Rhis\Backups\`, admin `/admin/backups`, client `/backups`).
 
+WordPress toolkit (`wordpress.py`, screens in `packages/wordpress`, `Rhis\WordPress\`,
+admin `/admin/wordpress`, client `/wordpress`):
+
+- Shared helper `agent/whp_agent/wordpress.py` for every feature that touches WordPress
+  (app installer, migrations): `site_info(domain)`, `detect(domain)` (reads files, runs no
+  PHP), `wp(domain, args, path="", input_text=None)` and `as_user(site, argv, cwd)`.
+  WP-CLI (`/usr/local/bin/wp`, installed by `installer/modules/50-php.sh`) always runs as
+  the site user through `systemd-run` in `whp-sites.slice`, with the site's PHP version and
+  `UMask=0022`, and by default with `--skip-plugins --skip-themes`. Never run it as root.
+- Actions: `wp.detect`, `wp.status`, `wp.users`, `wp.set_password` (password over stdin),
+  `wp.login_link` (single use link, 2 minutes, via the mu-plugin `whp-login.php`),
+  `wp.cron_get`, `wp.cron_set` (`DISABLE_WP_CRON` plus `whp-wpcron-<site>-<path>.timer`),
+  `wp.cron_run`, `wp.snapshots`, and the jobs `wp.update`, `wp.update_many`, `wp.restore`.
+- Before an update the database, plugins and themes are saved in
+  `/var/lib/webhosting-panel/wordpress/snapshots/<site>-<path>/` (last 2 kept). When the
+  front page answered below 500 before the update and 500+ after, the update is rolled back.
+- `site.php` rewrites the WP-cron units of the site, they call the PHP binary directly.
+
 Actions added by the app installer (`databases.py`, `apps.py`, see `packages/apps/README.md`):
 
 | Action | What |
