@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a12d53fcd0072f59745d4a447552e142",
+    "content-hash": "9464e86d6ea99a602afae74f3504b61d",
     "packages": [
         {
             "name": "brick/math",
@@ -3546,6 +3546,39 @@
                 "proprietary"
             ],
             "description": "Server migration for the Webhosting Panel: move websites, databases, mailboxes, certificates and DNS from a Plesk server.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/security",
+            "version": "dev-claude/project-thread-0lz2y1",
+            "dist": {
+                "type": "path",
+                "url": "../packages/security",
+                "reference": "18caad504c1c6f5a9deb8c0179b35b761b8b64ba"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Security\\SecurityServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Security\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Login protection for the Webhosting Panel: brute-force thresholds, per-site protection and allowlists, on top of CrowdSec through the agent.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8798,6 +8831,7 @@
         "rhis/files": 20,
         "rhis/git": 20,
         "rhis/migration": 20,
+        "rhis/security": 20,
         "rhis/vulnerabilities": 20,
         "rhis/wordpress": 20
     },
