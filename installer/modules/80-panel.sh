@@ -74,7 +74,9 @@ module_panel() {
   getent passwd whp >/dev/null || run useradd --system --gid whp --home-dir "$WHP_STATE" \
     --shell /usr/sbin/nologin whp
   chgrp whp "$WHP_ETC"
-  install -d -m 0750 -o whp -g whp "$WHP_STATE" "$WHP_STATE/panel"
+  # 0751: other users (vmail for the spam Sieve script) may traverse, not list.
+  install -d -m 0751 -o whp -g whp "$WHP_STATE"
+  install -d -m 0750 -o whp -g whp "$WHP_STATE/panel"
   install -d -m 0770 -o root -g whp "$WHP_LOG_DIR"
 
   panel_checkout

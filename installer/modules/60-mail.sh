@@ -141,6 +141,10 @@ mail_dovecot() {
   # Spam routing script: shipped once, afterwards owned by the panel agent.
   local sieve_dir=/var/lib/webhosting-panel/mail/sieve src=$REPO_DIR/mail/antispam/before.sieve
   [[ -f $src ]] || src=$TPL/dovecot/before.sieve
+  # vmail (LMTP) must reach the script: traverse-only on the parents.
+  chmod o+x "$WHP_STATE"
+  install -d -m 0751 "$WHP_STATE/mail"
+  chmod o+x "$WHP_STATE/mail"
   install -d -m 0755 "$sieve_dir"
   [[ -f $sieve_dir/before.sieve ]] || install -m 0644 "$src" "$sieve_dir/before.sieve"
   run doveconf -n

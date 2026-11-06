@@ -131,7 +131,8 @@ CONF
     timedatectl set-ntp true 2>/dev/null || true
   fi
 
-  install -d -m 0750 "$WHP_ETC" "$WHP_STATE"
+  install -d -m 0750 "$WHP_ETC"
+  install -d -m 0751 "$WHP_STATE"
   install -d -m 0755 "$WHP_VHOSTS" /var/www/acme
   ok "base system ready"
 }
