@@ -9,6 +9,7 @@ $paths = [
     'database' => '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
     'cloud' => '<path d="M7 18a5 5 0 0 1-.5-10A7 7 0 0 1 20 10a4 4 0 0 1-1 8H7Z"/>',
     'code' => '<path d="m8 7-5 5 5 5M16 7l5 5-5 5"/>',
+    'wordpress' => '<circle cx="12" cy="12" r="9"/><path d="M4.5 8.5h4M15 8.5h4M6.5 8.5 10 18l2-5.5L14 18l3.5-9.5M10.2 8.5l3.8 9.5"/>',
     'shield' => '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z"/>',
     'firewall' => '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 15h18M9 4v5M15 9v6M9 15v5"/>',
     'backup' => '<path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/>',

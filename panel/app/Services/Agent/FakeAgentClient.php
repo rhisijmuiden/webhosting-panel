@@ -113,8 +113,40 @@ class FakeAgentClient implements AgentClient
             'mail.quarantine_delete' => ['user' => $params['user'] ?? '', 'deleted' => count($params['uids'] ?? []), 'learned' => 0],
             'mail.tlsa' => ['usage' => 3, 'selector' => 1, 'matching_type' => 1, 'certificate' => hash('sha256', 'fake-mail-key'),
                 'cert_file' => '/etc/letsencrypt/live/mail.example.test/fullchain.pem', 'not_after' => 'Feb  3 12:00:00 2027 GMT', 'reuse_key' => true],
+            'wp.detect' => ['domain' => $params['domain'] ?? '', 'installs' => Website::where('domain', $params['domain'] ?? '')->where('profile', 'wordpress')->exists()
+                ? [['path' => '', 'version' => '6.6.2']] : []],
+            'wp.status' => $this->wordpressStatus($params),
+            'wp.update', 'wp.update_many', 'wp.restore' => ['job' => (string) Str::uuid()],
+            'wp.cron_get', 'wp.cron_set' => ['mode' => $params['mode'] ?? 'wordpress', 'interval' => ($params['mode'] ?? 'wordpress') === 'system' ? ($params['interval'] ?? 5) : null,
+                'timer' => 'whp-wpcron-fake.timer', 'timer_active' => ($params['mode'] ?? '') === 'system', 'last_run' => null, 'last_result' => null],
+            'wp.users' => ['users' => [['id' => 1, 'login' => 'beheerder', 'email' => 'info@'.($params['domain'] ?? 'example.test'), 'name' => 'Beheerder']]],
+            'wp.set_password' => ['user' => ['id' => $params['user_id'] ?? 1, 'login' => 'beheerder', 'email' => '', 'name' => '']]
+                + (isset($params['password']) ? [] : ['password' => 'Fake-Generated-Pass-2026']),
+            'wp.login_link' => ['url' => 'https://'.($params['domain'] ?? 'example.test').'/wp-login.php?whp_sso='.Str::random(43), 'user' => ['id' => 1, 'login' => 'beheerder'], 'expires_in' => 120],
+            'wp.snapshots' => ['snapshots' => [['id' => now()->subDay()->format('Ymd-His'), 'size' => 48 * 1024 * 1024]]],
             default => throw new AgentException('unknown_action', "Unknown action: {$action}"),
         };
+    }
+
+    private function wordpressStatus(array $params): array
+    {
+        $plugins = [
+            ['name' => 'woocommerce', 'title' => 'WooCommerce', 'status' => 'active', 'version' => '9.1.2', 'update' => true, 'update_version' => '9.4.1', 'auto_update' => false],
+            ['name' => 'contact-form-7', 'title' => 'Contact Form 7', 'status' => 'active', 'version' => '5.9.8', 'update' => true, 'update_version' => '6.0.1', 'auto_update' => false],
+            ['name' => 'wordfence', 'title' => 'Wordfence Security', 'status' => 'active', 'version' => '8.0.1', 'update' => false, 'update_version' => null, 'auto_update' => true],
+            ['name' => 'hello-dolly', 'title' => 'Hello Dolly', 'status' => 'inactive', 'version' => '1.7.2', 'update' => false, 'update_version' => null, 'auto_update' => false],
+        ];
+        $themes = [
+            ['name' => 'astra', 'title' => 'Astra', 'status' => 'active', 'version' => '4.7.0', 'update' => true, 'update_version' => '4.8.3', 'auto_update' => false],
+            ['name' => 'twentytwentyfour', 'title' => 'Twenty Twenty-Four', 'status' => 'inactive', 'version' => '1.2', 'update' => false, 'update_version' => null, 'auto_update' => false],
+        ];
+
+        return [
+            'domain' => $params['domain'] ?? '', 'path' => $params['path'] ?? '', 'version' => '6.6.2',
+            'core_update' => ['version' => '6.7.1', 'type' => 'major'], 'plugins' => $plugins, 'themes' => $themes,
+            'outdated' => ['core' => true, 'plugins' => 2, 'themes' => 1],
+            'cron' => ['mode' => 'wordpress', 'interval' => null], 'checked_at' => time(), 'errors' => [],
+        ];
     }
 
     private function quarantine(string $domain): array

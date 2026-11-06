@@ -39,4 +39,5 @@
             </dl>
         </x-ui.card>
     </section>
+    @includeIf('wordpress::partials.website-card', ['website' => $website])
 </x-layouts.client>
