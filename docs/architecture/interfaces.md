@@ -105,6 +105,15 @@ days, days forever.
 Other phases add their own module (`dns.py`, `mail.py`, `backup.py`), for
 example `backup.run` calling `whp-backup … --json`.
 
+Actions added by phase 4 (`backup.py`, see `backup/README.md`):
+`backup.status`, `backup.targets`, `backup.target_add` (secrets such as
+`password`, `ssh_key`, `onedrive_token` and `repo_key` go to whp-backup as
+temporary files), `backup.target_test`, `backup.target_remove`,
+`backup.target_export_key`, `backup.list`, `backup.schedule`,
+`backup.get_schedule`, and the jobs `backup.run`, `backup.restore`,
+`backup.check`, `backup.prune`. The screens live in `packages/backups`
+(`Rhis\Backups\`, admin `/admin/backups`, client `/backups`).
+
 ## Release channels
 
 | Channel | Git branch |

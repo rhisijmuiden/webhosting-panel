@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a5de7e7ab27dd7684e4bb17da603a0a5",
+    "content-hash": "45c4998ac4e8f2510f4bce144db12244",
     "packages": [
         {
             "name": "brick/math",
@@ -3306,8 +3306,74 @@
             "time": "2026-09-16T11:39:30+00:00"
         },
         {
+            "name": "rhis/backups",
+            "version": "dev-claude/project-thread-im3b15",
+            "dist": {
+                "type": "path",
+                "url": "../packages/backups",
+                "reference": "bc2c7f272a942311764cb117935218e2213984d0"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Backups\\BackupsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Backups\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Backup screens for the Webhosting Panel (admin and client), on top of whp-backup through the agent.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/crm-api",
+            "version": "dev-claude/project-thread-im3b15",
+            "dist": {
+                "type": "path",
+                "url": "../packages/crm-api",
+                "reference": "01ac550a7d0e4c30911072d01f7e2722f152825b"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\CrmApi\\CrmApiServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\CrmApi\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "CRM API for the Webhosting Panel (/api/v1/crm): plans, customers, subscriptions, usage, signed webhooks, catalog and orders.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "rhis/dns-mail",
-            "version": "dev-claude/project-thread-o92eyn",
+            "version": "dev-claude/project-thread-im3b15",
             "dist": {
                 "type": "path",
                 "url": "../packages/dns-mail",
@@ -8527,6 +8593,8 @@
     "aliases": [],
     "minimum-stability": "stable",
     "stability-flags": {
+        "rhis/backups": 20,
+        "rhis/crm-api": 20,
         "rhis/dns-mail": 20
     },
     "prefer-stable": true,

@@ -1,0 +1,936 @@
+#!/usr/bin/env bash
+# whp-backup: backup engine of Webhosting Panel.
+#
+# Wraps restic (encrypted, deduplicated snapshots) and rclone (transport to
+# SFTP/SCP, FTP, FTPS, OneDrive or a local/mounted path). Every target is one
+# restic repository. Run `whp-backup help` for usage.
+#
+# Output is human readable by default; pass --json for one JSON document on
+# stdout (used by the whp-agent). Logs go to stderr and the log file.
+
+set -Eeuo pipefail
+shopt -s nullglob
+
+WHP_BACKUP_VERSION="0.1.0"
+
+WHP_ETC="${WHP_ETC:-/etc/webhosting-panel}"
+CONF_DIR="${WHP_BACKUP_CONF_DIR:-$WHP_ETC/backup}"
+TARGETS_DIR="$CONF_DIR/targets"
+STATE_DIR="${WHP_STATE_DIR:-/var/lib/webhosting-panel}/backup"
+LOG_DIR="${WHP_LOG_DIR:-/var/log/webhosting-panel}"
+LOG_FILE="$LOG_DIR/backup.log"
+LOCK_FILE="${WHP_BACKUP_LOCK:-/run/lock/whp-backup.lock}"
+
+JSON=0
+QUIET=0
+
+# ----------------------------------------------------------------------------
+# Helpers
+# ----------------------------------------------------------------------------
+
+log() {
+	local level="$1"; shift
+	local line
+	line="$(date -u +%Y-%m-%dT%H:%M:%SZ) [$level] $*"
+	if [[ -d "$LOG_DIR" && -w "$LOG_DIR" ]]; then
+		printf '%s\n' "$line" >>"$LOG_FILE" 2>/dev/null || true
+	fi
+	if [[ $QUIET -eq 0 || "$level" == "error" ]]; then
+		printf '%s\n' "$line" >&2
+	fi
+}
+
+die() {
+	local code="$1"; shift
+	log error "$*"
+	if [[ $JSON -eq 1 ]]; then
+		jq -cn --arg code "$code" --arg msg "$*" '{ok:false, error:{code:$code, message:$msg}}'
+	fi
+	exit 1
+}
+
+need() {
+	local bin
+	for bin in "$@"; do
+		command -v "$bin" >/dev/null 2>&1 || die missing_dependency "required program not found: $bin"
+	done
+}
+
+# Print the result: JSON document when --json, otherwise a short human form.
+emit() {
+	local doc="$1"
+	if [[ $JSON -eq 1 ]]; then
+		jq -c '{ok:true, data:.}' <<<"$doc"
+	else
+		jq -r 'if type == "string" then . else . end' <<<"$doc"
+	fi
+}
+
+valid_name() { [[ "$1" =~ ^[a-z0-9][a-z0-9_-]{0,39}$ ]]; }
+valid_domain() { [[ "$1" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$ ]]; }
+valid_dbname() { [[ "$1" =~ ^[A-Za-z0-9_]{1,64}$ ]]; }
+valid_snapshot() { [[ "$1" =~ ^([0-9a-f]{8}|[0-9a-f]{64}|latest)$ ]]; }
+
+# Read KEY=VALUE files without sourcing them (no code execution).
+# Usage: read_kv FILE ARRAYNAME
+read_kv() {
+	local file="$1" __arr="$2" key value line
+	[[ -f "$file" ]] || return 0
+	while IFS= read -r line || [[ -n "$line" ]]; do
+		[[ "$line" =~ ^[[:space:]]*(#|$) ]] && continue
+		[[ "$line" =~ ^([A-Z][A-Z0-9_]*)=(.*)$ ]] || continue
+		key="${BASH_REMATCH[1]}"
+		value="${BASH_REMATCH[2]}"
+		# Strip one level of matching quotes.
+		if [[ "$value" =~ ^\"(.*)\"$ || "$value" =~ ^\'(.*)\'$ ]]; then
+			value="${BASH_REMATCH[1]}"
+		fi
+		printf -v "${__arr}[$key]" '%s' "$value"
+	done <"$file"
+}
+
+write_kv() {
+	# Usage: write_kv FILE KEY VALUE [KEY VALUE ...]
+	local file="$1"; shift
+	local tmp
+	tmp="$(mktemp "$file.XXXXXX")"
+	chmod 600 "$tmp"
+	while [[ $# -ge 2 ]]; do
+		[[ -n "$2" ]] && printf '%s="%s"\n' "$1" "${2//\"/}" >>"$tmp"
+		shift 2
+	done
+	mv -f "$tmp" "$file"
+}
+
+# ----------------------------------------------------------------------------
+# Configuration
+# ----------------------------------------------------------------------------
+
+declare -A CFG=(
+	[BACKUP_HOST]=""
+	[SITES_ROOT]="/var/www/vhosts"
+	[MAIL_ROOT]="/var/vmail"
+	[SYSTEM_PATHS]="/etc/webhosting-panel /etc/nginx /etc/php /etc/mysql /etc/postfix /etc/dovecot /etc/rspamd /etc/letsencrypt /etc/crowdsec /etc/nftables.conf /etc/unbound /var/lib/webhosting-panel/panel"
+	[DATABASES]="yes"
+	[DB_EXCLUDE]="information_schema performance_schema sys mysql"
+	[MARIADB_DEFAULTS_FILE]=""
+	[KEEP_LAST]="3"
+	[KEEP_DAILY]="7"
+	[KEEP_WEEKLY]="4"
+	[KEEP_MONTHLY]="6"
+	[KEEP_YEARLY]="0"
+	[COMPRESSION]="auto"
+	[LIMIT_UPLOAD_KIB]="0"
+	[CHECK_READ_DATA_SUBSET]="2%"
+	[PRE_RESTORE_SNAPSHOT]="yes"
+)
+
+load_config() {
+	read_kv "$CONF_DIR/backup.conf" CFG
+	[[ -n "${CFG[BACKUP_HOST]}" ]] || CFG[BACKUP_HOST]="$(hostname -f 2>/dev/null || hostname)"
+}
+
+declare -A TGT=()
+
+load_target() {
+	local name="$1"
+	valid_name "$name" || die invalid_params "invalid target name: $name"
+	local dir="$TARGETS_DIR/$name"
+	[[ -f "$dir/target.conf" ]] || die not_found "target not found: $name"
+	TGT=()
+	TGT[NAME]="$name"
+	TGT[ENABLED]="yes"
+	read_kv "$dir/target.conf" TGT
+	for k in KEEP_LAST KEEP_DAILY KEEP_WEEKLY KEEP_MONTHLY KEEP_YEARLY; do
+		[[ -n "${TGT[$k]:-}" ]] || TGT[$k]="${CFG[$k]}"
+	done
+	export RCLONE_CONFIG="$dir/rclone.conf"
+	export RESTIC_PASSWORD_FILE="$dir/repo.key"
+	export RESTIC_REPOSITORY="rclone:remote:${TGT[REMOTE_PATH]}"
+	export RESTIC_CACHE_DIR="$STATE_DIR/cache"
+	export RESTIC_COMPRESSION="${CFG[COMPRESSION]}"
+	unset RESTIC_PASSWORD RESTIC_PASSWORD_COMMAND
+	[[ -f "$RESTIC_PASSWORD_FILE" ]] || die not_found "repository key missing for target $name"
+}
+
+all_targets() {
+	local d
+	for d in "$TARGETS_DIR"/*/; do
+		d="${d%/}"; d="${d##*/}"
+		[[ -f "$TARGETS_DIR/$d/target.conf" ]] && printf '%s\n' "$d"
+	done
+}
+
+r() {
+	# restic with the globally configured options.
+	local -a extra=()
+	if [[ "${CFG[LIMIT_UPLOAD_KIB]}" != "0" ]]; then
+		extra+=(--limit-upload "${CFG[LIMIT_UPLOAD_KIB]}")
+	fi
+	restic "${extra[@]}" "$@"
+}
+
+restic_supports_stdin_command() {
+	# --stdin-from-command exists since restic 0.17 (Debian 13 ships 0.18).
+	local v
+	v="$(restic version 2>/dev/null | awk '{print $2}')"
+	[[ -n "$v" ]] || return 1
+	local major minor
+	IFS=. read -r major minor _ <<<"$v"
+	(( major > 0 || minor >= 17 ))
+}
+
+# ----------------------------------------------------------------------------
+# Lock
+# ----------------------------------------------------------------------------
+
+take_lock() {
+	mkdir -p "$(dirname "$LOCK_FILE")"
+	exec 9>"$LOCK_FILE"
+	flock -n 9 || die busy "another whp-backup job is running"
+}
+
+# ----------------------------------------------------------------------------
+# target subcommands
+# ----------------------------------------------------------------------------
+
+cmd_target() {
+	local sub="${1:-list}"; shift || true
+	case "$sub" in
+		add) target_add "$@" ;;
+		list) target_list ;;
+		show) target_show "$@" ;;
+		test) target_test "$@" ;;
+		remove) target_remove "$@" ;;
+		export-key) target_export_key "$@" ;;
+		*) die invalid_params "unknown target command: $sub" ;;
+	esac
+}
+
+target_add() {
+	local name="" type="" host="" port="" user="" path="" password_file="" key_file=""
+	local tls_mode="explicit" token_file="" drive_id="" drive_type="" repo_key_file=""
+	local insecure_ftp=0 known_hosts_file="" no_init=0 update=0
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			--name) name="$2"; shift 2 ;;
+			--type) type="$2"; shift 2 ;;
+			--host) host="$2"; shift 2 ;;
+			--port) port="$2"; shift 2 ;;
+			--user) user="$2"; shift 2 ;;
+			--path) path="$2"; shift 2 ;;
+			--password-file) password_file="$2"; shift 2 ;;
+			--ssh-key) key_file="$2"; shift 2 ;;
+			--known-hosts) known_hosts_file="$2"; shift 2 ;;
+			--tls) tls_mode="$2"; shift 2 ;;
+			--allow-plain-ftp) insecure_ftp=1; shift ;;
+			--onedrive-token-file) token_file="$2"; shift 2 ;;
+			--onedrive-drive-id) drive_id="$2"; shift 2 ;;
+			--onedrive-drive-type) drive_type="$2"; shift 2 ;;
+			--repo-key-file) repo_key_file="$2"; shift 2 ;;
+			--no-init) no_init=1; shift ;;
+			--update) update=1; shift ;;
+			*) die invalid_params "unknown option for target add: $1" ;;
+		esac
+	done
+
+	valid_name "$name" || die invalid_params "--name must match [a-z0-9][a-z0-9_-]{0,39}"
+	[[ -n "$path" ]] || die invalid_params "--path is required"
+	[[ "$path" != *$'\n'* && "$path" != *'"'* ]] || die invalid_params "invalid --path"
+	local dir="$TARGETS_DIR/$name"
+	if [[ -e "$dir" && $update -eq 0 ]]; then
+		die conflict "target already exists: $name (use --update)"
+	fi
+
+	local tmpdir
+	tmpdir="$(mktemp -d "$TARGETS_DIR/.new-$name.XXXXXX")"
+	chmod 700 "$tmpdir"
+	# shellcheck disable=SC2064
+	trap "rm -rf '$tmpdir'" EXIT
+
+	local rc="$tmpdir/rclone.conf"
+	local -a opts=()
+	local pass=""
+	if [[ -n "$password_file" ]]; then
+		[[ -r "$password_file" ]] || die invalid_params "cannot read --password-file"
+		pass="$(head -n1 "$password_file")"
+	fi
+
+	case "$type" in
+		sftp|scp)
+			[[ -n "$host" && -n "$user" ]] || die invalid_params "--host and --user are required for $type"
+			[[ -n "$key_file" || -n "$pass" ]] || die invalid_params "--ssh-key or --password-file is required for $type"
+			port="${port:-22}"
+			opts+=(host "$host" port "$port" user "$user")
+			if [[ -n "$key_file" ]]; then
+				[[ -r "$key_file" ]] || die invalid_params "cannot read --ssh-key"
+				install -m 600 "$key_file" "$tmpdir/id_key"
+				opts+=(key_file "$dir/id_key")
+			fi
+			[[ -n "$pass" ]] && opts+=(pass "$(rclone obscure "$pass")")
+			# Pin the host key: given file, else trust on first use.
+			if [[ -n "$known_hosts_file" ]]; then
+				install -m 600 "$known_hosts_file" "$tmpdir/known_hosts"
+			else
+				need ssh-keyscan
+				ssh-keyscan -p "$port" -T 10 "$host" >"$tmpdir/known_hosts" 2>/dev/null \
+					|| die unreachable "could not read the SSH host key of $host:$port"
+				[[ -s "$tmpdir/known_hosts" ]] || die unreachable "no SSH host key received from $host:$port"
+				log info "pinned SSH host key of $host:$port (trust on first use)"
+			fi
+			opts+=(known_hosts_file "$dir/known_hosts" shell_type unix)
+			type="sftp"
+			;;
+		ftp|ftps)
+			[[ -n "$host" && -n "$user" && -n "$pass" ]] || die invalid_params "--host, --user and --password-file are required for $type"
+			opts+=(host "$host" user "$user" pass "$(rclone obscure "$pass")")
+			if [[ "$type" == "ftps" ]]; then
+				case "$tls_mode" in
+					explicit) opts+=(explicit_tls true); port="${port:-21}" ;;
+					implicit) opts+=(tls true); port="${port:-990}" ;;
+					*) die invalid_params "--tls must be explicit or implicit" ;;
+				esac
+			else
+				[[ $insecure_ftp -eq 1 ]] || die invalid_params "plain FTP sends the password unencrypted; use ftps or pass --allow-plain-ftp"
+				port="${port:-21}"
+			fi
+			opts+=(port "$port")
+			;;
+		onedrive)
+			[[ -n "$token_file" ]] || die invalid_params "--onedrive-token-file is required (output of: rclone authorize onedrive)"
+			jq -e '.access_token and .refresh_token' "$token_file" >/dev/null 2>&1 \
+				|| die invalid_params "the OneDrive token file is not valid JSON from rclone authorize"
+			opts+=(token "$(jq -c . "$token_file")")
+			[[ -n "$drive_id" ]] && opts+=(drive_id "$drive_id")
+			opts+=(drive_type "${drive_type:-personal}")
+			;;
+		local)
+			;;
+		*) die invalid_params "--type must be one of: sftp, scp, ftp, ftps, onedrive, local" ;;
+	esac
+
+	: >"$rc"; chmod 600 "$rc"
+	RCLONE_CONFIG="$rc" rclone config create remote "$type" "${opts[@]}" --non-interactive >/dev/null \
+		|| die config_error "rclone could not create the remote"
+	# Paths inside rclone.conf must point at the final directory.
+	if [[ -n "$repo_key_file" ]]; then
+		[[ -r "$repo_key_file" ]] || die invalid_params "cannot read --repo-key-file"
+		install -m 600 "$repo_key_file" "$tmpdir/repo.key"
+	elif [[ $update -eq 1 && -f "$dir/repo.key" ]]; then
+		install -m 600 "$dir/repo.key" "$tmpdir/repo.key"
+	else
+		umask 077
+		head -c 48 /dev/urandom | base64 -w0 >"$tmpdir/repo.key"
+		printf '\n' >>"$tmpdir/repo.key"
+	fi
+	write_kv "$tmpdir/target.conf" \
+		TYPE "$type" HOST "$host" PORT "$port" USER "$user" REMOTE_PATH "$path" ENABLED yes \
+		CREATED "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+	if [[ $update -eq 1 && -d "$dir" ]]; then
+		rm -rf "$dir.old"
+		mv "$dir" "$dir.old"
+	fi
+	mv "$tmpdir" "$dir"
+	rm -rf "$dir.old"
+	trap - EXIT
+
+	load_target "$name"
+	local initialized="false"
+	if [[ $no_init -eq 0 ]]; then
+		if restic cat config >/dev/null 2>&1; then
+			log info "target $name: existing repository found, key accepted"
+		else
+			if [[ -n "$repo_key_file" ]]; then
+				die repo_error "no repository readable at the target with the given key"
+			fi
+			restic init >/dev/null || die repo_error "could not initialise the repository on target $name"
+			log info "target $name: new repository initialised"
+		fi
+		initialized="true"
+	fi
+	emit "$(target_json "$name" | jq --argjson init "$initialized" '. + {initialized:$init}')"
+}
+
+target_json() {
+	load_target "$1"
+	jq -n --arg name "$1" --arg type "${TGT[TYPE]}" --arg host "${TGT[HOST]:-}" \
+		--arg port "${TGT[PORT]:-}" --arg user "${TGT[USER]:-}" --arg path "${TGT[REMOTE_PATH]}" \
+		--arg enabled "${TGT[ENABLED]}" --arg created "${TGT[CREATED]:-}" \
+		'{name:$name, type:$type, host:$host, port:$port, user:$user, path:$path,
+		  enabled:($enabled == "yes"), created:$created}'
+}
+
+target_list() {
+	local doc="[]" t
+	while IFS= read -r t; do
+		doc="$(jq --argjson t "$(target_json "$t")" '. + [$t]' <<<"$doc")"
+	done < <(all_targets)
+	if [[ $JSON -eq 1 ]]; then
+		emit "$doc"
+	else
+		jq -r '.[] | "\(.name)\t\(.type)\t\(.host)\t\(.path)\t\(if .enabled then "enabled" else "disabled" end)"' <<<"$doc"
+	fi
+}
+
+target_show() { emit "$(target_json "${1:?target name}")"; }
+
+target_test() {
+	local name="${1:?target name}"
+	load_target "$name"
+	local start end ok="true" message="reachable" repo="false"
+	start="$(date +%s%N)"
+	if ! rclone lsf "remote:${TGT[REMOTE_PATH]}" --max-depth 1 >/dev/null 2>&1; then
+		if ! rclone mkdir "remote:${TGT[REMOTE_PATH]}" >/dev/null 2>&1; then
+			ok="false"; message="cannot connect or path not writable"
+		fi
+	fi
+	if [[ "$ok" == "true" ]] && restic cat config >/dev/null 2>&1; then
+		repo="true"
+	fi
+	end="$(date +%s%N)"
+	emit "$(jq -n --arg name "$name" --argjson ok "$ok" --argjson repo "$repo" --arg msg "$message" \
+		--argjson ms "$(( (end - start) / 1000000 ))" \
+		'{target:$name, reachable:$ok, repository:$repo, message:$msg, duration_ms:$ms}')"
+	[[ "$ok" == "true" ]]
+}
+
+target_remove() {
+	local name="${1:?target name}"
+	valid_name "$name" || die invalid_params "invalid target name"
+	[[ -d "$TARGETS_DIR/$name" ]] || die not_found "target not found: $name"
+	# Only the local configuration is removed; remote data stays.
+	rm -rf "${TARGETS_DIR:?}/$name"
+	emit "$(jq -n --arg name "$name" '{removed:$name, remote_data_kept:true}')"
+}
+
+target_export_key() {
+	local name="${1:?target name}"
+	load_target "$name"
+	emit "$(jq -n --arg name "$name" --arg key "$(head -n1 "$RESTIC_PASSWORD_FILE")" '{target:$name, repository_key:$key}')"
+}
+
+# ----------------------------------------------------------------------------
+# Scopes: what to back up
+# ----------------------------------------------------------------------------
+
+list_sites() {
+	local d
+	[[ -d "${CFG[SITES_ROOT]}" ]] || return 0
+	for d in "${CFG[SITES_ROOT]}"/*/; do
+		d="${d%/}"; d="${d##*/}"
+		valid_domain "$d" && printf 'site:%s\n' "$d"
+	done
+}
+
+list_mail() {
+	local d
+	[[ -d "${CFG[MAIL_ROOT]}" ]] || return 0
+	for d in "${CFG[MAIL_ROOT]}"/*/; do
+		d="${d%/}"; d="${d##*/}"
+		valid_domain "$d" && printf 'mail:%s\n' "$d"
+	done
+}
+
+mariadb_cmd() {
+	local bin="$1"; shift
+	local -a a=("$bin")
+	[[ -n "${CFG[MARIADB_DEFAULTS_FILE]}" ]] && a+=("--defaults-extra-file=${CFG[MARIADB_DEFAULTS_FILE]}")
+	printf '%s\n' "${a[@]}" "$@"
+}
+
+list_databases() {
+	[[ "${CFG[DATABASES]}" == "yes" ]] || return 0
+	command -v mariadb >/dev/null 2>&1 || { log warn "mariadb client not found, skipping databases"; return 0; }
+	local -a cmd
+	mapfile -t cmd < <(mariadb_cmd mariadb -N -B -e "SHOW DATABASES")
+	local db ex skip
+	while IFS= read -r db; do
+		skip=0
+		for ex in ${CFG[DB_EXCLUDE]}; do [[ "$db" == "$ex" ]] && skip=1; done
+		[[ $skip -eq 0 ]] && valid_dbname "$db" && printf 'db:%s\n' "$db"
+	done < <("${cmd[@]}" 2>/dev/null || log warn "could not list databases")
+}
+
+validate_scopes() {
+	local s
+	for s in "$@"; do
+		case "$s" in
+			all|system|sites|mail|databases) ;;
+			site:*|mail:*) valid_domain "${s#*:}" || die invalid_params "invalid domain in scope $s" ;;
+			db:*) valid_dbname "${s#db:}" || die invalid_params "invalid database in scope $s" ;;
+			*) die invalid_params "unknown scope: $s" ;;
+		esac
+	done
+}
+
+# Expand --scope values into a list of concrete items (validated first).
+expand_scopes() {
+	local s
+	for s in "$@"; do
+		case "$s" in
+			all) printf 'system\n'; list_sites; list_mail; list_databases ;;
+			system) printf 'system\n' ;;
+			sites) list_sites ;;
+			mail) list_mail ;;
+			databases) list_databases ;;
+			site:*) valid_domain "${s#site:}" || die invalid_params "invalid domain in $s"; printf '%s\n' "$s" ;;
+			mail:*) valid_domain "${s#mail:}" || die invalid_params "invalid domain in $s"; printf '%s\n' "$s" ;;
+			db:*) valid_dbname "${s#db:}" || die invalid_params "invalid database in $s"; printf '%s\n' "$s" ;;
+			*) die invalid_params "unknown scope: $s" ;;
+		esac
+	done | awk '!seen[$0]++'
+}
+
+scope_paths() {
+	local item="$1" p
+	case "$item" in
+		system)
+			for p in ${CFG[SYSTEM_PATHS]}; do [[ -e "$p" ]] && printf '%s\n' "$p"; done ;;
+		site:*) printf '%s\n' "${CFG[SITES_ROOT]}/${item#site:}" ;;
+		mail:*) printf '%s\n' "${CFG[MAIL_ROOT]}/${item#mail:}" ;;
+	esac
+}
+
+# ----------------------------------------------------------------------------
+# run
+# ----------------------------------------------------------------------------
+
+summary_json() {
+	# Pick restic's summary line out of --json output.
+	jq -c 'select(.message_type == "summary")
+		| {snapshot_id, files_new, files_changed, files_unmodified,
+		   data_added, total_bytes_processed, duration:.total_duration}' 2>/dev/null | tail -n1
+}
+
+backup_item() {
+	local item="$1" kind="$2"
+	local -a tags=(--tag whp --tag "kind:$kind" --tag "scope:$item" --host "${CFG[BACKUP_HOST]}")
+	local out rc=0
+	case "$item" in
+		db:*)
+			local db="${item#db:}"
+			local -a dump
+			mapfile -t dump < <(mariadb_cmd mariadb-dump --single-transaction --quick --routines \
+				--triggers --events --hex-blob --default-character-set=utf8mb4 -- "$db")
+			if restic_supports_stdin_command; then
+				out="$(r backup --json "${tags[@]}" --stdin-filename "databases/$db.sql" \
+					--stdin-from-command -- "${dump[@]}" 2>>"$STATE_DIR/restic.err")" || rc=$?
+			else
+				local -a st
+				out="$("${dump[@]}" 2>>"$STATE_DIR/restic.err" | r backup --json "${tags[@]}" \
+					--stdin --stdin-filename "databases/$db.sql" 2>>"$STATE_DIR/restic.err"; \
+					printf '\n#PIPE %s %s' "${PIPESTATUS[0]}" "${PIPESTATUS[1]}")" || true
+				read -r -a st <<<"$(grep -o '#PIPE [0-9]* [0-9]*$' <<<"$out" | cut -d' ' -f2-)"
+				out="$(sed '$d' <<<"$out")"
+				if [[ "${st[0]:-1}" != "0" ]]; then
+					rc=1
+					local sid
+					sid="$(summary_json <<<"$out" | jq -r '.snapshot_id // empty')"
+					if [[ -n "$sid" ]]; then r forget "$sid" >/dev/null 2>&1 || true; fi
+				elif [[ "${st[1]:-1}" != "0" ]]; then
+					rc=1
+				fi
+			fi
+			;;
+		*)
+			local -a paths
+			mapfile -t paths < <(scope_paths "$item")
+			if [[ ${#paths[@]} -eq 0 ]]; then
+				jq -cn --arg item "$item" '{scope:$item, status:"skipped", reason:"nothing to back up"}'
+				return 0
+			fi
+			local -a extra=(--one-file-system --exclude-caches)
+			[[ -f "$CONF_DIR/excludes.txt" ]] && extra+=(--exclude-file "$CONF_DIR/excludes.txt")
+			[[ "$kind" == "full" ]] && extra+=(--force)
+			out="$(r backup --json "${tags[@]}" "${extra[@]}" -- "${paths[@]}" 2>>"$STATE_DIR/restic.err")" || rc=$?
+			# restic exits 3 when some files could not be read; snapshot exists.
+			;;
+	esac
+	local sum
+	sum="$(summary_json <<<"$out")"
+	if [[ $rc -eq 0 && -n "$sum" ]]; then
+		jq -c --arg item "$item" '{scope:$item, status:"ok"} + .' <<<"$sum"
+	elif [[ $rc -eq 3 && -n "$sum" ]]; then
+		jq -c --arg item "$item" '{scope:$item, status:"warning", reason:"some files could not be read"} + .' <<<"$sum"
+	else
+		jq -cn --arg item "$item" --arg rc "$rc" --arg err "$(tail -n3 "$STATE_DIR/restic.err" 2>/dev/null)" \
+			'{scope:$item, status:"failed", exit_code:($rc|tonumber), reason:$err}'
+	fi
+}
+
+cmd_run() {
+	local kind="incremental" target="" prune=0
+	local -a scopes=()
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			--full) kind="full"; shift ;;
+			--incremental) kind="incremental"; shift ;;
+			--target) target="$2"; shift 2 ;;
+			--scope) scopes+=("$2"); shift 2 ;;
+			--prune) prune=1; shift ;;
+			*) die invalid_params "unknown option for run: $1" ;;
+		esac
+	done
+	[[ ${#scopes[@]} -gt 0 ]] || scopes=(all)
+	validate_scopes "${scopes[@]}"
+	take_lock
+	mkdir -p "$STATE_DIR"
+	: >"$STATE_DIR/restic.err"
+
+	local -a targets items
+	if [[ -n "$target" ]]; then
+		targets=("$target")
+	else
+		mapfile -t targets < <(all_targets)
+	fi
+	[[ ${#targets[@]} -gt 0 ]] || die not_found "no backup targets configured"
+	mapfile -t items < <(expand_scopes "${scopes[@]}")
+
+	local started finished t item res status="ok" runs="[]" results
+	started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	for t in "${targets[@]}"; do
+		load_target "$t"
+		if [[ "${TGT[ENABLED]}" != "yes" && -z "$target" ]]; then
+			continue
+		fi
+		log info "target $t: $kind backup of ${#items[@]} item(s)"
+		results="[]"
+		for item in "${items[@]}"; do
+			res="$(backup_item "$item" "$kind")"
+			log info "target $t: $(jq -r '"\(.scope) \(.status)"' <<<"$res")"
+			results="$(jq --argjson r "$res" '. + [$r]' <<<"$results")"
+		done
+		local pruned="null"
+		if [[ $prune -eq 1 ]]; then
+			if forget_target >/dev/null; then pruned="true"; else pruned="false"; fi
+		fi
+		runs="$(jq --arg t "$t" --argjson res "$results" --argjson pruned "$pruned" \
+			'. + [{target:$t, items:$res, pruned:$pruned}]' <<<"$runs")"
+	done
+	finished="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	if jq -e '[.[].items[] | select(.status == "failed")] | length > 0' <<<"$runs" >/dev/null; then
+		status="failed"
+	elif jq -e '[.[].items[] | select(.status == "warning")] | length > 0' <<<"$runs" >/dev/null; then
+		status="warning"
+	fi
+	local doc
+	doc="$(jq -n --arg kind "$kind" --arg s "$started" --arg f "$finished" --arg st "$status" \
+		--arg host "${CFG[BACKUP_HOST]}" --argjson runs "$runs" \
+		'{kind:$kind, status:$st, host:$host, started:$s, finished:$f, targets:$runs}')"
+	printf '%s\n' "$doc" >"$STATE_DIR/last-run.json.tmp" && mv -f "$STATE_DIR/last-run.json.tmp" "$STATE_DIR/last-run.json"
+	if [[ $JSON -eq 1 ]]; then
+		emit "$doc"
+	else
+		jq -r '"\(.kind) backup \(.status) (\(.started) - \(.finished))",
+			(.targets[] | .target as $t | .items[] | "  \($t)  \(.scope)  \(.status)  \(.data_added // 0) bytes added")' <<<"$doc"
+	fi
+	[[ "$status" != "failed" ]]
+}
+
+# ----------------------------------------------------------------------------
+# snapshots
+# ----------------------------------------------------------------------------
+
+snapshots_json() {
+	# Args: restic snapshot filters, or a snapshot id.
+	# Note: several --tag options are OR-ed by restic, so pass one at most.
+	r snapshots --json "$@" | jq -c '[ .[] | select(any(.tags[]?; . == "whp")) | {
+		id, short_id, time, host: .hostname, paths,
+		kind: ([.tags[]? | select(startswith("kind:")) | ltrimstr("kind:")][0] // "unknown"),
+		scope: ([.tags[]? | select(startswith("scope:")) | ltrimstr("scope:")][0] // "unknown"),
+		size: (.summary.total_bytes_processed // null)
+	} ] | sort_by(.time) | reverse'
+}
+
+cmd_snapshots() {
+	local target="" scope="" host=""
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			--target) target="$2"; shift 2 ;;
+			--scope) scope="$2"; shift 2 ;;
+			--host) host="$2"; shift 2 ;;
+			*) die invalid_params "unknown option for snapshots: $1" ;;
+		esac
+	done
+	[[ -n "$target" ]] || die invalid_params "--target is required"
+	load_target "$target"
+	local -a f=(--tag whp)
+	if [[ -n "$scope" ]]; then
+		[[ "$scope" =~ ^(system|(site|mail):[a-z0-9.-]+|db:[A-Za-z0-9_]+)$ ]] || die invalid_params "invalid --scope"
+		f=(--tag "whp,scope:$scope")
+	fi
+	[[ -n "$host" ]] && f+=(--host "$host")
+	local doc
+	doc="$(snapshots_json "${f[@]}")" || die repo_error "could not list snapshots on target $target"
+	if [[ $JSON -eq 1 ]]; then
+		emit "$doc"
+	else
+		jq -r '.[] | "\(.short_id)  \(.time[0:19])  \(.kind)\t\(.scope)\t\(.host)"' <<<"$doc"
+	fi
+}
+
+# ----------------------------------------------------------------------------
+# restore
+# ----------------------------------------------------------------------------
+
+cmd_restore() {
+	local target="" snap="" to="" in_place=0 database="" include=""
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			--target) target="$2"; shift 2 ;;
+			--snapshot) snap="$2"; shift 2 ;;
+			--to) to="$2"; shift 2 ;;
+			--in-place) in_place=1; shift ;;
+			--database) database="$2"; shift 2 ;;
+			--include) include="$2"; shift 2 ;;
+			*) die invalid_params "unknown option for restore: $1" ;;
+		esac
+	done
+	[[ -n "$target" && -n "$snap" ]] || die invalid_params "--target and --snapshot are required"
+	valid_snapshot "$snap" || die invalid_params "invalid --snapshot"
+	[[ $in_place -eq 1 || -n "$to" ]] || die invalid_params "choose --to DIR or --in-place"
+	[[ $in_place -eq 1 && -n "$to" ]] && die invalid_params "--to and --in-place cannot be combined"
+	[[ -z "$database" ]] || valid_dbname "$database" || die invalid_params "invalid --database"
+	if [[ -n "$include" ]]; then
+		[[ "$include" == /* && "$include" != *..* ]] || die invalid_params "--include must be an absolute path without .."
+	fi
+
+	load_target "$target"
+	take_lock
+	mkdir -p "$STATE_DIR"
+
+	local meta
+	meta="$(snapshots_json "$snap" | jq -c '.[0] // empty')" || true
+	[[ -n "$meta" ]] || die not_found "snapshot $snap not found on target $target"
+	local scope id
+	scope="$(jq -r .scope <<<"$meta")"
+	id="$(jq -r .id <<<"$meta")"
+	log info "restore $scope from snapshot ${id:0:8} on target $target"
+
+	local result
+	case "$scope" in
+		db:*)
+			result="$(restore_db "$id" "${scope#db:}" "$database" "$to" "$in_place")" ;;
+		system|site:*|mail:*)
+			result="$(restore_files "$id" "$scope" "$to" "$in_place" "$include")" ;;
+		*) die unsupported "snapshot $snap has no known scope" ;;
+	esac
+	emit "$(jq -c --argjson meta "$meta" '{snapshot:$meta} + .' <<<"$result")"
+}
+
+restore_db() {
+	local id="$1" orig="$2" database="$3" to="$4" in_place="$5"
+	local name="${database:-$orig}"
+	if [[ -n "$to" ]]; then
+		mkdir -p "$to"
+		r dump "$id" "/databases/$orig.sql" >"$to/$orig.sql" || die restore_failed "could not read the dump"
+		jq -cn --arg f "$to/$orig.sql" '{restored:"file", path:$f}'
+		return
+	fi
+	need mariadb
+	local -a cli
+	mapfile -t cli < <(mariadb_cmd mariadb)
+	if [[ "${CFG[PRE_RESTORE_SNAPSHOT]}" == "yes" && "$name" == "$orig" ]]; then
+		local pre
+		pre="$(backup_item "db:$name" pre-restore)"
+		[[ "$(jq -r .status <<<"$pre")" == "ok" ]] || log warn "pre-restore snapshot of db:$name failed"
+	fi
+	"${cli[@]}" -e "CREATE DATABASE IF NOT EXISTS \`$name\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" \
+		|| die restore_failed "could not create database $name"
+	set +e
+	r dump "$id" "/databases/$orig.sql" | "${cli[@]}" "$name"
+	local -a st=("${PIPESTATUS[@]}")
+	set -e
+	[[ "${st[0]}" == "0" && "${st[1]}" == "0" ]] || die restore_failed "database import failed (restic ${st[0]}, mariadb ${st[1]})"
+	jq -cn --arg db "$name" '{restored:"database", database:$db}'
+}
+
+restore_files() {
+	local id="$1" scope="$2" to="$3" in_place="$4" include="$5"
+	local -a inc=()
+	[[ -n "$include" ]] && inc+=(--include "$include")
+	if [[ -n "$to" ]]; then
+		[[ "$to" == /* ]] || die invalid_params "--to must be an absolute path"
+		mkdir -p "$to"
+		r restore "$id" --target "$to" "${inc[@]}" >/dev/null 2>>"$STATE_DIR/restic.err" \
+			|| die restore_failed "restic restore failed: $(tail -n1 "$STATE_DIR/restic.err")"
+		jq -cn --arg to "$to" '{restored:"files", mode:"copy", path:$to}'
+		return
+	fi
+
+	# In place: snapshot the current state first, restore into staging and
+	# mirror with rsync so files created after the backup are removed too.
+	need rsync
+	local pre_id=""
+	if [[ "${CFG[PRE_RESTORE_SNAPSHOT]}" == "yes" ]]; then
+		local pre
+		pre="$(backup_item "$scope" pre-restore)"
+		pre_id="$(jq -r '.snapshot_id // empty' <<<"$pre")"
+		[[ -n "$pre_id" ]] || log warn "pre-restore snapshot of $scope failed or had nothing to save"
+	fi
+	local stage="$STATE_DIR/restore-staging/${id:0:12}"
+	rm -rf "$stage"; mkdir -p "$stage"
+	r restore "$id" --target "$stage" "${inc[@]}" >/dev/null 2>>"$STATE_DIR/restic.err" \
+		|| die restore_failed "restic restore failed: $(tail -n1 "$STATE_DIR/restic.err")"
+	local -a paths
+	mapfile -t paths < <(r snapshots --json "$id" | jq -r '.[0].paths[]')
+	local p src
+	for p in "${paths[@]}"; do
+		if [[ -n "$include" ]]; then
+			# Partial restore: only mirror the included sub path.
+			[[ "$include" == "$p" || "$include" == "$p/"* ]] || continue
+			p="$include"
+		fi
+		src="$stage$p"
+		[[ -e "$src" ]] || continue
+		if [[ -d "$src" ]]; then
+			mkdir -p "$p"
+			rsync -aHAX --numeric-ids --delete "$src/" "$p/"
+		else
+			mkdir -p "$(dirname "$p")"
+			rsync -aHAX --numeric-ids "$src" "$p"
+		fi
+	done
+	rm -rf "$stage"
+	jq -cn --arg pre "$pre_id" --argjson paths "$(printf '%s\n' "${paths[@]}" | jq -R . | jq -s .)" \
+		'{restored:"files", mode:"in-place", paths:$paths, pre_restore_snapshot:(if $pre == "" then null else $pre end)}'
+}
+
+# ----------------------------------------------------------------------------
+# maintenance
+# ----------------------------------------------------------------------------
+
+forget_target() {
+	local -a keep=()
+	local k flag
+	for k in LAST DAILY WEEKLY MONTHLY YEARLY; do
+		flag="--keep-${k,,}"
+		[[ "${TGT[KEEP_$k]}" =~ ^[0-9]+$ && "${TGT[KEEP_$k]}" != "0" ]] && keep+=("$flag" "${TGT[KEEP_$k]}")
+	done
+	[[ ${#keep[@]} -gt 0 ]] || { log warn "no retention configured, nothing forgotten"; return 0; }
+	r forget --tag whp --group-by host,paths "${keep[@]}" --prune --json
+}
+
+cmd_prune() {
+	local target=""
+	[[ "${1:-}" == "--target" ]] && target="${2:-}"
+	[[ -n "$target" ]] || die invalid_params "--target is required"
+	load_target "$target"
+	take_lock
+	local out
+	out="$(forget_target)" || die repo_error "forget/prune failed on target $target"
+	emit "$(jq -n --arg t "$target" --argjson removed "$(jq -s '[.[]? | .[]? | .remove // [] | length] | add // 0' <<<"$out" 2>/dev/null || echo 0)" \
+		'{target:$t, snapshots_removed:$removed}')"
+}
+
+cmd_check() {
+	local target="" read_data=0
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			--target) target="$2"; shift 2 ;;
+			--read-data) read_data=1; shift ;;
+			*) die invalid_params "unknown option for check: $1" ;;
+		esac
+	done
+	[[ -n "$target" ]] || die invalid_params "--target is required"
+	load_target "$target"
+	take_lock
+	local -a a=()
+	[[ $read_data -eq 1 ]] && a+=(--read-data-subset "${CFG[CHECK_READ_DATA_SUBSET]}")
+	local ok="true" out
+	out="$(r check "${a[@]}" 2>&1)" || ok="false"
+	emit "$(jq -n --arg t "$target" --argjson ok "$ok" --arg out "$(tail -n5 <<<"$out")" '{target:$t, healthy:$ok, output:$out}')"
+	[[ "$ok" == "true" ]]
+}
+
+cmd_unlock() {
+	local target="${2:-}"
+	[[ "${1:-}" == "--target" && -n "$target" ]] || die invalid_params "--target is required"
+	load_target "$target"
+	r unlock >/dev/null
+	emit "$(jq -n --arg t "$target" '{target:$t, unlocked:true}')"
+}
+
+cmd_status() {
+	local last="null"
+	[[ -f "$STATE_DIR/last-run.json" ]] && last="$(cat "$STATE_DIR/last-run.json")"
+	local tlist="[]" t
+	while IFS= read -r t; do
+		tlist="$(jq --argjson t "$(target_json "$t")" '. + [$t]' <<<"$tlist")"
+	done < <(all_targets)
+	local running="false"
+	if [[ -e "$LOCK_FILE" ]] && ! flock -n "$LOCK_FILE" true 2>/dev/null; then running="true"; fi
+	local doc
+	doc="$(jq -n --arg v "$WHP_BACKUP_VERSION" --argjson last "$last" --argjson targets "$tlist" \
+		--argjson running "$running" --arg restic "$(restic version 2>/dev/null | awk '{print $2}')" \
+		--arg rclone "$(rclone version 2>/dev/null | awk 'NR==1{print $2}')" \
+		'{version:$v, restic:$restic, rclone:$rclone, running:$running, targets:$targets, last_run:$last}')"
+	emit "$doc"
+}
+
+usage() {
+	cat <<'EOF'
+whp-backup - backups for Webhosting Panel (restic + rclone)
+
+Usage: whp-backup [--json] [--quiet] <command> [options]
+
+Targets (each target is one encrypted restic repository):
+  target add --name N --type sftp|scp|ftp|ftps|onedrive|local --path P [options]
+      --host H --port P --user U --password-file F     connection
+      --ssh-key F --known-hosts F                     sftp/scp (host key is pinned)
+      --tls explicit|implicit                         ftps (default explicit)
+      --allow-plain-ftp                               allow unencrypted ftp
+      --onedrive-token-file F                         JSON from `rclone authorize onedrive`
+      --onedrive-drive-id ID --onedrive-drive-type personal|business|documentLibrary
+      --repo-key-file F    connect to an EXISTING repository (disaster recovery)
+      --update             replace the settings of an existing target
+  target list | show N | test N | remove N | export-key N
+
+Backups:
+  run [--full|--incremental] [--target N] [--scope S]... [--prune]
+      scopes: all (default), system, sites, mail, databases,
+              site:<domain>, mail:<domain>, db:<name>
+  snapshots --target N [--scope S] [--host H]
+  restore --target N --snapshot ID (--to DIR | --in-place) [--include PATH] [--database NAME]
+  prune --target N            apply retention and free space
+  check --target N [--read-data]
+  unlock --target N
+  status
+  version
+EOF
+}
+
+main() {
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			--json) JSON=1; QUIET=1; shift ;;
+			--quiet) QUIET=1; shift ;;
+			*) break ;;
+		esac
+	done
+	local command="${1:-help}"; shift || true
+	case "$command" in
+		help|-h|--help) usage; return 0 ;;
+		version|--version)
+			if [[ $JSON -eq 1 ]]; then emit "$(jq -n --arg v "$WHP_BACKUP_VERSION" '{version:$v}')"; else echo "$WHP_BACKUP_VERSION"; fi
+			return 0 ;;
+	esac
+	need restic rclone jq flock
+	umask 077
+	mkdir -p "$TARGETS_DIR" "$STATE_DIR"
+	load_config
+	case "$command" in
+		target) cmd_target "$@" ;;
+		run) cmd_run "$@" ;;
+		snapshots) cmd_snapshots "$@" ;;
+		restore) cmd_restore "$@" ;;
+		prune) cmd_prune "$@" ;;
+		check) cmd_check "$@" ;;
+		unlock) cmd_unlock "$@" ;;
+		status) cmd_status ;;
+		*) usage >&2; die invalid_params "unknown command: $command" ;;
+	esac
+}
+
+main "$@"
