@@ -55,6 +55,7 @@ mail_postfix() {
     "smtpd_helo_required = yes" \
     "strict_rfc821_envelopes = yes" \
     "smtputf8_enable = yes" \
+    "enable_long_queue_ids = yes" \
     "virtual_mailbox_domains = texthash:/etc/postfix/whp/virtual_domains" \
     "virtual_mailbox_maps = texthash:/etc/postfix/whp/virtual_mailboxes" \
     "virtual_alias_maps = texthash:/etc/postfix/whp/virtual_aliases" \

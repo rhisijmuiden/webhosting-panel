@@ -28,6 +28,7 @@ final class DnsMailServiceProvider extends ServiceProvider
         $this->app->singleton(HttpClient::class, static fn (): HttpClient => new CurlHttpClient());
         $this->app->singleton(DnsMailConfig::class);
         $this->app->bind(MailServerSettings::class, static fn ($app) => $app->make(DnsMailConfig::class)->server());
+        $this->app->register(MailLogServiceProvider::class);
     }
 
     public function boot(): void
