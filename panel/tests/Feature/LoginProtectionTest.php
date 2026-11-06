@@ -57,7 +57,7 @@ class LoginProtectionTest extends TestCase
         $this->get('/admin/security/protection')->assertOk()
             ->assertSee('WordPress')->assertSee('name="services[ssh][temp_after]"', false)
             ->assertSee(route('admin.protection.allowlist.store'), false);
-        $this->get('/admin')->assertSee(route('admin.protection.edit'), false);
+        $this->get('/admin/tools')->assertSee(route('admin.protection.edit'), false);
         $this->get('/admin/security')->assertOk()->assertSee(route('admin.protection.edit'), false);
     }
 
