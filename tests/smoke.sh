@@ -111,6 +111,8 @@ check "install.log holds no passwords" bash -c 'p=$(grep ^PANEL_DB_PASS= /etc/we
 check "panel vhost answers on 8443 with TLS" bash -c "curl -sk -o /dev/null -w '%{http_code}' --resolve $HOST:8443:127.0.0.1 https://$HOST:8443/ | grep -qE '^[1-5][0-9][0-9]$'"
 if [[ -f /opt/webhosting-panel/panel/artisan ]]; then
   check "panel login page renders" bash -c "[[ \$(curl -sk -o /dev/null -w %{http_code} --resolve \"$HOST:8443:127.0.0.1\" https://$HOST:8443/login) == 200 ]]"
+  check "panel asset links keep port 8443" bash -c "curl -sk --resolve \"$HOST:8443:127.0.0.1\" https://$HOST:8443/login | grep -q \"https://$HOST:8443/assets/app.css\""
+  check "panel stylesheet is served as CSS" bash -c "curl -skI --resolve \"$HOST:8443:127.0.0.1\" https://$HOST:8443/assets/app.css | grep -qi 'content-type: text/css'"
   check "panel queue worker active" systemctl is-active --quiet whp-queue.service
   check "agent active" systemctl is-active --quiet whp-agent.service
 fi
