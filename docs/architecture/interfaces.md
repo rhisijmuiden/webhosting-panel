@@ -82,6 +82,7 @@ Actions added by phase 2:
 | `service.list`, `service.status`, `service.restart` | systemd services |
 | `firewall.list`, `firewall.add`, `firewall.delete` | Panel rules, see below |
 | `crowdsec.decisions`, `crowdsec.metrics`, `crowdsec.ban`, `crowdsec.unban` | Through `/usr/bin/cscli` |
+| `security.apply`, `security.site_activity`, `security.site_release`, `security.check_ip` | Login protection, see below |
 | `site.list`, `site.add`, `site.show`, `site.php`, `site.cache`, `site.ssl`, `site.quota`, `site.remove`, `site.suspend`, `site.unsuspend` | Through the installer's `whp-site … --json` |
 | `stats.sample` | Server and per-site usage, rates since the previous call |
 | `panel.version`, `panel.check_update`, `panel.update`, `panel.set_channel` | Updates and release channel |
@@ -93,6 +94,23 @@ ports). The agent keeps panel rules in `/etc/webhosting-panel/firewall.json`
 and writes `/etc/nftables.d/whp-panel.nft` with elements for the installer's
 sets (`tcp_open`, `udp_open`, `blocked_v4`, `blocked_v6`), checks the ruleset
 with `nft -c` and runs `systemctl reload nftables`.
+
+### Login protection
+
+`packages/security` (`Rhis\Security\`) owns the settings: thresholds per
+service (`ssh`, `mail`, `panel`, `wordpress`) in Settings, per-site choices in
+`site_protections`. Every change sends the complete set with
+`security.apply`; the agent (`security.py`) writes CrowdSec scenarios
+`whp/<service>-bf` (temporary block) and `whp/<service>-bf-perm` (permanent
+block), the profiles with the ban durations, the allowlists, and drops the
+hub's own login brute-force scenarios. It runs `crowdsec -t` before reloading
+and puts the old files back when CrowdSec refuses them. Failed panel logins
+(password and two-factor) are appended to `/var/log/webhosting-panel/auth.log`
+in syslog format. Also `security.site_activity`, `security.site_release` and
+`security.check_ip` for the customer screens. Other packages read
+`Rhis\Security\Models\SiteProtection::wordpressProtected($website)` and never
+write CrowdSec configuration themselves. `whp:security:apply` pushes the
+settings again (run by `panel/deploy/install.sh` and after every update).
 
 ### Usage statistics
 

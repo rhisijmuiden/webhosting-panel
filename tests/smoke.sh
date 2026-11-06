@@ -115,6 +115,59 @@ if [[ -f /opt/webhosting-panel/panel/artisan ]]; then
   check "panel stylesheet is served as CSS" bash -c "curl -skI --resolve \"$HOST:8443:127.0.0.1\" https://$HOST:8443/assets/app.css | grep -qi 'content-type: text/css'"
   check "panel queue worker active" systemctl is-active --quiet whp-queue.service
   check "agent active" systemctl is-active --quiet whp-agent.service
+
+  echo "== login protection"
+  agent_call() {
+    python3 - "$1" "$2" <<'PY'
+import json, socket, sys
+s = socket.socket(socket.AF_UNIX)
+s.connect("/run/whp-agent/agent.sock")
+s.sendall((json.dumps({"id": "smoke", "action": sys.argv[1], "params": json.loads(sys.argv[2])}) + "\n").encode())
+buf = b""
+while not buf.endswith(b"\n"):
+    chunk = s.recv(65536)
+    if not chunk:
+        break
+    buf += chunk
+r = json.loads(buf)
+print(json.dumps(r))
+sys.exit(0 if r.get("ok") else 1)
+PY
+  }
+  export -f agent_call
+  # wait_ban <ip> <scenario>: CrowdSec bans the address for that scenario within 60 seconds.
+  wait_ban() {
+    local i
+    for i in $(seq 1 60); do
+      cscli decisions list --ip "$1" -o json 2>/dev/null | jq -e --arg s "$2" '[.[]?.decisions[]?.scenario] | index($s) != null' >/dev/null && return 0
+      sleep 1
+    done
+    cscli decisions list --ip "$1"; cscli alerts list --ip "$1"
+    return 1
+  }
+  now_iso() { date +%Y-%m-%dT%H:%M:%S%:z; }
+  now_clf() { date '+%d/%b/%Y:%H:%M:%S %z'; }
+  AUTH_LOG=/var/log/webhosting-panel/auth.log
+  SITE_LOG=/var/www/vhosts/site.test/logs/access.log
+  check "panel applies login protection" runuser -u whp -- php /opt/webhosting-panel/panel/artisan whp:security:apply
+  check "crowdsec has the panel scenarios" bash -c 'cscli scenarios list -a -o raw | grep -q "whp/wordpress-bf"'
+  check "agent applies allowlists and per-site settings (crowdsec -t passes)" agent_call security.apply \
+    '{"allowlist":[{"address":"198.51.100.0/24","comment":"ci"}],"sites":[{"domain":"site.test","allowlist":["203.0.113.52"]},{"domain":"off.test","enabled":false,"wordpress":false}]}'
+  check "an invalid setting is refused" bash -c '! agent_call security.apply "{\"services\":{\"ssh\":{\"temp_after\":9,\"perm_after\":3}}}"'
+  sleep 5  # CrowdSec reloads its configuration
+  for _ in 1 2 3 4 5 6; do
+    printf '%s %s whp-panel[1]: auth_failed ip=203.0.113.50 user=ci@example.test\n' "$(now_iso)" "$HOST" >>"$AUTH_LOG"
+    for ip in 203.0.113.51 203.0.113.52; do
+      printf '%s - - [%s] "POST /wp-login.php HTTP/1.1" 200 4321 "-" "Mozilla/5.0" rt=0.050 cache=-\n' "$ip" "$(now_clf)" >>"$SITE_LOG"
+    done
+  done
+  check "failed panel logins get the address blocked" wait_ban 203.0.113.50 whp/panel-bf
+  check "failed WordPress logins get the address blocked" wait_ban 203.0.113.51 whp/wordpress-bf
+  check "an address on the site allowlist is not blocked" bash -c '! cscli decisions list --ip 203.0.113.52 -o json | jq -e "length > 0"'
+  check "the customer sees the attack on their site" bash -c "agent_call security.site_activity '{\"domain\":\"site.test\"}' | tee /dev/stderr | jq -e '[.data.alerts[].address] | index(\"203.0.113.51\") != null'"
+  check "allowlisting by the customer lifts the block" bash -c "agent_call security.site_release '{\"domain\":\"site.test\",\"address\":\"203.0.113.51\"}' | jq -e '.data.released > 0' && ! cscli decisions list --ip 203.0.113.51 -o json | jq -e 'length > 0'"
+  cscli decisions delete --ip 203.0.113.50 >/dev/null 2>&1 || true
+  check "panel settings applied again" runuser -u whp -- php /opt/webhosting-panel/panel/artisan whp:security:apply
 fi
 
 exit $fail

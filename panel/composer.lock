@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "45c4998ac4e8f2510f4bce144db12244",
+    "content-hash": "54d94c3a16a75287a4ad1418c336db55",
     "packages": [
         {
             "name": "brick/math",
@@ -3307,7 +3307,7 @@
         },
         {
             "name": "rhis/backups",
-            "version": "dev-claude/project-thread-im3b15",
+            "version": "dev-claude/project-thread-018wgc",
             "dist": {
                 "type": "path",
                 "url": "../packages/backups",
@@ -3340,7 +3340,7 @@
         },
         {
             "name": "rhis/crm-api",
-            "version": "dev-claude/project-thread-im3b15",
+            "version": "dev-claude/project-thread-018wgc",
             "dist": {
                 "type": "path",
                 "url": "../packages/crm-api",
@@ -3373,7 +3373,7 @@
         },
         {
             "name": "rhis/dns-mail",
-            "version": "dev-claude/project-thread-im3b15",
+            "version": "dev-claude/project-thread-018wgc",
             "dist": {
                 "type": "path",
                 "url": "../packages/dns-mail",
@@ -3414,6 +3414,39 @@
                 "proprietary"
             ],
             "description": "Cloudflare DNS sync, per-domain mail routing (RHIS mail or Microsoft 365) and SnappyMail webmail config for the Webhosting Panel.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/security",
+            "version": "dev-claude/project-thread-018wgc",
+            "dist": {
+                "type": "path",
+                "url": "../packages/security",
+                "reference": "18caad504c1c6f5a9deb8c0179b35b761b8b64ba"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Security\\SecurityServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Security\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Login protection for the Webhosting Panel: brute-force thresholds, per-site protection and allowlists, on top of CrowdSec through the agent.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8595,7 +8628,8 @@
     "stability-flags": {
         "rhis/backups": 20,
         "rhis/crm-api": 20,
-        "rhis/dns-mail": 20
+        "rhis/dns-mail": 20,
+        "rhis/security": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

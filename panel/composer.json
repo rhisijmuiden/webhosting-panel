@@ -14,7 +14,8 @@
         "laravel/tinker": "^2.10.1",
         "rhis/backups": "@dev",
         "rhis/crm-api": "@dev",
-        "rhis/dns-mail": "@dev"
+        "rhis/dns-mail": "@dev",
+        "rhis/security": "@dev"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
