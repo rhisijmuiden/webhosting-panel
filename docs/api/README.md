@@ -101,9 +101,9 @@ Current limits of the implementation:
 
 - Usage reports disk space and domains; mailbox, database and traffic
   counters follow when the mail and database modules report them.
-- Suspension blocks the customer login and marks the site suspended. The
-  503 suspension page on the server needs the agent actions `site.suspend`
-  and `site.unsuspend`; until those exist the panel logs that it could not
-  apply them.
+- Suspension blocks the customer login and calls the agent actions
+  `site.suspend` / `site.unsuspend` for the 503 page on the server. When the
+  server side fails, the suspension still holds and the failure is written to
+  the activity log.
 - One customer has one plan in the panel, so all subscriptions of a customer
   share the plan of the most recent one.

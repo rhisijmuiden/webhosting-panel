@@ -178,10 +178,8 @@ final class Subscriptions
         try {
             $this->agent->call("site.{$state}", ['domain' => $website->domain], 120);
         } catch (AgentException $e) {
-            if ($e->errorCode !== 'unknown_action') {
-                throw new ApiError(502, 'agent_error', $e->getMessage());
-            }
-            ActivityLog::record('crm.site_state_not_applied', $website->domain, ['state' => $state], $s->customer_id);
+            // The login is blocked either way; the server side is retried by the admin.
+            ActivityLog::record('crm.site_state_not_applied', $website->domain, ['state' => $state, 'error' => $e->getMessage()], $s->customer_id);
         }
     }
 }

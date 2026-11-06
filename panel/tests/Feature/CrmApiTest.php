@@ -177,7 +177,7 @@ class CrmApiTest extends TestCase
         $this->seedPlanAndCustomer();
         $this->api('POST', '/subscriptions', ['customer_id' => 'ext:C-1001', 'plan_id' => 'code:hosting-basic', 'external_id' => 'ORD-1', 'primary_domain' => 'jansen.nl']);
         $this->agent()->respond('site.suspend', new AgentException('unknown_action', 'Unknown action'));
-        $this->agent()->respond('site.unsuspend', new AgentException('unknown_action', 'Unknown action'));
+        $this->agent()->respond('site.unsuspend', new AgentException('command_failed', 'whp-site has no unsuspend yet'));
 
         $this->api('POST', '/subscriptions/ext:ORD-1/suspend', ['reason' => 'unpaid'])->assertOk()->assertJsonPath('status', 'suspended')->assertJsonPath('suspension.reason', 'unpaid');
         $this->assertSame('suspended', Customer::where('crm_id', 'C-1001')->first()->status);
