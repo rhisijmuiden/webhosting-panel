@@ -82,6 +82,7 @@ class AppServiceProvider extends ServiceProvider
             ->add('quick', 'Quick view', 'admin.quick', icon: 'bolt', order: 5, activePatterns: ['admin.quick*'])
             ->add('customers', 'Customers', 'admin.customers.index', icon: 'customers', section: 'Hosting', order: 10)
             ->add('packages', 'Packages', 'admin.packages.index', icon: 'package', section: 'Hosting', order: 20)
+            ->add('subscriptions', 'Subscriptions', 'admin.subscriptions.index', icon: 'apps', section: 'Hosting', order: 25, activePatterns: ['admin.subscriptions.*'])
             ->add('websites', 'Websites', 'admin.websites.index', icon: 'globe', section: 'Hosting', order: 30)
             ->add('php', 'PHP settings', 'admin.php.index', icon: 'code', section: 'Server', order: 95)
             ->add('statistics', 'Statistics', 'admin.statistics.index', icon: 'chart', section: 'Server', order: 90)

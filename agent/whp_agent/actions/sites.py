@@ -47,9 +47,9 @@ def site_add(params):
     quota = v.integer(params, "quota_mb", required=False, minimum=0, maximum=10_000_000)
     if quota:
         argv += ["--quota", str(quota)]
-    customer = v.integer(params, "customer_id", required=False, minimum=1, maximum=999_999_999)
-    if customer:
-        argv += ["--owner", f"c{customer}"]
+    owner = _owner(params)
+    if owner:
+        argv += ["--owner", owner]
     workers = v.integer(params, "php_workers", required=False, minimum=1, maximum=999)
     if workers:
         argv += ["--workers", str(workers)]
@@ -115,12 +115,20 @@ def site_unsuspend(params):
     return _site(["unsuspend", v.domain(params, "domain")], timeout=120)
 
 
+def _owner(params) -> str | None:
+    """Slice owner: s<subscription id> (one website on one package), or c<customer id> (older panels)."""
+    subscription = v.integer(params, "subscription_id", required=False, minimum=1, maximum=999_999_999)
+    if subscription:
+        return f"s{subscription}"
+    customer = v.integer(params, "customer_id", required=False, minimum=1, maximum=999_999_999)
+    return f"c{customer}" if customer else None
+
+
 @action("site.owner")
 def site_owner(params):
-    """Run the site in its customer's resource slice (customer_id null: the shared slice)."""
-    customer = v.integer(params, "customer_id", required=False, minimum=1, maximum=999_999_999)
+    """Run the site in its subscription's resource slice (no subscription_id: the shared slice)."""
     domain = v.domain(params, "domain")
-    result = _site(["owner", domain, f"c{customer}" if customer else "-"], timeout=120)
+    result = _site(["owner", domain, _owner(params) or "-"], timeout=120)
     # WP-cron timers carry the slice in their unit: write them again.
     try:
         from .wordpress import refresh_cron_units
@@ -130,15 +138,26 @@ def site_owner(params):
     return result
 
 
+@action("subscription.limits")
+def subscription_limits(params):
+    """Resource jail of one subscription (one website). A missing or null value removes that cap."""
+    subscription = v.integer(params, "subscription_id", minimum=1, maximum=999_999_999)
+    return _slice(f"s{subscription}", params)
+
+
 @action("customer.limits")
 def customer_limits(params):
-    """Resource jail for all sites of one customer. A missing or null value removes that cap."""
+    """Resource jail shared by all sites of one customer (before subscriptions; kept for older panels)."""
     customer = v.integer(params, "customer_id", minimum=1, maximum=999_999_999)
+    return _slice(f"c{customer}", params)
+
+
+def _slice(owner: str, params):
     cpu = v.integer(params, "cpu_percent", required=False, minimum=10, maximum=10_000)
     memory = v.integer(params, "memory_mb", required=False, minimum=64, maximum=10_000_000)
     io = v.integer(params, "io_mbps", required=False, minimum=1, maximum=100_000)
     tasks = v.integer(params, "max_processes", required=False, minimum=16, maximum=100_000)
-    return _site(["slice", f"c{customer}",
+    return _site(["slice", owner,
                   "--cpu", f"{cpu}%" if cpu else "",
                   "--memory", str(memory or ""),
                   "--io", str(io or ""),

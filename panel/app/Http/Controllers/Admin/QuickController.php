@@ -34,7 +34,7 @@ class QuickController extends Controller
 
         $recentIds = ActivityLog::whereNotNull('customer_id')->latest('created_at')->limit(200)
             ->pluck('customer_id')->unique()->take(6)->values();
-        $recent = Customer::with('package')->withCount('websites')->whereIn('id', $recentIds)->get()
+        $recent = Customer::withCount(['websites', 'subscriptions'])->whereIn('id', $recentIds)->get()
             ->sortBy(fn ($c) => $recentIds->search($c->id))->values();
 
         return view('admin.quick', [

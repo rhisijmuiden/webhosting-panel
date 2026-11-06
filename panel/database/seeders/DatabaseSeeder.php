@@ -31,13 +31,16 @@ class DatabaseSeeder extends Seeder
             ['Kapsalon Lotte', 'Lotte Bakker', 'info@kapsalonlotte.example', $start, 'en', [['kapsalonlotte.example', 'wordpress', '8.3', 600]]],
         ];
         foreach ($customers as $i => [$company, $name, $email, $package, $locale, $sites]) {
-            $customer = Customer::create(['company' => $company, 'name' => $name, 'email' => $email, 'hosting_package_id' => $package->id, 'locale' => $locale, 'crm_id' => 'CRM-'.(1001 + $i)]);
+            $customer = Customer::create(['company' => $company, 'name' => $name, 'email' => $email, 'locale' => $locale, 'crm_id' => 'CRM-'.(1001 + $i)]);
             foreach ($sites as [$domain, $profile, $php, $mb]) {
-                Website::create([
+                // Every website is a subscription on its own package.
+                $website = new Website([
                     'customer_id' => $customer->id, 'domain' => $domain, 'aliases' => ['www.'.$domain], 'profile' => $profile, 'php_version' => $php,
                     'page_cache' => $profile !== 'laravel', 'ssl_status' => 'active', 'status' => 'active', 'system_user' => 'site'.($i + 1),
                     'document_root' => $profile === 'laravel' ? 'app/public' : 'public', 'disk_used_mb' => $mb, 'disk_quota_mb' => $package->disk_mb,
                 ]);
+                $website->initialPackageId = $package->id;
+                $website->save();
             }
             User::create(['name' => $name, 'email' => $email, 'password' => 'password', 'role' => User::ROLE_CLIENT, 'customer_id' => $customer->id, 'locale' => $locale]);
         }

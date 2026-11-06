@@ -34,11 +34,9 @@ class DnsMailTest extends TestCase
         $settings->set('dnsmail.webmail_host', 'webmail.rhis.nl');
     }
 
-    private function customer(int $maxMailboxes = 10): Customer
+    private function customer(): Customer
     {
-        $package = HostingPackage::create(['name' => 'Start', 'max_mailboxes' => $maxMailboxes]);
-
-        return Customer::create(['name' => 'Jan', 'email' => 'jan@example.test', 'hosting_package_id' => $package->id]);
+        return Customer::create(['name' => 'Jan', 'email' => 'jan@example.test']);
     }
 
     private function records(string $zone, ?string $type = null, ?string $name = null): array
@@ -134,8 +132,11 @@ class DnsMailTest extends TestCase
 
     public function test_mailboxes_respect_the_package_and_reach_the_agent(): void
     {
-        $customer = $this->customer(maxMailboxes: 1);
-        $domain = MailDomain::create(['customer_id' => $customer->id, 'domain' => 'klant.nl', 'dns_managed' => false]);
+        // The mailbox limit is the one of the package of the domain's website (subscription).
+        $customer = $this->customer();
+        $site = $this->withPackage(Website::create(['customer_id' => $customer->id, 'domain' => 'klant.nl', 'status' => 'active']),
+            HostingPackage::create(['name' => 'Start', 'max_mailboxes' => 1]));
+        $domain = MailDomain::updateOrCreate(['domain' => 'klant.nl'], ['customer_id' => $customer->id, 'website_id' => $site->id, 'dns_managed' => false]);
         $user = User::factory()->create(['customer_id' => $customer->id]);
 
         $this->actingAs($user)->post("/mail/domains/{$domain->id}/mailboxes", [

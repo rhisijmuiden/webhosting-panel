@@ -18,9 +18,9 @@
 #   whp-site quota <domain> <MB>     (0 = unlimited; hard limit when the filesystem
 #                                     has project quotas, see docs/installer.md)
 #   whp-site limits <domain> [--cpu 200%] [--memory 1G]   (empty value removes the cap)
-#   whp-site owner <domain> <c12|->  (run the site in the customer's slice whp-sites-c12.slice)
-#   whp-site slice <c12> [--cpu 200%] [--memory 2048] [--io 50] [--tasks 512]
-#                                    (resource jail for all sites of one customer: CPU,
+#   whp-site owner <domain> <s12|->  (run the site in the slice of subscription 12: whp-sites-s12.slice)
+#   whp-site slice <s12> [--cpu 200%] [--memory 2048] [--io 50] [--tasks 512]
+#                                    (resource jail of one subscription (website): CPU,
 #                                     memory in MB, disk IO in MB/s, processes; empty = no cap)
 #   whp-site phpini <domain> [--set memory_limit=256M]... [--reset] [--workers 10]
 #                                    (per-site php.ini values as php_admin_value, matching
@@ -122,8 +122,9 @@ disable_functions_for() {
   esac
 }
 
-# Customer owner id (c<number>) of a site: its PHP runs in that customer's slice.
-valid_owner() { [[ $1 =~ ^c[0-9]{1,9}$ ]]; }
+# Slice owner of a site: s<subscription id> (one website on one package), or
+# c<customer id> (one slice per customer, before subscriptions). Its PHP runs in that slice.
+valid_owner() { [[ $1 =~ ^[cs][0-9]{1,9}$ ]]; }
 site_slice() {
   if [[ -n ${SITE_OWNER:-} ]]; then printf 'whp-sites-%s.slice' "$SITE_OWNER"; else printf 'whp-sites.slice'; fi
 }
@@ -601,7 +602,7 @@ cmd_add() {
       --no-cache) SITE_CACHE=off ;;
       --no-ssl) SITE_SSL=off ;;
       --quota) SITE_QUOTA_MB=$2; shift ;;
-      --owner) valid_owner "$2" || die "--owner: c<customer id>, e.g. c12"; SITE_OWNER=$2; shift ;;
+      --owner) valid_owner "$2" || die "--owner: s<subscription id>, e.g. s12"; SITE_OWNER=$2; shift ;;
       --workers) [[ $2 =~ ^[1-9][0-9]{0,2}$ ]] || die "--workers: 1-999"; SITE_PM_MAX=$2; shift ;;
       --parent) SITE_PARENT=${2,,}; shift ;;
       --json) JSON=yes ;;
@@ -719,10 +720,10 @@ cmd_limits() {
   if [[ $JSON == yes ]]; then print_site "$domain"; fi
 }
 
-# ---- Customer resource jail ------------------------------------------------
-# All websites of one customer run in whp-sites-<owner>.slice. Without caps the
-# slices share the server fairly (equal CPU and IO weight); with caps a customer
-# can never use more than its package allows, whatever its sites do.
+# ---- Subscription resource jail --------------------------------------------
+# Every subscription (one website on one package) runs in whp-sites-<owner>.slice.
+# Without caps the slices share the server fairly (equal CPU and IO weight); with
+# caps a website can never use more than its package allows, whatever it does.
 SLICES_DB=$WHP_STATE/slices
 
 slice_load() {
@@ -758,7 +759,7 @@ user_slice_write() {
   if [[ -z ${SITE_OWNER:-} ]]; then rm -rf "$d"; return 0; fi
   slice_load "$SITE_OWNER"
   install -d -m 0755 "$d"
-  { echo "# Managed by whp-site: same limits as customer $SITE_OWNER ($SITE_DOMAIN)"; echo "[Slice]"; slice_properties; } >"$d/50-whp.conf"
+  { echo "# Managed by whp-site: same limits as $SITE_OWNER ($SITE_DOMAIN)"; echo "[Slice]"; slice_properties; } >"$d/50-whp.conf"
 }
 
 cmd_slice() {
@@ -780,14 +781,14 @@ cmd_slice() {
   local f=$SLICES_DB/$owner.env k
   for k in SLICE_CPU SLICE_MEM SLICE_IO SLICE_TASKS; do env_set "$f" "$k" "${!k}"; done
   {
-    echo "# Managed by whp-site: resource limits for customer $owner (all its websites)."
+    echo "# Managed by whp-site: resource limits for $owner (subscription s<id>, or customer c<id>)."
     echo "[Unit]"
-    echo "Description=Webhosting Panel customer $owner"
+    echo "Description=Webhosting Panel $owner"
     echo
     echo "[Slice]"
     slice_properties
   } >"/etc/systemd/system/whp-sites-$owner.slice"
-  # Same caps for the SSH/SFTP sessions of the customer's site users.
+  # Same caps for the SSH/SFTP sessions of the site users in this slice.
   local sf
   for sf in "$SITES_DB"/*.env; do
     [[ -e $sf ]] || continue
@@ -818,7 +819,7 @@ cmd_owner() {
   local domain=${1:-} owner=${2:-}
   [[ -n $domain && -n $owner ]] || usage
   [[ $owner == - ]] && owner=''
-  [[ -z $owner ]] || valid_owner "$owner" || die "owner: c<customer id>, e.g. c12, or -"
+  [[ -z $owner ]] || valid_owner "$owner" || die "owner: s<subscription id>, e.g. s12, or -"
   site_load "$domain"
   if [[ ${SITE_OWNER:-} != "$owner" ]]; then
     SITE_OWNER=$owner

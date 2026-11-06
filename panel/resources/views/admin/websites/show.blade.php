@@ -51,7 +51,9 @@
                 <dt>{{ __('Web root') }}</dt><dd class="mono">{{ $website->document_root ?? '–' }}</dd>
                 <dt>{{ __('Disk') }}</dt><dd>{{ $website->disk_used_mb }} MB @if ($website->disk_quota_mb) / {{ $website->disk_quota_mb }} MB @endif</dd>
                 <dt>{{ __('Data traffic this month') }}</dt><dd>{{ \Illuminate\Support\Number::fileSize($website->trafficBytes(), 1) }}</dd>
-                <dt>{{ __('Resource jail') }}</dt><dd class="mono small">whp-sites-c{{ $website->customer_id }}.slice</dd>
+                <dt>{{ __('Subscription') }}</dt><dd>@if ($website->subscription)<a href="{{ route('admin.subscriptions.edit', $website->subscription) }}">{{ $website->subscription->package?->name ?? __('No package') }}</a>
+                    <x-ui.pill :status="$website->subscription->status">{{ __(ucfirst($website->subscription->status)) }}</x-ui.pill>@if ($website->subscription->expires_on) <span class="small muted">{{ __('until :date', ['date' => $website->subscription->expires_on->isoFormat('LL')]) }}</span>@endif @else – @endif</dd>
+                <dt>{{ __('Resource jail') }}</dt><dd class="mono small">{{ $website->subscription ? 'whp-sites-'.$website->subscription->sliceOwner().'.slice' : 'whp-sites.slice' }}</dd>
                 <dt>{{ __('Created') }}</dt><dd>{{ $website->created_at->isoFormat('LLL') }}</dd>
             </dl>
         </x-ui.card>

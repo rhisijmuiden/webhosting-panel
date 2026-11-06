@@ -3,8 +3,8 @@
 The panel calls stats.sample once a minute. Counters (CPU time, network and
 disk bytes) are turned into rates against the previous call, kept in memory.
 Per-site usage comes from cgroup v2: every site runs as whp-site-<id>.service
-inside whp.slice/whp-sites.slice, or one level deeper in the customer's
-whp-sites-c<customer>.slice (<id> = domain with . and - as _).
+inside whp.slice/whp-sites.slice, or one level deeper in the subscription's
+whp-sites-s<subscription>.slice (<id> = domain with . and - as _).
 """
 
 import os
@@ -84,7 +84,7 @@ def _slices():
         if entry.startswith(UNIT_PREFIX) and entry.endswith(UNIT_SUFFIX):
             out[entry[len(UNIT_PREFIX):-len(UNIT_SUFFIX)]] = _slice_counters(os.path.join(CGROUP_ROOT, entry))
         elif entry.startswith("whp-sites-") and entry.endswith(".slice"):
-            # Sites of a customer with its own resource slice (whp-site slice/owner).
+            # Sites of a subscription with its own resource slice (whp-site slice/owner).
             try:
                 inner = os.listdir(os.path.join(CGROUP_ROOT, entry))
             except OSError:

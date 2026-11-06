@@ -92,19 +92,19 @@ class SiteOverview
 
     public function canUseTerminal(): bool
     {
-        return (bool) $this->website->customer?->package?->allow_ssh && $this->has('client.files.terminal');
+        return (bool) $this->website->package?->allow_ssh && $this->has('client.files.terminal');
     }
 
     public function diskPercent(): ?float
     {
-        $quota = $this->website->disk_quota_mb ?: $this->website->customer?->package?->disk_mb;
+        $quota = $this->website->disk_quota_mb ?: $this->website->package?->disk_mb;
 
         return $quota ? min(100, $this->website->disk_used_mb / $quota * 100) : null;
     }
 
     public function diskQuotaMb(): ?int
     {
-        return $this->website->disk_quota_mb ?: $this->website->customer?->package?->disk_mb;
+        return $this->website->disk_quota_mb ?: $this->website->package?->disk_mb;
     }
 
     /** Link to a tab of this website's mail domain page, or null without one. */
