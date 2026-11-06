@@ -79,6 +79,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Menu::admin()
             ->add('dashboard', 'Dashboard', 'admin.dashboard', icon: 'dashboard', order: 0)
+            ->add('quick', 'Quick view', 'admin.quick', icon: 'bolt', order: 5, activePatterns: ['admin.quick*'])
             ->add('customers', 'Customers', 'admin.customers.index', icon: 'customers', section: 'Hosting', order: 10)
             ->add('packages', 'Packages', 'admin.packages.index', icon: 'package', section: 'Hosting', order: 20)
             ->add('websites', 'Websites', 'admin.websites.index', icon: 'globe', section: 'Hosting', order: 30)
@@ -113,6 +114,7 @@ class AppServiceProvider extends ServiceProvider
             ['', 'Hosting services', 'Additional services', 'Server management'],
             [
                 'dashboard' => ['section' => '', 'order' => 0, 'label' => 'Home', 'icon' => 'home'],
+                'quick' => ['section' => '', 'order' => 5],
                 'customers' => ['section' => 'Hosting services', 'order' => 100, 'badge' => $count(\App\Models\Customer::class)],
                 'websites' => ['section' => 'Hosting services', 'order' => 110, 'label' => 'Domains', 'badge' => $count(\App\Models\Website::class)],
                 'subscriptions' => ['section' => 'Hosting services', 'order' => 120],
