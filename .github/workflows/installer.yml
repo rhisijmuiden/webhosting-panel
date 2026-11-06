@@ -27,6 +27,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - name: Allow user namespaces like Debian does
+        # Ubuntu 24.04 runners block unprivileged user namespaces through AppArmor;
+        # Debian 13 allows them, and the web terminal sandbox (bubblewrap) needs them.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       - name: Build Debian 13 image with systemd
         run: docker build -t whp-trixie tests/
       - name: Boot container

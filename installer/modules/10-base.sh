@@ -72,6 +72,9 @@ module_base() {
     acl apt-listchanges bash-completion bind9-dnsutils certbot cron git htop jq less \
     locales logrotate nano openssl python3 rsync ssl-cert sudo unattended-upgrades \
     unzip xz-utils zstd
+  # Web terminal of the file manager: bubblewrap (sandbox) and ttyd (terminal over WebSocket).
+  apt_install bubblewrap
+  install_ttyd
 
   ln -sf "/usr/share/zoneinfo/$WHP_TZ" /etc/localtime
   printf '%s\n' "$WHP_TZ" >/etc/timezone
@@ -135,4 +138,33 @@ CONF
   install -d -m 0751 "$WHP_STATE"
   install -d -m 0755 "$WHP_VHOSTS" /var/www/acme
   ok "base system ready"
+}
+
+# ttyd from Debian when the release has it, otherwise the upstream static build
+# (pinned version, checked against its SHA-256).
+TTYD_VERSION=1.7.7
+declare -A TTYD_SHA256=(
+  [amd64]=8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55
+  [arm64]=b38acadd89d1d396a0f5649aa52c539edbad07f4bc7348b27b4f4b7219dd4165
+)
+install_ttyd() {
+  if [[ -n $(apt_available ttyd) ]]; then
+    apt_install ttyd
+    return 0
+  fi
+  local arch file tmp
+  arch=$(dpkg --print-architecture)
+  case $arch in amd64) file=ttyd.x86_64 ;; arm64) file=ttyd.aarch64 ;; *) warn "ttyd: no build for $arch, web terminal disabled"; return 0 ;; esac
+  if [[ -x /usr/local/bin/ttyd ]] && sha256sum /usr/local/bin/ttyd | grep -q "^${TTYD_SHA256[$arch]} "; then
+    return 0
+  fi
+  tmp=$(mktemp)
+  if curl -fsSL --retry 3 -o "$tmp" "https://github.com/tsl0922/ttyd/releases/download/$TTYD_VERSION/$file" \
+    && sha256sum "$tmp" | grep -q "^${TTYD_SHA256[$arch]} "; then
+    install -m 0755 "$tmp" /usr/local/bin/ttyd
+    ok "ttyd $TTYD_VERSION (static build)"
+  else
+    warn "ttyd download failed, web terminal disabled"
+  fi
+  rm -f "$tmp"
 }

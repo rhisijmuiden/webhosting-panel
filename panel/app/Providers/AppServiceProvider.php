@@ -144,6 +144,7 @@ class AppServiceProvider extends ServiceProvider
                 'protection' => ['section' => 'Websites', 'order' => 135, 'label' => 'Login protection'],
                 'mail' => ['section' => 'Email & domains', 'order' => 200],
                 'domain-aliases' => ['section' => 'Email & domains', 'order' => 210],
+                'files' => ['section' => 'Files & data', 'order' => 290],
                 'backups' => ['section' => 'Files & data', 'order' => 300],
                 'shop' => ['section' => 'Account', 'order' => 400],
             ],

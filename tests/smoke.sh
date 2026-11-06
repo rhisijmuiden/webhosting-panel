@@ -208,6 +208,37 @@ PY
   check "Joomla administrator login" bash -c "[[ \$(curl -s -o /dev/null -w %{http_code} -H 'Host: joomla.test' http://127.0.0.1/portal/administrator/) == 200 ]]"
   check "Joomla installation folder is gone" test ! -e /var/www/vhosts/joomla.test/public/portal/installation
 
+  echo "== file manager"
+  whp-site add files.test --php 8.4 --no-ssl --json >/dev/null
+  fm() { agent "$1" "$(jq -nc '$ARGS.named' --arg domain files.test "${@:2}")"; }
+  fm_spool() { local n; n=$1-$(openssl rand -hex 16); printf '%s' "$n"; }
+  export -f fm fm_spool agent_job
+  check "file manager lists the site root" bash -c 'fm files.list | jq -e "[.entries[].name] | index(\"public\") != null"'
+  check "file manager stays inside the webspace" bash -c '! fm files.list --arg path ../site.test && ! fm files.list --arg path public/../../site.test'
+  check "file manager spool belongs to the panel user" bash -c "[[ \$(stat -c '%U %a' /var/lib/webhosting-panel/files-spool) == 'whp 700' ]]"
+  up=$(fm_spool up)
+  printf '<?php echo "fm-ok";\n' | runuser -u whp -- tee "/var/lib/webhosting-panel/files-spool/$up" >/dev/null
+  check "upload is written as the site user" bash -c "fm files.upload --arg dir public --arg name tools/fm.php --arg spool $up >/dev/null && [[ \$(stat -c %U /var/www/vhosts/files.test/public/tools/fm.php) == s_files_test ]] && curl -s -H 'Host: files.test' http://127.0.0.1/tools/fm.php | grep -q fm-ok"
+  rd=$(fm_spool rd)
+  check "editor read goes through the spool" bash -c "fm files.read --arg path public/tools/fm.php --arg spool $rd >/dev/null && runuser -u whp -- grep -q fm-ok /var/lib/webhosting-panel/files-spool/$rd"
+  check "zip and unzip as jobs" bash -c 'agent_job files.compress "{\"domain\":\"files.test\",\"paths\":[\"public/tools\"],\"dir\":\"\",\"name\":\"tools\"}" && agent_job files.extract "{\"domain\":\"files.test\",\"path\":\"tools.zip\",\"to\":\"tmp\"}" && test -f /var/www/vhosts/files.test/tmp/tools/fm.php'
+  check "managed folders cannot be deleted" bash -c '! agent files.delete "{\"domain\":\"files.test\",\"paths\":[\"public\"]}" && test -d /var/www/vhosts/files.test/public'
+  check "web terminal tools installed" bash -c "command -v ttyd && command -v bwrap"
+  check "terminal sandbox hides the server" bash -c "cd /opt/webhosting-panel/agent && python3 -c '
+import subprocess, sys
+from whp_agent.actions.files import _site
+from whp_agent.actions.terminal import sandbox_argv
+site = _site({\"domain\": \"files.test\"})
+argv = sandbox_argv(site, [\"/bin/bash\", \"-c\", \"test ! -e /etc/webhosting-panel && test ! -e /var/www/vhosts/site.test && ! touch /usr/x 2>/dev/null && touch public/sandbox-ok && php -v >/dev/null\"])
+sys.exit(subprocess.run(argv, user=site[\"uid\"], group=site[\"gid\"], extra_groups=[]).returncode)
+' && test -f /var/www/vhosts/files.test/public/sandbox-ok"
+  TERM_START=$(agent terminal.start '{"domain":"files.test","minutes":5}') || echo "terminal.start: $TERM_START"
+  TOK=$(jq -r '.token // empty' <<<"$TERM_START" 2>/dev/null || true)
+  check "terminal session starts (ttyd socket)" bash -c "[[ -n '$TOK' ]] && test -S /run/whp-terminal/$TOK/ttyd.sock || { ls -la /run/whp-terminal /run/whp-terminal/$TOK; systemctl status --no-pager whp-term-$TOK.service; journalctl -u whp-term-$TOK.service --no-pager | tail -20; false; }"
+  check "ttyd serves the terminal page" bash -c "curl -s --unix-socket /run/whp-terminal/$TOK/ttyd.sock http://localhost/terminal/$TOK/ | grep -qi '<html'"
+  check "terminal proxy refuses visitors without a session" bash -c "code=\$(curl -sk -o /dev/null -w %{http_code} --resolve \"$HOST:8443:127.0.0.1\" https://$HOST:8443/terminal/$TOK/); echo \"HTTP \$code\"; [[ \$code == 401 ]]"
+  check "terminal session stops" bash -c "agent terminal.stop '{\"token\":\"$TOK\"}' >/dev/null && ! test -e /run/whp-terminal/$TOK"
+
   echo "== login protection"
   agent_call() {
     python3 - "$1" "$2" <<'PY'

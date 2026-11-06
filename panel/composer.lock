@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3bb0db612c0affd8c1a2b32f53b7d748",
+    "content-hash": "53bd6726f4c15fd62113064da1c4cb7e",
     "packages": [
         {
             "name": "brick/math",
@@ -3307,7 +3307,7 @@
         },
         {
             "name": "rhis/apps",
-            "version": "dev-main",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/apps",
@@ -3340,7 +3340,7 @@
         },
         {
             "name": "rhis/backups",
-            "version": "dev-main",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/backups",
@@ -3373,7 +3373,7 @@
         },
         {
             "name": "rhis/crm-api",
-            "version": "dev-main",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/crm-api",
@@ -3406,7 +3406,7 @@
         },
         {
             "name": "rhis/dns-mail",
-            "version": "dev-main",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/dns-mail",
@@ -3454,7 +3454,7 @@
         },
         {
             "name": "rhis/domain-aliases",
-            "version": "dev-main",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/domain-aliases",
@@ -3486,8 +3486,41 @@
             }
         },
         {
+            "name": "rhis/files",
+            "version": "dev-claude/project-thread-0lz2y1",
+            "dist": {
+                "type": "path",
+                "url": "../packages/files",
+                "reference": "20fc5e5ec9eb5ba3572e1ecb4d34b6a4c8495fbd"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Files\\FilesServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Files\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Client file manager for the Webhosting Panel: browse, upload, download, zip/unzip, a code editor and an optional sandboxed web terminal.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "rhis/git",
-            "version": "dev-main",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/git",
@@ -3520,7 +3553,7 @@
         },
         {
             "name": "rhis/migration",
-            "version": "dev-main",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/migration",
@@ -3553,7 +3586,7 @@
         },
         {
             "name": "rhis/security",
-            "version": "dev-main",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/security",
@@ -3586,7 +3619,7 @@
         },
         {
             "name": "rhis/vulnerabilities",
-            "version": "dev-main",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/vulnerabilities",
@@ -3619,7 +3652,7 @@
         },
         {
             "name": "rhis/wordpress",
-            "version": "dev-main",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/wordpress",
@@ -8829,6 +8862,7 @@
         "rhis/crm-api": 20,
         "rhis/dns-mail": 20,
         "rhis/domain-aliases": 20,
+        "rhis/files": 20,
         "rhis/git": 20,
         "rhis/migration": 20,
         "rhis/security": 20,
