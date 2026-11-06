@@ -123,6 +123,11 @@ printf 'example.test OK\n' >>/etc/postfix/whp/virtual_domains
 printf 'info@example.test example.test/info/\n' >>/etc/postfix/whp/virtual_mailboxes
 printf 'info@example.test info@example.test\n' >>/etc/postfix/whp/sender_login
 printf 'info@example.test:%s::::::\n' "$(doveadm pw -s ARGON2ID -p 'Test-1234-pass')" >/etc/dovecot/users
+# Second mailbox for the autoresponder and IMAP import checks.
+printf 'bob@example.test example.test/bob/\n' >>/etc/postfix/whp/virtual_mailboxes
+printf 'bob@example.test bob@example.test\n' >>/etc/postfix/whp/sender_login
+printf 'bob@example.test:%s::::::\n' "$(doveadm pw -s ARGON2ID -p 'Test-1234-bob')" >>/etc/dovecot/users
+install -d -m 0700 -o vmail -g vmail /var/vmail/example.test /var/vmail/example.test/info /var/vmail/example.test/bob
 postfix reload >/dev/null 2>&1
 check "smtp banner on 25" bash -c 'exec 3<>/dev/tcp/127.0.0.1/25; read -t 5 l <&3; [[ $l == 220* ]]'
 check "submission offers AUTH after STARTTLS" bash -c "(printf 'EHLO t\r\n'; sleep 2; printf 'QUIT\r\n') | timeout 8 openssl s_client -quiet -starttls smtp -connect 127.0.0.1:587 2>/dev/null | grep -q AUTH"
@@ -205,6 +210,32 @@ PY
   check "mail log: smoke message is in the journal, delivered locally" bash -c 'agent mail.log_read "{\"since_hours\":1}" | jq -e "[.events[] | select(.kind == \"delivery\" and .to == \"info@example.test\" and .status == \"sent\" and .local)] | length > 0"'
   check "mail log: long queue ids and a cursor" bash -c 'agent mail.log_read "{\"since_hours\":1}" | jq -e "(.cursor | length > 0) and ([.events[] | select(.kind == \"pickup\") | .qid | length > 12] | length > 0)"'
   check "mail log: rspamd history has the scan" bash -c 'agent mail.spam_history | jq -e ".rows | length > 0"'
+
+  echo "== mail extras (autoresponder, IMAP import)"
+  check "dovecot has the import master user and the autoreply script slot" bash -c "doveconf -n | grep -q whp_autoreply && doveconf -n | grep -q master-users && [[ -s /etc/dovecot/master-users ]]"
+  check "imapsync installed" command -v imapsync
+  check "autoreply: script written and compiled" bash -c 'agent mail.autoreply_sync "{\"autoreplies\":[{\"email\":\"info@example.test\",\"subject\":\"Smoke away\",\"body\":\"I am away until Monday.\",\"days\":1}]}" | jq -e ".written == [\"info@example.test\"]" && [[ -f /var/vmail/example.test/info/whp-autoreply.svbin ]]'
+  printf 'Subject: question\nFrom: bob@example.test\nTo: info@example.test\n\nare you there?\n' | sendmail -f bob@example.test -t -i
+  autoreply_arrived() { grep -lqs '^Subject: Smoke away' /var/vmail/example.test/bob/Maildir/new/* /var/vmail/example.test/bob/Maildir/cur/*; }
+  for i in $(seq 1 30); do autoreply_arrived && break; sleep 1; done
+  check "autoreply: the sender gets the answer" autoreply_arrived
+  check "autoreply: removed again" bash -c 'agent mail.autoreply_sync "{\"autoreplies\":[]}" | jq -e ".removed == [\"info@example.test\"]" && [[ ! -e /var/vmail/example.test/info/whp-autoreply.sieve ]]'
+  check "imap import: public-only by default (loopback refused)" bash -c 'agent mail.imap_import_test "{\"host\":\"127.0.0.1\",\"port\":143,\"security\":\"none\",\"user\":\"info@example.test\",\"password\":\"Test-1234-pass\"}" | jq -e ".code == \"forbidden\""'
+  printf 'IMAP_IMPORT_ALLOW_PRIVATE=yes\n' >/etc/webhosting-panel/mail-import.conf
+  check "imap import: test login counts the source messages" bash -c 'agent mail.imap_import_test "{\"host\":\"127.0.0.1\",\"port\":143,\"security\":\"none\",\"user\":\"info@example.test\",\"password\":\"Test-1234-pass\"}" | jq -e ".ok and .messages >= 2"'
+  check "imap import: wrong password is refused" bash -c 'agent mail.imap_import_test "{\"host\":\"127.0.0.1\",\"port\":143,\"security\":\"none\",\"user\":\"info@example.test\",\"password\":\"wrong\"}" | jq -e ".code == \"forbidden\""'
+  check "imap import: started as a unit" bash -c 'agent mail.imap_import_start "{\"id\":1,\"email\":\"bob@example.test\",\"host\":\"127.0.0.1\",\"port\":143,\"security\":\"none\",\"user\":\"info@example.test\",\"password\":\"Test-1234-pass\"}" | jq -e ".state == \"running\""'
+  for i in $(seq 1 90); do
+    [[ $(agent mail.imap_import_status '{"id":1}' | jq -r .state) != running ]] && break
+    sleep 2
+  done
+  agent mail.imap_import_status '{"id":1}' | jq -c '{state, exit_code, progress, error_lines}' || true
+  check "imap import: finished with all messages copied" bash -c 'agent mail.imap_import_status "{\"id\":1}" | jq -e ".state == \"done\" and .progress.percent == 100 and .progress.transferred >= 2 and .progress.errors == 0"'
+  check "imap import: the source mail is in the target mailbox" bash -c "grep -lqs '^Subject: smoke' /var/vmail/example.test/bob/Maildir/cur/* /var/vmail/example.test/bob/Maildir/new/*"
+  check "imap import: password files are gone" bash -c '[[ ! -e /var/lib/webhosting-panel/mail/imports/1/pass1 && ! -e /var/lib/webhosting-panel/mail/imports/1/pass2 ]]'
+  check "imap import: master user refused from outside loopback" grep -q 'allow_nets=127.0.0.1/32,::1/128' /etc/dovecot/master-users
+  agent mail.imap_import_forget '{"id":1}' >/dev/null || true
+  rm -f /etc/webhosting-panel/mail-import.conf
   check "app catalog" bash -c 'agent apps.catalog | jq -e "[.apps[].id] == [\"wordpress\",\"woocommerce\",\"joomla\",\"nextcloud\",\"piwigo\",\"mediawiki\",\"dokuwiki\",\"phpbb\",\"freshrss\"]"'
   agent apps.catalog | jq -r '.apps[] | "   \(.id): \(.latest_version) released \(.released_at // "-") maintained=\(.maintained)"' || true
   check "app catalog: every app has a latest release and is maintained" bash -c 'agent apps.catalog | jq -e "all(.apps[]; .latest_version != null and .maintained == true)"'

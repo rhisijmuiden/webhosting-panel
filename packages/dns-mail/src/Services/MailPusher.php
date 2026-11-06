@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rhis\DnsMail\Services;
 
 use App\Services\Agent\AgentClient;
+use Rhis\DnsMail\MailExtras\AutoreplyParams;
 use Rhis\DnsMail\Models\MailAlias;
 use Rhis\DnsMail\Models\MailDomain;
 use Rhis\DnsMail\Models\MailSenderRule;
@@ -25,8 +26,10 @@ final class MailPusher
         $routing = $this->agent->call('mail.set_routing', $this->routingParams(), 60);
         $boxes = $this->agent->call('mail.mailboxes_sync', $this->mailboxParams(), 60);
         $spam = $this->agent->call('mail.spam_policy_sync', $this->spamParams(), 60);
+        // After the mailboxes: the agent writes autoreplies into their homes.
+        $autoreply = $this->agent->call('mail.autoreply_sync', AutoreplyParams::build(), 60);
 
-        return ['routing' => $routing, 'mailboxes' => $boxes, 'spam' => $spam];
+        return ['routing' => $routing, 'mailboxes' => $boxes, 'spam' => $spam, 'autoreply' => $autoreply];
     }
 
     public function routingParams(): array
