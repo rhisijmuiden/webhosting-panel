@@ -26,12 +26,23 @@ VERIFY_DIR="$T/verify"
 VERIFY_MIN_FREE_PERCENT="0"
 EOF
 [[ -n "${WHP_TEST_DB:-}" ]] || sed -i 's/^DATABASES=.*/DATABASES="no"/' "$WHP_ETC/backup/backup.conf"
+if [[ -n "${WHP_TEST_DB:-}" ]]; then
+	# Only the databases these tests create: leave the server's own databases out.
+	existing="$(mariadb -N -B -e 'SHOW DATABASES' | tr '\n' ' ')"
+	sed -i "s/^DB_EXCLUDE=.*/DB_EXCLUDE=\"$existing\"/" "$WHP_ETC/backup/backup.conf"
+fi
 
 pass=0 fail=0
 ok() { pass=$((pass + 1)); printf '  ok   %s\n' "$1"; }
 ko() { fail=$((fail + 1)); printf '  FAIL %s\n' "$1"; }
 check() { local name="$1"; shift; if "$@" >/dev/null 2>&1; then ok "$name"; else ko "$name"; fi; }
-wb() { "$BIN" --json "$@"; }
+# A failing command still prints its JSON; the checks below judge it (set -e must not stop the run).
+wb() {
+	local rc=0
+	"$BIN" --json "$@" || rc=$?
+	[[ $rc -eq 0 ]] || echo "  (whp-backup $1 exited $rc)" >&2
+	return 0
+}
 
 reset_fixture() {
 	rm -rf "$SITES" "$MAIL" "$T/sysconf"
