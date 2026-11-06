@@ -26,6 +26,7 @@ class CustomerController extends Controller
                 ->orWhere('email', 'like', "%{$search}%")
                 ->orWhereHas('websites', fn ($w) => $w->where('domain', 'like', "%{$search}%"))))
             ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
+            ->when($request->integer('package'), fn ($q, $p) => $q->where('hosting_package_id', $p))
             ->orderBy('name')
             ->paginate(25)->withQueryString();
 

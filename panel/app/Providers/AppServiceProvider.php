@@ -90,7 +90,8 @@ class AppServiceProvider extends ServiceProvider
             ->add('firewall', 'Firewall', 'admin.firewall.index', icon: 'firewall', section: 'Server', order: 120)
             ->add('mail-settings', 'Mail server (SMTP)', 'admin.settings.mail.edit', icon: 'send', section: 'System', order: 200, activePatterns: ['admin.settings.mail.*'])
             ->add('system', 'Updates', 'admin.system.index', icon: 'refresh', section: 'System', order: 210)
-            ->add('activity', 'Activity log', 'admin.activity.index', icon: 'list', section: 'System', order: 220);
+            ->add('activity', 'Activity log', 'admin.activity.index', icon: 'list', section: 'System', order: 220)
+            ->add('tools', 'Tools & settings', 'admin.tools.index', icon: 'tools', section: 'Server management', order: 300);
 
         Menu::client()
             ->add('overview', 'Overview', 'client.dashboard', icon: 'dashboard', order: 0)
@@ -105,36 +106,43 @@ class AppServiceProvider extends ServiceProvider
      */
     private function arrangeMenus(): void
     {
+        // Admin: like a classic hosting panel. Home, then collapsible groups;
+        // settings pages are not in the menu but under "Tools & settings".
+        $count = fn (string $model) => fn () => $model::query()->count();
+        $tools = ['parent' => 'tools'];
         Menu::admin()->arrange(
-            ['', 'Overview', 'Customers', 'Hosting', 'Domains & mail', 'Server', 'System'],
+            ['', 'Hosting services', 'Additional services', 'Server management'],
             [
-                'dashboard' => ['section' => 'Overview', 'order' => 0],
+                'dashboard' => ['section' => '', 'order' => 0, 'label' => 'Home', 'icon' => 'home'],
                 'quick' => ['section' => '', 'order' => 5],
-                'security-overview' => ['section' => 'Overview', 'order' => 10, 'label' => 'Security center'],
-                'activity' => ['section' => 'Overview', 'order' => 20, 'label' => 'Activity'],
-                'customers' => ['section' => 'Customers', 'order' => 100],
-                'packages' => ['section' => 'Customers', 'order' => 110],
-                'migration' => ['section' => 'Customers', 'order' => 120, 'label' => 'Migrations'],
-                'websites' => ['section' => 'Hosting', 'order' => 200],
-                'wordpress' => ['section' => 'Hosting', 'order' => 210],
-                'apps' => ['section' => 'Hosting', 'order' => 220, 'label' => 'Apps'],
-                'git' => ['section' => 'Hosting', 'order' => 230],
-                'databases' => ['section' => 'Hosting', 'order' => 240],
-                'files' => ['section' => 'Hosting', 'order' => 250],
-                'domains' => ['section' => 'Domains & mail', 'order' => 300, 'label' => 'Domains & DNS'],
-                'domain-aliases' => ['section' => 'Domains & mail', 'order' => 310],
-                'mail-log' => ['section' => 'Domains & mail', 'order' => 320],
-                'services' => ['section' => 'Server', 'order' => 400],
-                'security' => ['section' => 'Server', 'order' => 405, 'label' => 'Attack blocking'],
-                'protection' => ['section' => 'Server', 'order' => 407, 'label' => 'Login protection'],
-                'firewall' => ['section' => 'Server', 'order' => 410],
-                'backups' => ['section' => 'Server', 'order' => 420],
-                'statistics' => ['section' => 'Server', 'order' => 430],
-                'php' => ['section' => 'Server', 'order' => 440, 'label' => 'PHP settings'],
-                'mail-settings' => ['section' => 'System', 'order' => 500],
-                'dns-mail-settings' => ['section' => 'System', 'order' => 510],
-                'crm-api' => ['section' => 'System', 'order' => 520],
-                'system' => ['section' => 'System', 'order' => 530],
+                'customers' => ['section' => 'Hosting services', 'order' => 100, 'badge' => $count(\App\Models\Customer::class)],
+                'websites' => ['section' => 'Hosting services', 'order' => 110, 'label' => 'Domains', 'badge' => $count(\App\Models\Website::class)],
+                'subscriptions' => ['section' => 'Hosting services', 'order' => 120],
+                'packages' => ['section' => 'Hosting services', 'order' => 130, 'label' => 'Service plans', 'badge' => $count(\App\Models\HostingPackage::class)],
+                'domains' => ['section' => 'Hosting services', 'order' => 140, 'label' => 'Mail & DNS'],
+                'domain-aliases' => ['section' => 'Hosting services', 'order' => 150],
+                'migration' => ['section' => 'Hosting services', 'order' => 160, 'label' => 'Migrations'],
+                'wordpress' => ['section' => 'Additional services', 'order' => 200],
+                'apps' => ['section' => 'Additional services', 'order' => 210, 'label' => 'Apps'],
+                'git' => ['section' => 'Additional services', 'order' => 220],
+                'databases' => ['section' => 'Additional services', 'order' => 230],
+                'files' => ['section' => 'Additional services', 'order' => 240],
+                'tools' => ['section' => 'Server management', 'order' => 300],
+                'security-overview' => ['section' => 'Server management', 'order' => 310, 'label' => 'Security center'],
+                'statistics' => ['section' => 'Server management', 'order' => 320],
+                'services' => ['section' => 'Server management', 'order' => 330, 'label' => 'Monitoring'],
+                'backups' => ['section' => 'Server management', 'order' => 340],
+                // Reached through Tools & settings; the menu marks that item active.
+                'security' => $tools + ['label' => 'Attack blocking'],
+                'protection' => $tools + ['label' => 'Login protection'],
+                'firewall' => $tools,
+                'php' => $tools + ['label' => 'PHP settings'],
+                'mail-settings' => $tools,
+                'dns-mail-settings' => $tools,
+                'mail-log' => $tools,
+                'crm-api' => $tools,
+                'system' => $tools + ['label' => 'Updates & release channel'],
+                'activity' => $tools + ['label' => 'Activity log'],
             ],
         );
 

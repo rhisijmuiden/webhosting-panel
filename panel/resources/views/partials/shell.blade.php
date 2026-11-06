@@ -6,11 +6,11 @@
     $versions = app(\App\Services\VersionService::class);
     $channel = $versions->channel();
     $isAdmin = $user->isAdmin();
-    $paletteItems = collect($sections)->flatMap(fn ($items, $section) => collect($items)->map(fn ($i) => [
+    $paletteItems = collect($menu->pages())->map(fn ($i) => [
         'label' => __($i['label']),
-        'section' => $section !== '' ? __($section) : '',
+        'section' => $i['context'] !== '' ? __($i['context']) : '',
         'url' => route($i['route']),
-    ]))->values();
+    ])->values();
 @endphp
 <div class="app" x-data="{ nav: false }" @keydown.escape.window="nav = false">
     <aside class="sidebar" :class="{ open: nav }" id="sidebar">
@@ -32,13 +32,27 @@
 
         <nav class="nav" aria-label="{{ __('Main menu') }}">
             @foreach ($sections as $section => $items)
-                @if ($section !== '')<div class="nav-section">{{ __($section) }}</div>@endif
-                @foreach ($items as $item)
-                    <a href="{{ route($item['route']) }}" @class(['active' => $item['active']]) @if ($item['active']) aria-current="page" @endif>
-                        <x-icon :name="$item['icon']" /><span class="nav-label">{{ __($item['label']) }}</span>
-                        @if ($item['badge'])<span class="badge">{{ __($item['badge']) }}</span>@endif
-                    </a>
-                @endforeach
+                @if ($section === '')
+                    @foreach ($items as $item)
+                        @include('partials.nav-item', ['item' => $item])
+                    @endforeach
+                @else
+                    @php($sectionOpen = collect($items)->contains('active', true))
+                    <div class="nav-group" x-data="{
+                        key: @js('whp.nav.'.\Illuminate\Support\Str::slug($section)), open: true,
+                        init() { if (! @js($sectionOpen)) { try { this.open = localStorage.getItem(this.key) !== 'closed'; } catch (e) {} } },
+                        toggle() { this.open = ! this.open; try { localStorage.setItem(this.key, this.open ? 'open' : 'closed'); } catch (e) {} },
+                    }" :class="{ closed: ! open }">
+                        <button type="button" class="nav-section" @click="toggle()" :aria-expanded="open.toString()" aria-expanded="true">
+                            <span>{{ __($section) }}</span><x-icon name="chevron" class="icon nav-caret" />
+                        </button>
+                        <div class="nav-items" x-show="open">
+                            @foreach ($items as $item)
+                                @include('partials.nav-item', ['item' => $item])
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
             @endforeach
         </nav>
 
@@ -70,7 +84,11 @@
             <button type="button" class="btn icon-btn menu-toggle" @click="nav = !nav" :aria-expanded="nav" aria-controls="sidebar" aria-label="{{ __('Menu') }}"><x-icon name="menu" /></button>
             <nav class="topbar-crumbs" aria-label="{{ __('Breadcrumbs') }}">
                 @if ($current && $current['section_label'] !== '')
-                    <span>{{ __($current['section_label']) }}</span><x-icon name="chevron" />
+                    @if (! empty($current['section_route']))
+                        <a href="{{ route($current['section_route']) }}">{{ __($current['section_label']) }}</a><x-icon name="chevron" />
+                    @else
+                        <span>{{ __($current['section_label']) }}</span><x-icon name="chevron" />
+                    @endif
                 @endif
                 <strong>{{ $current ? __($current['label']) : ($title ?? '') }}</strong>
             </nav>

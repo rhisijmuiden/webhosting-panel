@@ -108,14 +108,18 @@
   table.table:not(.table-keep) tr { padding: 12px 16px; border-bottom: 1px solid var(--line-soft); }
   table.table:not(.table-keep) tr:last-child { border-bottom: 0; }
   table.table:not(.table-keep) tbody tr:hover td { background: none; }
-  table.table:not(.table-keep) td { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 3px 0; border: 0; text-align: right; min-height: 0; }
+  table.table:not(.table-keep) td { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px 8px; padding: 3px 0; border: 0; text-align: right; min-height: 0; }
   table.table:not(.table-keep) td.num { text-align: right; }
-  table.table:not(.table-keep) td::before { content: attr(data-label); color: var(--ink-muted); font-size: 12.5px; font-weight: 600; text-align: left; flex: none; }
+  table.table:not(.table-keep) td::before { content: attr(data-label); color: var(--ink-muted); font-size: 12.5px; font-weight: 600; text-align: left; flex: none; margin-right: auto; }
   table.table:not(.table-keep) td:first-child { display: block; text-align: left; font-size: 15px; padding-bottom: 6px; }
   table.table:not(.table-keep) td:first-child::before, table.table:not(.table-keep) td[data-label=""]::before { display: none; }
   table.table:not(.table-keep) td[data-label=""] { justify-content: flex-end; }
   table.table:not(.table-keep) td[colspan] { display: block; text-align: left; }
   table.table:not(.table-keep) td:empty { display: none; }
+  table.table:not(.table-keep) tr { position: relative; }
+  table.table:not(.table-keep) td.m-check { position: absolute; top: 12px; right: 16px; width: auto; padding: 0; }
+  table.table:not(.table-keep) td.m-check + td { display: block; text-align: left; font-size: 15px; padding: 0 40px 6px 0; }
+  table.table:not(.table-keep) td.m-check + td::before { display: none; }
 
   .m-stats { gap: 8px; }
   .m-stats .card { padding: 12px; }

@@ -10,6 +10,8 @@
         let col = 0;
         Array.from(tr.children).forEach((td) => {
           if (!td.hasAttribute('data-label')) td.setAttribute('data-label', heads[col] || '');
+          // A select-checkbox column floats in the corner; the next cell becomes the title.
+          if (col === 0 && td.querySelector('input[type=checkbox]') && td.textContent.trim() === '') td.classList.add('m-check');
           col += td.colSpan || 1;
         });
       });
