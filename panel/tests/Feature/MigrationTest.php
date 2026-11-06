@@ -248,7 +248,8 @@ class MigrationTest extends TestCase
     {
         $this->actingAsAdmin();
         $customer = Customer::create(['name' => 'Bestaand', 'email' => 'b@example.test']);
-        $this->agent()->respond('site.add', new \App\Services\Agent\AgentException('command_failed', 'whp-site exited with code 1'));
+        $this->agent()->respond('site.add', new \App\Services\Agent\AgentException('command_failed', '/usr/local/sbin/whp-site exited with code 1',
+            ['stderr' => "\e[1m== bakkerij.test ==\e[0m\n\e[31m✗ nginx config test failed (see /var/log/webhosting-panel/sites.log)\e[0m\n"]));
         $source = $this->source();
 
         $this->post(route('admin.migration.sources.migrate', $source), [
@@ -258,7 +259,40 @@ class MigrationTest extends TestCase
         $this->assertSame('failed', $item->status);
         $this->assertSame($customer->id, $item->customer_id);
         $this->assertStringContainsString('whp-site exited', $item->error);
-        $this->get(route('admin.migration.items.show', $item))->assertOk()->assertSee('whp-site exited');
+        $this->assertStringContainsString('✗ nginx config test failed', $item->error);
+        $this->get(route('admin.migration.items.show', $item))->assertOk()->assertSee('nginx config test failed');
+    }
+
+    public function test_site_that_already_exists_on_the_server_is_reused(): void
+    {
+        $this->actingAsAdmin();
+        $this->agent()->respond('site.list', ['sites' => [['domain' => 'bakkerij.test']]]);
+        $this->agent()->respond('site.show', ['domain' => 'bakkerij.test', 'php' => '8.3', 'ssl' => 'off']);
+
+        $item = $this->migrateBakkerij($this->source());
+
+        $this->assertSame([], $this->calls('site.add'));
+        $this->assertSame('copying', $item->status, (string) $item->error);
+        $this->assertSame('active', $item->website->status);
+    }
+
+    public function test_missing_php_version_falls_back_to_84(): void
+    {
+        $this->actingAsAdmin();
+        $this->agent()->respond('site.add', function (array $p) {
+            if ($p['php'] !== '8.4') {
+                throw new \App\Services\Agent\AgentException('command_failed', 'whp-site exited with code 1', ['stderr' => '✗ Unsupported PHP version: 8.3 (supported: 8.4 8.5)']);
+            }
+
+            return ['domain' => $p['domain'], 'php' => '8.4', 'ssl' => 'off'];
+        });
+
+        $item = $this->migrateBakkerij($this->source());
+
+        $this->assertSame('copying', $item->status, (string) $item->error);
+        $this->assertSame('8.4', $item->website->php_version);
+        $this->assertCount(2, $this->calls('site.add'));
+        $this->assertContains('PHP 8.3 is not installed on this server, so the website uses PHP 8.4.', $item->noteTexts());
     }
 
     public function test_site_plan_and_dns_filter(): void
