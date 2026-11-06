@@ -17,6 +17,8 @@
     .bk-items li label { display: grid; grid-template-columns: 20px 1fr auto; gap: 10px; align-items: center; padding: 8px 16px; cursor: pointer; }
     .bk-items li:hover { background: var(--surface-sunken); }
     .bk-sticky { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 14px 16px; background: var(--surface-raised); border-top: 1px solid var(--line); border-radius: 0 0 var(--radius-md) var(--radius-md); }
+    .bk-onedrive { margin-bottom: 12px; }
+    .bk-onedrive-status { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--ok, #1f8a4c); }
     .bk-drop { display: block; margin-top: 12px; border: 2px dashed var(--line); border-radius: var(--radius-md); padding: 28px 16px; text-align: center; cursor: pointer; }
     .bk-drop.is-over { border-color: var(--lucht, #4aa3df); background: var(--surface-sunken); }
     .bk-progress { height: 8px; border-radius: 999px; background: var(--surface-sunken); overflow: hidden; margin: 12px 0; }
