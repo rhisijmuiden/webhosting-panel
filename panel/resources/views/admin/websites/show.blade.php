@@ -20,6 +20,8 @@
         <div class="alert alert-bad" role="alert"><x-icon name="info" /><div><strong>{{ __('Something went wrong') }}</strong><p class="small mono">{{ $website->last_error }}</p></div></div>
     @endif
 
+    @includeIf('wordpress::partials.website-card', ['website' => $website])
+
     <section class="grid grid-2" style="align-items:start">
         <x-ui.card :title="__('PHP and caching')">
             <form method="POST" action="{{ route('admin.websites.update', $website) }}" class="form">

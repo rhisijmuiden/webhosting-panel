@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "322acb3066db15720b41e0f31d237592",
+    "content-hash": "bd6b5d6140e7aa6fd79134a2f47ca592",
     "packages": [
         {
             "name": "brick/math",
@@ -3513,6 +3513,39 @@
                 "proprietary"
             ],
             "description": "Login protection for the Webhosting Panel: brute-force thresholds, per-site protection and allowlists, on top of CrowdSec through the agent.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/wordpress",
+            "version": "dev-claude/project-thread-018wgc",
+            "dist": {
+                "type": "path",
+                "url": "../packages/wordpress",
+                "reference": "71ee75a967512e4773a834e67d43b279568f58d4"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\WordPress\\WordPressServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\WordPress\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "WordPress toolkit for the Webhosting Panel: one-click updates, WP-cron takeover, admin passwords and one-click login, outdated plugins in the security screen.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8697,7 +8730,8 @@
         "rhis/crm-api": 20,
         "rhis/dns-mail": 20,
         "rhis/migration": 20,
-        "rhis/security": 20
+        "rhis/security": 20,
+        "rhis/wordpress": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

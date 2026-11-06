@@ -78,6 +78,13 @@ check "quota stored" whp-site quota app.test 500 --json
 check "remove site" whp-site remove app.test --json
 check "site user removed" bash -c '! getent passwd s_app_test'
 
+echo "== wordpress toolkit"
+check "wp-cli installed" bash -c "php /usr/local/bin/wp --allow-root --version | grep -q 'WP-CLI 2'"
+check "add wordpress site" whp-site add wp.test --profile wordpress --no-ssl --json
+mariadb -e "CREATE DATABASE IF NOT EXISTS wp_smoke; CREATE USER IF NOT EXISTS 'wp_smoke'@'localhost' IDENTIFIED BY 'Smoke-Db-Pass-2026'; GRANT ALL ON wp_smoke.* TO 'wp_smoke'@'localhost';"
+rm -f /var/www/vhosts/wp.test/public/index.html
+check "toolkit end to end (detect, status, cron, password, login link, update)" python3 "$(dirname "$0")/wp_smoke.py" wp.test
+
 echo "== mail"
 printf 'example.test OK\n' >>/etc/postfix/whp/virtual_domains
 printf 'info@example.test example.test/info/\n' >>/etc/postfix/whp/virtual_mailboxes
