@@ -59,7 +59,7 @@ def site_info(domain):
 
 def site_slice(owner):
     """The systemd slice a site's processes run in: its customer's slice when it has one."""
-    if owner and re.fullmatch(r"c[0-9]{1,9}", owner):
+    if owner and re.fullmatch(r"[cs][0-9]{1,9}", owner):
         return f"whp-sites-{owner}.slice"
     return "whp-sites.slice"
 

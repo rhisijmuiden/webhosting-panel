@@ -1,0 +1,24 @@
+{
+    "name": "rhis/webapps",
+    "description": "Node.js and Python apps for the Webhosting Panel: runtime versions, start command, environment variables, systemd service per app with resource limits, Nginx reverse proxy, logs and restart, Git deploy hook.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rhis\\WebApps\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rhis\\WebApps\\WebAppsServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

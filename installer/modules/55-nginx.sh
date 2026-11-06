@@ -38,12 +38,13 @@ module_nginx() {
   fi
   local f
   render "$TPL/nginx/whp-http.conf" /etc/nginx/conf.d/whp-http.conf
-  for f in tls.conf headers.conf php-cache.conf php-nocache.conf php-common.conf acme.conf static.conf deny.conf; do
+  for f in tls.conf headers.conf php-cache.conf php-nocache.conf php-common.conf acme.conf static.conf deny.conf proxy.conf; do
     render "$TPL/nginx/snippets/$f" "/etc/nginx/whp/$f"
   done
 
   install -d -m 0755 /etc/nginx/whp/pages
   install -m 0644 "$TPL/nginx/pages/suspended.html" /etc/nginx/whp/pages/suspended.html
+  install -m 0644 "$TPL/nginx/pages/app-down.html" /etc/nginx/whp/pages/app-down.html
 
   rm -f /etc/nginx/sites-enabled/default
   render "$TPL/nginx/default-server.conf" /etc/nginx/sites-available/00-whp-default.conf

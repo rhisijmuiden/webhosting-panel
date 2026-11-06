@@ -43,6 +43,19 @@
                 @endforeach
             </div>
         </x-ui.card>
+        <x-ui.card :title="__('Node.js and Python apps')">
+            <p class="muted small">{{ __('Apps run as the website user in the same resource jail, behind Nginx. Set the number of apps to 0 to switch the feature off for this package.') }}</p>
+            <div class="form-grid">
+                @php $appHelp = [
+                    'max_webapps' => __('Apps one website may run at the same time.'),
+                    'webapp_memory_mb' => __('Hard cap for one app; the app is restarted when it uses more.'),
+                    'webapp_cpu_percent' => __('100 % is one full CPU core.'),
+                ]; @endphp
+                @foreach (\App\Models\HostingPackage::APP_LIMITS as $key => [$label, $unit, $min, $max])
+                    <x-ui.limit :name="$key" :label="__($label)" :unit="$unit" :min="$min" :max="$max" :value="$package->{$key}" :help="$appHelp[$key]" />
+                @endforeach
+            </div>
+        </x-ui.card>
         <div class="actions">
             <button type="submit" class="btn btn-primary">{{ __('Save') }}</button>
             <a class="btn" href="{{ route('admin.packages.index') }}">{{ __('Cancel') }}</a>
