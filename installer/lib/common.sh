@@ -221,6 +221,19 @@ cert_paths() {
   fi
 }
 
+# Log format for the data traffic per website (bytes out and in), read by whp-agent
+# for the package traffic limit. Kept in its own conf.d file so whp-site can add it
+# on servers whose nginx.conf predates it (a panel update does not re-render nginx.conf).
+nginx_traffic_format() {
+  local f=/etc/nginx/conf.d/whp-traffic.conf
+  if grep -qs 'log_format whp_traffic' /etc/nginx/nginx.conf; then rm -f "$f"; return 0; fi
+  [[ -f $f ]] && return 0
+  install -d -m 0755 /etc/nginx/conf.d
+  # shellcheck disable=SC2016 # nginx variables
+  printf '%s\n' '# Managed by the Webhosting Panel: data traffic per website (whp-agent traffic.report).' \
+    "log_format whp_traffic '\$server_name \$bytes_sent \$request_length';" >"$f"
+}
+
 nginx_has_http3() { [[ $(nginx -V 2>&1 || true) == *--with-http_v3_module* ]]; }
 
 valid_domain() {
