@@ -101,6 +101,45 @@ class MigrationStatusTest extends TestCase
             ->assertDontSee('value="api.bakkerij.test"', false);
     }
 
+    public function test_wordpress_fix_is_shown_and_known_passwords_go_back_to_the_agent(): void
+    {
+        $this->actingAsAdmin();
+        $item = $this->startBakkerij();
+        $this->agent()->respond('job.status', ['id' => $item->agent_job, 'status' => 'succeeded', 'finished_at' => time(), 'error' => null,
+            'log' => ['wordpress /: updating the configuration', 'wordpress /: done (config: DB_HOST, DB_PASSWORD; files: 2; database paths: 31)'],
+            'result' => ['domain' => 'bakkerij.test', 'files' => ['stats' => []], 'mail' => [], 'ssl' => null, 'errors' => [], 'status' => 'ok',
+                'databases' => [['name' => 'wp_bakkerij', 'target' => 'wp_bakkerij', 'ok' => true, 'users' => [['user' => 'wp_bakkerij', 'new_password' => 'Nieuw-1']]]],
+                'wordpress' => [['path' => '', 'ok' => true, 'config' => ['DB_HOST', 'DB_PASSWORD'], 'files' => ['wp-config.php'], 'db_replacements' => 31]]]]);
+        $this->get(route('admin.migration.items.show', $item))->assertOk()
+            ->assertSee('Configured for this server')
+            ->assertSee('wp-config.php: DB_HOST, DB_PASSWORD · 31 paths replaced in the database')
+            ->assertSee('WordPress /: configuration and paths updated for this server (31 paths in the database).');
+
+        $this->post(route('admin.migration.items.sync', $item), ['kind' => 'sync'])->assertRedirect();
+        $sync = collect($this->agent()->calls)->where('action', 'migrate.transfer')->last()['params'];
+        $this->assertSame(['wp_bakkerij' => 'Nieuw-1'], $sync['db_passwords']);
+    }
+
+    public function test_wordpress_settings_can_be_fixed_after_the_dns_switch(): void
+    {
+        $this->actingAsAdmin();
+        $item = $this->startBakkerij();
+        $item->update(['status' => 'live', 'secrets' => ['db:wp_bakkerij' => 'Nieuw-1']]);
+        $this->agent()->respond('migrate.wordpress_fix', function (array $p) {
+            $this->assertSame('/var/www/vhosts/bakkerij.test/httpdocs', $p['old_root']);
+            $this->assertSame(['wp_bakkerij' => 'Nieuw-1'], $p['db_passwords']);
+
+            return ['domain' => 'bakkerij.test', 'log' => ['wordpress /: done (config: paths; files: 1; database paths: 4)'],
+                'wordpress' => [['path' => '', 'ok' => true, 'config' => ['paths'], 'files' => ['.user.ini'], 'db_replacements' => 4]]];
+        });
+
+        $this->get(route('admin.migration.items.show', $item))->assertSee('Fix WordPress settings');
+        $this->post(route('admin.migration.items.wordpress', $item))->assertRedirect()->assertSessionHas('status');
+        $item->refresh();
+        $this->assertSame(4, $item->result['wordpress'][0]['db_replacements']);
+        $this->assertContains('wordpress /: done (config: paths; files: 1; database paths: 4)', array_column($item->logLines(), 'text'));
+    }
+
     public function test_empty_status_page(): void
     {
         $this->actingAsAdmin();
