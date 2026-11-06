@@ -18,6 +18,7 @@
         "rhis/dns-mail": "@dev",
         "rhis/git": "@dev",
         "rhis/migration": "@dev",
+        "rhis/vulnerabilities": "@dev",
         "rhis/wordpress": "@dev"
     },
     "require-dev": {

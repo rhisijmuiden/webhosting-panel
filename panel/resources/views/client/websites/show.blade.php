@@ -35,10 +35,12 @@
                 <dt>{{ __('Type') }}</dt><dd>{{ __(ucfirst($website->profile)) }}</dd>
                 <dt>{{ __('Also reachable as') }}</dt><dd>{{ $website->aliases ? implode(', ', $website->aliases) : '–' }}</dd>
                 <dt>{{ __('Disk') }}</dt><dd>{{ $website->disk_used_mb }} MB</dd>
+                <dt>{{ __('Data traffic this month') }}</dt><dd>{{ \Illuminate\Support\Number::fileSize($website->trafficBytes(), 1) }}</dd>
                 <dt>{{ __('SFTP user') }}</dt><dd class="mono">{{ $website->system_user ?? '–' }}</dd>
             </dl>
         </x-ui.card>
     </section>
+    @include('partials.website-php', ['website' => $website, 'action' => route('client.websites.php', $website)])
     @includeIf('wordpress::partials.website-card', ['website' => $website])
     @includeIf('git::partials.website-card', ['website' => $website])
 </x-layouts.client>

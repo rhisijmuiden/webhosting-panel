@@ -71,7 +71,7 @@ class AdminTest extends TestCase
         $this->assertSame('active', $site->ssl_status);
         $this->assertFalse($site->page_cache, 'Laravel sites have no page cache');
         $call = collect($this->agent()->calls)->firstWhere('action', 'site.add');
-        $this->assertSame(['domain' => 'example.nl', 'php' => '8.5', 'profile' => 'laravel', 'cache' => false, 'ssl' => true, 'no_alias' => false, 'quota_mb' => 5000], $call['params']);
+        $this->assertSame(['domain' => 'example.nl', 'php' => '8.5', 'profile' => 'laravel', 'cache' => false, 'ssl' => true, 'no_alias' => false, 'quota_mb' => 5000, 'customer_id' => $customer->id, 'php_workers' => 10], $call['params']);
 
         // The package allows one website.
         $this->post('/admin/websites', ['customer_id' => $customer->id, 'domain' => 'second.nl', 'profile' => 'php', 'php_version' => '8.4'])

@@ -85,7 +85,8 @@ def create_for_site(domain, label):
             f"CREATE DATABASE `{name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\n"
             f"CREATE USER '{name}'@'localhost' IDENTIFIED BY '{pw}';\n"
             f"GRANT ALL PRIVILEGES ON `{name}`.* TO '{name}'@'localhost';\n"
-            "FLUSH PRIVILEGES;\n"
+            + _connections_sql(name, _limits().get(domain))
+            + "FLUSH PRIVILEGES;\n"
         )
         data[name] = {"domain": domain, "user": name, "label": label, "created": int(time.time())}
         _save(data)
@@ -157,3 +158,47 @@ def db_create(params):
 @action("db.drop")
 def db_drop(params):
     return drop(v.string(params, "name", max_len=64, pattern=DB_NAME.pattern[1:-1]), v.domain(params, "domain"))
+
+
+def _limits_file():
+    return os.path.join(paths.STATE_DIR, "database-limits.json")
+
+
+def _limits():
+    try:
+        with open(_limits_file()) as fh:
+            data = json.load(fh)
+            return data if isinstance(data, dict) else {}
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def _connections_sql(user, limit):
+    # 0 = no own limit (the server-wide max_connections still applies).
+    return f"ALTER USER '{user}'@'localhost' WITH MAX_USER_CONNECTIONS {int(limit or 0)};\n"
+
+
+@action("db.limits")
+def db_limits(params):
+    """Cap the simultaneous MariaDB connections of every database user of a site
+    (package limit), so one site cannot take all connections of the server.
+    Databases created later for the site get the same cap."""
+    domain = v.domain(params, "domain")
+    limit = v.integer(params, "max_connections", required=False, minimum=1, maximum=10_000)
+    with _lock:
+        limits = _limits()
+        if limit:
+            limits[domain] = limit
+        else:
+            limits.pop(domain, None)
+        os.makedirs(paths.STATE_DIR, exist_ok=True)
+        tmp = _limits_file() + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(limits, fh, indent=1, sort_keys=True)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, _limits_file())
+        users = sorted({e.get("user", n) for n, e in _load().items() if e.get("domain") == domain})
+        users = [u for u in users if DB_NAME.match(u or "")]
+        if users:
+            sql("".join(_connections_sql(u, limit) for u in users))
+    return {"domain": domain, "max_connections": limit, "users": users}
