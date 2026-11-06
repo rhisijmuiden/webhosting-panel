@@ -84,6 +84,23 @@ class FakeAgentClient implements AgentClient
             'site.ssl' => ['domain' => $params['domain'], 'ssl' => 'active'],
             'site.remove', 'site.quota' => ['domain' => $params['domain'] ?? ''],
             'site.list' => ['sites' => []],
+            'site.suspend', 'site.unsuspend' => ['domain' => $params['domain'], 'suspended' => $action === 'site.suspend'],
+            'site.owner' => ['domain' => $params['domain'], 'owner' => isset($params['customer_id']) ? 'c'.$params['customer_id'] : null],
+            'site.php_settings' => ['domain' => $params['domain'], 'php_ini' => $params['settings'] ?? [], 'php_workers' => $params['php_workers'] ?? 10],
+            'customer.limits' => ['owner' => 'c'.($params['customer_id'] ?? 0), 'cpu' => isset($params['cpu_percent']) ? $params['cpu_percent'].'%' : null,
+                'memory_mb' => $params['memory_mb'] ?? null, 'io_mbps' => $params['io_mbps'] ?? null, 'tasks' => $params['max_processes'] ?? null],
+            'db.limits' => ['domain' => $params['domain'], 'max_connections' => $params['max_connections'] ?? null, 'users' => []],
+            'traffic.report' => ['month' => now()->utc()->format('Y-m'), 'sites' => Website::pluck('domain')
+                ->mapWithKeys(fn ($d) => [$d => abs(crc32($d)) % (40 * 1024 ** 3)])->all()],
+            'php.extensions.list' => $this->phpExtensions($params['php'] ?? '8.4'),
+            'php.extensions.search_pecl' => ['results' => collect([
+                ['name' => 'swoole', 'version' => '6.0.2', 'summary' => 'Event-driven asynchronous and concurrent networking engine'],
+                ['name' => 'mailparse', 'version' => '3.1.8', 'summary' => 'Email message manipulation'],
+                ['name' => 'xdebug', 'version' => '3.4.2', 'summary' => 'Xdebug - debugger and profiler for PHP'],
+                ['name' => 'ssh2', 'version' => '1.4.1', 'summary' => 'Bindings for the libssh2 library'],
+            ])->filter(fn ($r) => str_contains($r['name'].' '.strtolower($r['summary']), strtolower($params['q'] ?? '')))->values()->all()],
+            'php.extensions.install', 'php.extensions.remove' => ['job' => (string) Str::uuid()],
+            'php.extensions.toggle' => ['php' => $params['php'], 'name' => $params['name'], 'enabled' => (bool) $params['enabled']],
             'stats.sample' => $this->statsSample(),
             'backup.status' => [
                 'version' => 'fake', 'running' => false,
@@ -254,5 +271,25 @@ class FakeAgentClient implements AgentClient
         Cache::forever('fake-agent.firewall', $rules);
 
         return ['deleted' => $params['id']];
+    }
+
+    private function phpExtensions(string $php): array
+    {
+        $installed = ['bcmath', 'curl', 'gd', 'gmp', 'igbinary', 'imagick', 'intl', 'mbstring', 'mysql', 'redis', 'soap', 'sqlite3', 'xml', 'zip', 'apcu', 'exif'];
+        $available = ['amqp' => 'AMQP extension', 'apcu' => 'APC User Cache', 'bcmath' => 'Bcmath module', 'curl' => 'CURL module',
+            'decimal' => 'Arbitrary precision decimals', 'gd' => 'GD module', 'gmp' => 'GMP module', 'igbinary' => 'igbinary serializer',
+            'imagick' => 'ImageMagick module', 'intl' => 'Internationalisation module', 'ldap' => 'LDAP module', 'mailparse' => 'Email message manipulation',
+            'mbstring' => 'MBSTRING module', 'memcached' => 'memcached extension module', 'mongodb' => 'MongoDB driver', 'mysql' => 'MySQL module',
+            'pgsql' => 'PostgreSQL module', 'redis' => 'PHP extension for interfacing with Redis', 'soap' => 'SOAP module', 'sqlite3' => 'SQLite3 module',
+            'ssh2' => 'Bindings for the libssh2 library', 'swoole' => 'Swoole networking engine', 'tidy' => 'tidy module', 'xdebug' => 'Xdebug Module',
+            'xml' => 'DOM, SimpleXML, XML, and XSL module', 'yaml' => 'YAML-1.1 parser and emitter', 'zip' => 'Zip module', 'exif' => 'EXIF module'];
+        $extra = Cache::get("fake-agent.phpext.$php", []);
+        $rows = collect($available)->map(fn ($desc, $name) => [
+            'name' => $name, 'package' => "php$php-$name", 'description' => $desc, 'source' => 'apt',
+            'installed' => in_array($name, $installed, true) || in_array($name, $extra, true),
+            'loaded' => in_array($name, $installed, true) || in_array($name, $extra, true), 'core' => false,
+        ])->values()->all();
+
+        return ['php' => $php, 'extensions' => $rows, 'loaded' => $installed];
     }
 }

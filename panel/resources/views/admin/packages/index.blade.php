@@ -12,11 +12,10 @@
                 <x-slot:actions>@unless ($p->is_active)<x-ui.pill status="neutral">{{ __('Inactive') }}</x-ui.pill>@endunless</x-slot:actions>
                 @if ($p->description)<p class="muted small">{{ $p->description }}</p>@endif
                 <div>
-                    <div class="row"><span>{{ __('Disk space') }}</span><strong>{{ \Illuminate\Support\Number::fileSize($p->disk_mb * 1024 * 1024) }}</strong></div>
-                    <div class="row"><span>{{ __('Websites') }}</span><strong>{{ $p->max_websites }}</strong></div>
-                    <div class="row"><span>{{ __('Mailboxes') }}</span><strong>{{ $p->max_mailboxes }}</strong></div>
-                    <div class="row"><span>{{ __('Databases') }}</span><strong>{{ $p->max_databases }}</strong></div>
-                    <div class="row"><span>{{ __('Cron jobs') }}</span><strong>{{ $p->max_cronjobs }}</strong></div>
+                    @foreach (['disk_mb' => 'Disk space', 'traffic_gb_month' => 'Data traffic', 'max_websites' => 'Websites', 'max_mailboxes' => 'Mailboxes', 'max_databases' => 'Databases', 'max_cronjobs' => 'Cron jobs'] as $key => $label)
+                        <div class="row"><span>{{ __($label) }}</span><strong>{{ $p->limitLabel($key) }}</strong></div>
+                    @endforeach
+                    <div class="row"><span>{{ __('Resources') }}</span><strong>{{ $p->hasResourceCaps() ? collect(['cpu_percent', 'memory_mb'])->filter(fn ($k) => $p->{$k} !== null)->map(fn ($k) => $p->limitLabel($k))->implode(' · ') ?: __('Capped') : __('Fair share') }}</strong></div>
                     <div class="row"><span>{{ __('SSH access') }}</span><strong>{{ $p->allow_ssh ? __('Yes') : __('No') }}</strong></div>
                     <div class="row"><span>{{ __('Customers') }}</span><strong>{{ $p->customers_count }}</strong></div>
                 </div>

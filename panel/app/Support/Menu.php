@@ -15,6 +15,11 @@ class Menu
 
     private array $items = [];
 
+    /** Section order and per-item placement (section, order, label) that override what a package registered. */
+    private array $sectionOrder = [];
+
+    private array $placements = [];
+
     public static function admin(): self
     {
         return self::$menus['admin'] ??= new self;
@@ -46,6 +51,19 @@ class Menu
         return $this;
     }
 
+    /**
+     * Arrange the menu centrally without touching the packages that add items:
+     * the order of the sections, and for known items their section, order and label.
+     * Items that are not placed keep their own section and come after the placed ones.
+     */
+    public function arrange(array $sectionOrder, array $placements): self
+    {
+        $this->sectionOrder = $sectionOrder;
+        $this->placements = $placements;
+
+        return $this;
+    }
+
     public function remove(string $key): self
     {
         unset($this->items[$key]);
@@ -60,6 +78,16 @@ class Menu
         $items = collect($this->items)
             ->filter(fn ($i) => Route::has($i['route']))
             ->filter(fn ($i) => $i['visible'] === null || ($i['visible'])())
+            ->map(function ($i) {
+                $place = $this->placements[$i['key']] ?? null;
+                if ($place === null) {
+                    $i['order'] += $this->placements ? 1000 : 0;
+
+                    return $i;
+                }
+
+                return array_merge($i, array_filter($place, fn ($v) => $v !== null));
+            })
             ->sortBy('order');
 
         foreach ($items as $item) {
@@ -68,6 +96,25 @@ class Menu
             $sections[$item['section'] ?? ''][] = $item;
         }
 
+        if ($this->sectionOrder) {
+            $rank = array_flip($this->sectionOrder);
+            uksort($sections, fn ($a, $b) => ($rank[$a] ?? 999) <=> ($rank[$b] ?? 999));
+        }
+
         return $sections;
+    }
+
+    /** The active item with its section, for the breadcrumbs in the top bar. */
+    public function active(): ?array
+    {
+        foreach ($this->sections() as $section => $items) {
+            foreach ($items as $item) {
+                if ($item['active']) {
+                    return $item + ['section_label' => $section];
+                }
+            }
+        }
+
+        return null;
     }
 }
