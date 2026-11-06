@@ -105,3 +105,11 @@ out = g.remove({"domain": domain, "id": "smoke-0001", "path": "public", "shared"
 step("remove keeps the files as a normal folder", out["files_kept"] and not os.path.islink(site["docroot"]) and "git-release-1" in page())
 step("repository folder removed", not os.path.exists(os.path.join(site["root"], "git/smoke-0001")))
 shutil.rmtree(remote, ignore_errors=True)
+
+# Put the site back the way it was: later checks (second install run) expect its own index.php.
+import glob  # noqa: E402
+
+before = sorted(glob.glob(site["docroot"] + ".before-git-*"))
+step("the original folder was kept aside", len(before) == 1)
+shutil.rmtree(site["docroot"])
+os.rename(before[0], site["docroot"])
