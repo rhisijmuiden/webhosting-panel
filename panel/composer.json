@@ -20,6 +20,7 @@
         "rhis/files": "@dev",
         "rhis/git": "@dev",
         "rhis/migration": "@dev",
+        "rhis/reports": "@dev",
         "rhis/security": "@dev",
         "rhis/server-admin": "@dev",
         "rhis/subdomains": "@dev",
