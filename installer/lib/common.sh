@@ -240,17 +240,22 @@ cert_paths() {
   fi
 }
 
-# Log format for the data traffic per website (bytes out and in), read by whp-agent
-# for the package traffic limit. Kept in its own conf.d file so whp-site can add it
+# Log format for the data traffic per website (bytes out and in) and the visitor
+# statistics, read by whp-agent for the package traffic limit and the Statistics page. Kept in its own conf.d file so whp-site can add it
 # on servers whose nginx.conf predates it (a panel update does not re-render nginx.conf).
 nginx_traffic_format() {
   local f=/etc/nginx/conf.d/whp-traffic.conf
   if grep -qs 'log_format whp_traffic' /etc/nginx/nginx.conf; then rm -f "$f"; return 0; fi
-  [[ -f $f ]] && return 0
-  install -d -m 0755 /etc/nginx/conf.d
+  # Fields: site, bytes out, bytes in, then (for the visitor statistics) time, status,
+  # client address, content type and user agent. whp-agent reads both the old
+  # three-field lines and these. An older file is replaced; the caller reloads Nginx.
+  local want
   # shellcheck disable=SC2016 # nginx variables
-  printf '%s\n' '# Managed by the Webhosting Panel: data traffic per website (whp-agent traffic.report).' \
-    "log_format whp_traffic '\$server_name \$bytes_sent \$request_length';" >"$f"
+  want=$(printf '%s\n' '# Managed by the Webhosting Panel: traffic and visitors per website (whp-agent traffic.report, traffic.history).' \
+    "log_format whp_traffic '\$server_name \$bytes_sent \$request_length \$msec \$status \$remote_addr \"\$sent_http_content_type\" \"\$http_user_agent\"';")
+  [[ -f $f && $(<"$f") == "$want" ]] && return 0
+  install -d -m 0755 /etc/nginx/conf.d
+  printf '%s\n' "$want" >"$f"
 }
 
 nginx_has_http3() { [[ $(nginx -V 2>&1 || true) == *--with-http_v3_module* ]]; }

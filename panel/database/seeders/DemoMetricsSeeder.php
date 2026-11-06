@@ -28,7 +28,7 @@ class DemoMetricsSeeder extends Seeder
             return [$server, $rows];
         };
 
-        foreach ([['minute', 48 * 60, 'subMinutes'], ['hour', 90 * 24, 'subHours'], ['day', 365, 'subDays']] as [$res, $count, $sub]) {
+        foreach ([['minute', 48 * 60, 'subMinutes'], ['hour', 90 * 24, 'subHours'], ['day', 730, 'subDays']] as [$res, $count, $sub]) {
             $servers = [];
             $siteRows = [];
             for ($i = $count; $i >= 0; $i--) {
@@ -41,6 +41,39 @@ class DemoMetricsSeeder extends Seeder
             }
             foreach (array_chunk($siteRows, 500) as $c) {
                 DB::table('website_metric_samples')->insert($c);
+            }
+        }
+
+        // Visitors: 30 days per hour and two years per day, with a weekly and a daily rhythm.
+        $visit = function (CarbonImmutable $t, string $res) use ($sites) {
+            $hourly = $res === 'hour';
+            $shape = $hourly ? max(0.05, sin(((int) $t->format('G') - 6) / 24 * 2 * M_PI)) : 1;
+            $week = in_array($t->dayOfWeekIso, [6, 7]) ? 0.7 : 1.0;
+            $growth = 0.6 + 0.4 * (1 - $t->diffInDays(CarbonImmutable::now()) / 730);
+            $rows = [];
+            $total = ['visitors' => 0, 'pageviews' => 0, 'requests' => 0, 'bots' => 0, 'bytes' => 0];
+            foreach ($sites as $i => $id) {
+                $v = (int) round(($hourly ? 40 : 600) / ($i + 1) * $shape * $week * $growth * (0.8 + mt_rand(0, 40) / 100));
+                $row = ['visitors' => $v, 'pageviews' => (int) ($v * 3.2), 'requests' => $v * 38, 'bots' => $v * 7, 'bytes' => $v * 2_400_000];
+                $rows[] = ['website_id' => $id, 'resolution' => $res, 'period_start' => $t] + $row;
+                foreach ($row as $k => $n) {
+                    $total[$k] += $n;
+                }
+            }
+            $total['visitors'] = (int) round($total['visitors'] * 0.92);
+            $rows[] = ['website_id' => null, 'resolution' => $res, 'period_start' => $t] + $total;
+
+            return $rows;
+        };
+        $hour = $now->startOfHour();
+        $day = $now->startOfDay();
+        foreach ([['hour', 30 * 24, fn ($i) => $hour->subHours($i)], ['day', 730, fn ($i) => $day->subDays($i)]] as [$res, $count, $at]) {
+            $rows = [];
+            for ($i = $count; $i >= 0; $i--) {
+                array_push($rows, ...$visit($at($i), $res));
+            }
+            foreach (array_chunk($rows, 500) as $c) {
+                DB::table('visit_stats')->insert($c);
             }
         }
     }
