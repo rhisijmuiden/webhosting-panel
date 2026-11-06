@@ -36,7 +36,7 @@ use Throwable;
  */
 abstract class DomainActions extends Controller
 {
-    public const TABS = ['mail', 'mailboxes', 'spam', 'dns'];
+    public const TABS = ['mail', 'mailboxes', 'spam', 'import', 'dns'];
 
     public const OWN_RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT'];
 
