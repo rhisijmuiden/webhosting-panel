@@ -225,5 +225,24 @@ class FilesTest(unittest.TestCase):
         self.assertEqual([r["path"] for r in data["results"]], ["public/contact.php"])
 
 
+class TerminalArgvTest(unittest.TestCase):
+    def test_sandbox_and_unit_command_line(self):
+        from whp_agent.actions import terminal
+        site = {"domain": "klant.nl", "user": "s_klant_nl", "root": "/var/www/vhosts/klant.nl"}
+        argv = terminal.sandbox_argv(site)
+        joined = " ".join(argv)
+        self.assertIn("--bind /var/www/vhosts/klant.nl /var/www/vhosts/klant.nl", joined)
+        self.assertIn("--ro-bind /usr /usr", joined)
+        for hidden in ("/etc/webhosting-panel", "/var/lib/webhosting-panel", "/home", "/root"):
+            self.assertNotIn(f" {hidden} ", f" {joined} ")
+        # ttyd's static build crashes on a trailing option-like argument (ttyd#1575).
+        self.assertFalse(argv[-1].startswith("-"))
+        unit = terminal.unit_argv(site, "a" * 32, 60)
+        self.assertIn("--uid=s_klant_nl", unit)
+        self.assertIn("RuntimeMaxSec=3600", unit)
+        self.assertIn("/run/whp-terminal/" + "a" * 32 + "/ttyd.sock", unit)
+        self.assertFalse(unit[-1].startswith("-"))
+
+
 if __name__ == "__main__":
     unittest.main()

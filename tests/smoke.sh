@@ -212,7 +212,7 @@ import subprocess, sys
 from whp_agent.actions.files import _site
 from whp_agent.actions.terminal import sandbox_argv
 site = _site({\"domain\": \"files.test\"})
-argv = sandbox_argv(site)[:-4] + [\"/bin/bash\", \"-c\", \"test ! -e /etc/webhosting-panel && test ! -e /var/www/vhosts/site.test && ! touch /usr/x 2>/dev/null && touch public/sandbox-ok && php -v >/dev/null\"]
+argv = sandbox_argv(site, [\"/bin/bash\", \"-c\", \"test ! -e /etc/webhosting-panel && test ! -e /var/www/vhosts/site.test && ! touch /usr/x 2>/dev/null && touch public/sandbox-ok && php -v >/dev/null\"])
 sys.exit(subprocess.run(argv, user=site[\"uid\"], group=site[\"gid\"], extra_groups=[]).returncode)
 ' && test -f /var/www/vhosts/files.test/public/sandbox-ok"
   TERM_START=$(agent terminal.start '{"domain":"files.test","minutes":5}') || echo "terminal.start: $TERM_START"

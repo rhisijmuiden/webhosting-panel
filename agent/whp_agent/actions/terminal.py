@@ -44,7 +44,7 @@ def available():
     return os.access(TTYD, os.X_OK) and os.access(BWRAP, os.X_OK)
 
 
-def sandbox_argv(site):
+def sandbox_argv(site, command=None):
     """bwrap command line: only the site root is writable, the rest of the system read-only."""
     root = site["root"]
     argv = [
@@ -68,7 +68,9 @@ def sandbox_argv(site):
         "--setenv", "PATH", "/usr/local/bin:/usr/bin:/bin", "--setenv", "TERM", "xterm-256color",
         "--setenv", "LANG", "C.UTF-8", "--setenv", "TMPDIR", "/tmp",
         "--setenv", "PS1", f"\\[\\e[38;5;209m\\]{site['user']}@{site['domain']}\\[\\e[0m\\]:\\w\\$ ",
-        "/bin/bash", "--noprofile", "--norc", "-i",
+        # The command must not end in an option-like argument: the static ttyd build
+        # crashes at startup on a trailing "-i" (tsl0922/ttyd#1575).
+        *(command or ["/bin/sh", "-c", "exec /bin/bash --noprofile --norc -i"]),
     ]
     return argv
 
