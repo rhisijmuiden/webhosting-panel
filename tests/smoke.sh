@@ -109,5 +109,10 @@ check "panel.env exists and is not world readable" bash -c '[[ $(stat -c %a /etc
 check "secrets.env is root only" bash -c '[[ $(stat -c %a /etc/webhosting-panel/secrets.env) == 600 ]]'
 check "install.log holds no passwords" bash -c 'p=$(grep ^PANEL_DB_PASS= /etc/webhosting-panel/secrets.env | cut -d= -f2); [[ -n $p ]] && ! grep -qF -- "$p" /var/log/webhosting-panel/install.log'
 check "panel vhost answers on 8443 with TLS" bash -c "curl -sk -o /dev/null -w '%{http_code}' --resolve $HOST:8443:127.0.0.1 https://$HOST:8443/ | grep -qE '^[1-5][0-9][0-9]$'"
+if [[ -f /opt/webhosting-panel/panel/artisan ]]; then
+  check "panel login page renders" bash -c "[[ \$(curl -sk -o /dev/null -w %{http_code} --resolve \"$HOST:8443:127.0.0.1\" https://$HOST:8443/login) == 200 ]]"
+  check "panel queue worker active" systemctl is-active --quiet whp-queue.service
+  check "agent active" systemctl is-active --quiet whp-agent.service
+fi
 
 exit $fail

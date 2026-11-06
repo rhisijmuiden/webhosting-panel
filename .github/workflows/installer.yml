@@ -2,9 +2,9 @@ name: Installer
 
 on:
   push:
-    paths: ["installer/**", "tests/**", ".github/workflows/installer.yml", ".shellcheckrc"]
+    paths: ["installer/**", "tests/**", "agent/**", "panel/deploy/**", "webmail/**", "backup/**", "mail/**", ".github/workflows/installer.yml", ".shellcheckrc"]
   pull_request:
-    paths: ["installer/**", "tests/**", ".github/workflows/installer.yml", ".shellcheckrc"]
+    paths: ["installer/**", "tests/**", "agent/**", "panel/deploy/**", "webmail/**", "backup/**", "mail/**", ".github/workflows/installer.yml", ".shellcheckrc"]
   workflow_dispatch:
 
 permissions:
