@@ -8,7 +8,17 @@
                 @if ($hasToken)<x-ui.pill status="ok">{{ __('Token saved') }}</x-ui.pill>@else<x-ui.pill status="warn">{{ __('Not connected') }}</x-ui.pill>@endif
             </x-slot:actions>
             <x-ui.field name="cloudflare_token" type="password" :label="__('API token')" autocomplete="off"
-                :help="($hasToken ? __('A token is saved. Leave empty to keep it.').' ' : '').__('Create a token with “Zone: Read” and “DNS: Edit” for the zones you want to manage.')" />
+                :help="($hasToken ? __('A token is saved. Leave empty to keep it.').' ' : '').__('An API token, not the Global API Key.')" />
+            <details>
+                <summary class="small" style="cursor:pointer;font-weight:600">{{ __('How to create the token') }}</summary>
+                <ol class="small muted" style="padding-left:20px">
+                    <li>{{ __('In Cloudflare, open My Profile > API Tokens and click Create Token, then “Create Custom Token”.') }}</li>
+                    <li>{{ __('Permissions: Zone > Zone > Edit, Zone > DNS > Edit, Zone > DNSSEC > Read and Account > Account Settings > Read.') }}</li>
+                    <li>{{ __('Zone Resources: Include > All zones from an account > your account. Account Resources: your account.') }}</li>
+                    <li>{{ __('Continue to summary, Create Token, and copy the long value Cloudflare shows once. Paste it here and save, then click Test connection.') }}</li>
+                </ol>
+                <p class="small muted">{{ __('Made an account API token (Manage Account > Account API Tokens) instead? That also works; fill in the account ID below as well.') }}</p>
+            </details>
             <x-ui.field name="cloudflare_account_id" :label="__('Account ID')" :value="$values['cloudflare_account_id']" placeholder="0123456789abcdef0123456789abcdef"
                 :help="__('Account new customer domains are added to by the DNS wizard. Empty: the only account the token can see. For the wizard the token also needs “Zone: Edit” and “Account Settings: Read”.')" />
             @if ($hasToken)<label class="check"><input type="checkbox" name="clear_token" value="1"><span>{{ __('Remove the saved token') }}</span></label>@endif

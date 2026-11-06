@@ -93,6 +93,13 @@ final class FakeCloudflare implements HttpClient
             return $this->error(403, 9109, 'Invalid access token');
         }
 
+        // "Bearer acct": an account API token, unknown to the user endpoint.
+        if (($headers['Authorization'] ?? '') === 'Bearer acct' && $path === '/user/tokens/verify') {
+            return $this->error(401, 1000, 'Invalid API Token');
+        }
+        if ($method === 'GET' && preg_match('#^/accounts/[^/]+/tokens/verify$#', $path)) {
+            return $this->ok(['id' => 'tok', 'status' => 'active']);
+        }
         if ($method === 'GET' && $path === '/user/tokens/verify') {
             return $this->ok(['id' => 'tok', 'status' => 'active']);
         }

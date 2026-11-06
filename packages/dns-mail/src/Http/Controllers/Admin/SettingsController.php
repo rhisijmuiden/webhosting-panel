@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Rhis\DnsMail\Cloudflare\CloudflareClient;
+use Rhis\DnsMail\Cloudflare\CloudflareException;
 use Rhis\DnsMail\Http\HttpClient;
 use Rhis\DnsMail\Services\DaneSync;
 use Rhis\DnsMail\Services\DnsMailConfig;
@@ -56,6 +57,9 @@ class SettingsController extends Controller
             'default_quarantine_score' => ['nullable', 'integer', 'min:6', 'max:50'],
             'cloudflare_account_id' => ['nullable', 'string', 'regex:/^[a-f0-9]{32}$/'],
         ]);
+        if (filled($data['cloudflare_token'] ?? null) && CloudflareClient::looksLikeGlobalKey($data['cloudflare_token'])) {
+            return back()->withErrors(['cloudflare_token' => __('This looks like the Global API Key. The panel needs an API token: Cloudflare > My Profile > API Tokens > Create Token.')])->withInput();
+        }
         $data['dane'] = $this->config->daneEnabled() ? '1' : null; // changed with the DANE buttons only
         foreach (DnsMailConfig::KEYS as $key) {
             $this->settings->set('dnsmail.' . $key, $data[$key] ?? null);
@@ -111,12 +115,25 @@ class SettingsController extends Controller
         if (!$this->config->hasCloudflare()) {
             return back()->withErrors(['cloudflare_token' => __('Save a token first.')]);
         }
+        $tokenValue = $this->config->cloudflareToken();
+        $accountId = (string) $this->config->get('cloudflare_account_id', '');
+        $client = new CloudflareClient($http, $tokenValue);
         try {
-            $client = new CloudflareClient($http, $this->config->cloudflareToken());
-            $token = $client->verifyToken();
+            try {
+                $token = $client->verifyToken($accountId);
+            } catch (CloudflareException $e) {
+                // An account token without a saved account ID: listing zones still proves it works.
+                if (!$e->hasCode(1000) || $accountId !== '') {
+                    throw $e;
+                }
+                $client->listZones();
+                $token = ['status' => 'active', 'kind' => 'account'];
+            }
             $zones = $client->listZones();
+        } catch (CloudflareException $e) {
+            return back()->withErrors(['cloudflare_token' => $this->explain($e, $tokenValue)]);
         } catch (Throwable $e) {
-            return back()->withErrors(['cloudflare_token' => __('Cloudflare refused the token: :error', ['error' => $e->getMessage()])]);
+            return back()->withErrors(['cloudflare_token' => __('Cloudflare could not be reached: :error', ['error' => $e->getMessage()])]);
         }
 
         try {
@@ -125,6 +142,9 @@ class SettingsController extends Controller
             $accounts = [];
         }
         $status = __('Connected to Cloudflare (token :status). :count zones found.', ['status' => $token['status'], 'count' => count($zones)]);
+        if ($token['kind'] === 'account') {
+            $status .= ' ' . __('This is an account API token.');
+        }
         $warnings = [];
         if ($accounts === []) {
             $warnings[] = __('The token cannot see any Cloudflare account, so the DNS wizard cannot add new domains. Add "Account Settings: Read" and "Zone: Edit".');
@@ -133,5 +153,22 @@ class SettingsController extends Controller
         }
 
         return back()->with('status', $status)->with('warnings', $warnings);
+    }
+
+    /** Turn Cloudflare's auth errors into steps the admin can follow. */
+    private function explain(CloudflareException $e, string $token): string
+    {
+        $raw = $e->getMessage();
+        if (CloudflareClient::looksLikeGlobalKey($token)) {
+            return __('This looks like the Global API Key. The panel needs an API token: Cloudflare > My Profile > API Tokens > Create Token.') . ' (' . $raw . ')';
+        }
+        if ($e->hasCode(1000) || $e->hasCode(6003) || $e->hasCode(6111) || $e->httpStatus === 401) {
+            return __('Cloudflare does not recognise this token. Copy the token value shown once after “Create Token” (not the token name or ID), paste it again and save. For an account API token, also fill in the account ID.') . ' (' . $raw . ')';
+        }
+        if ($e->httpStatus === 403 || $e->hasCode(9109)) {
+            return __('The token works but lacks permissions. Give it “Zone: Read”, “DNS: Edit”, “Zone: Edit” and “Account Settings: Read”.') . ' (' . $raw . ')';
+        }
+
+        return __('Cloudflare refused the token: :error', ['error' => $raw]);
     }
 }
