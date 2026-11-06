@@ -186,7 +186,7 @@ PY
   }
   app_params() { printf '{"domain":"%s","app":"%s","path":"%s","title":"Smoke","admin_user":"smoke","admin_email":"smoke@example.test","admin_password":"Smoke-test-pass-123","locale":"%s"}' "$@"; }
 
-  export -f agent app_params
+  export -f agent app_params agent_job
   check "server: status with kernel, never a shutdown" bash -c 'agent server.status | jq -e "(.kernel | length > 0) and .can_shutdown == false and (.reboot_reasons | type == \"array\")"'
   check "server: list of pending updates" bash -c 'agent server.updates | jq -e ".packages | type == \"array\""'
   check "server: health check answers for services and sites" bash -c 'agent server.health "{\"sites\":[{\"domain\":\"example.test\",\"ssl\":false}]}" | jq -e "(.services | length > 0) and (.sites | length == 1)"'
@@ -196,7 +196,10 @@ PY
   check "mail log: smoke message is in the journal, delivered locally" bash -c 'agent mail.log_read "{\"since_hours\":1}" | jq -e "[.events[] | select(.kind == \"delivery\" and .to == \"info@example.test\" and .status == \"sent\" and .local)] | length > 0"'
   check "mail log: long queue ids and a cursor" bash -c 'agent mail.log_read "{\"since_hours\":1}" | jq -e "(.cursor | length > 0) and ([.events[] | select(.kind == \"pickup\") | .qid | length > 12] | length > 0)"'
   check "mail log: rspamd history has the scan" bash -c 'agent mail.spam_history | jq -e ".rows | length > 0"'
-  check "app catalog" bash -c 'agent apps.catalog | jq -e "[.apps[].id] == [\"wordpress\",\"joomla\",\"nextcloud\"]"'
+  check "app catalog" bash -c 'agent apps.catalog | jq -e "[.apps[].id] == [\"wordpress\",\"woocommerce\",\"joomla\",\"nextcloud\",\"piwigo\",\"mediawiki\",\"dokuwiki\",\"phpbb\",\"freshrss\"]"'
+  agent apps.catalog | jq -r '.apps[] | "   \(.id): \(.latest_version) released \(.released_at // "-") maintained=\(.maintained)"' || true
+  check "app catalog: every app has a latest release and is maintained" bash -c 'agent apps.catalog | jq -e "all(.apps[]; .latest_version != null and .maintained == true)"'
+  check "app catalog: every app has a release date" bash -c 'agent apps.catalog "{\"refresh\":true}" | jq -e "all(.apps[]; .released_at != null)"'
   check "add a site for the app installer" whp-site add appwp.test --php 8.4 --no-ssl --json
   check "install WordPress (nl) through the agent" agent_job apps.install "$(app_params appwp.test wordpress '' nl)"
   WP_ID=$(jq -r .result.id /tmp/app-job.json); WP_DB=$(jq -r .result.database /tmp/app-job.json)
@@ -215,6 +218,40 @@ PY
   check "Joomla answers in /portal/" bash -c "curl -s -L -H 'Host: joomla.test' http://127.0.0.1/portal/ | grep -qi 'joomla'"
   check "Joomla administrator login" bash -c "[[ \$(curl -s -o /dev/null -w %{http_code} -H 'Host: joomla.test' http://127.0.0.1/portal/administrator/) == 200 ]]"
   check "Joomla installation folder is gone" test ! -e /var/www/vhosts/joomla.test/public/portal/installation
+
+  # The rest of the catalog, side by side in subfolders of one site (their Nginx snippets must coexist).
+  code() { curl -s -o /dev/null -w '%{http_code}' -H "Host: $1" "http://127.0.0.1$2"; }
+  export -f code
+  check "add a site for the app catalog" whp-site add apps.test --php 8.4 --no-ssl --json
+  check "install Piwigo (nl) in /photos" agent_job apps.install "$(app_params apps.test piwigo photos nl)"
+  check "Piwigo gallery answers" bash -c "curl -s -L -H 'Host: apps.test' http://127.0.0.1/photos/ | grep -qi piwigo"
+  check "Piwigo database config is private and not served" bash -c "[[ \$(stat -c %a /var/www/vhosts/apps.test/public/photos/local/config/database.inc.php) == 600 && \$(code apps.test /photos/local/config/database.inc.php) == 404 ]]"
+  check "install MediaWiki (nl) in /wiki" agent_job apps.install "$(app_params apps.test mediawiki wiki nl)"
+  # MediaWiki redirects to its main page with an absolute URL: resolve the site name to this server.
+  check "MediaWiki main page answers" bash -c "curl -s -L --resolve apps.test:80:127.0.0.1 'http://apps.test/wiki/index.php' | grep -qi 'mediawiki'"
+  check "MediaWiki LocalSettings.php is private, maintenance is closed" bash -c "[[ \$(stat -c %a /var/www/vhosts/apps.test/public/wiki/LocalSettings.php) == 600 && \$(code apps.test /wiki/maintenance/run.php) == 404 ]]"
+  check "install DokuWiki (nl, no database) in /docs" agent_job apps.install "$(app_params apps.test dokuwiki docs nl)"
+  check "DokuWiki answers" bash -c "curl -s -L -H 'Host: apps.test' 'http://127.0.0.1/docs/doku.php' | grep -qi dokuwiki"
+  check "DokuWiki data and conf are not served, install.php is gone" bash -c "[[ \$(code apps.test /docs/conf/users.auth.php) == 404 && \$(code apps.test /docs/data/pages/wiki/dokuwiki.txt) == 404 ]] && test ! -e /var/www/vhosts/apps.test/public/docs/install.php"
+  check "DokuWiki admin password hash verifies" bash -c "php8.4 -r '\$l = preg_grep(\"/^smoke:/\", file(\"/var/www/vhosts/apps.test/public/docs/conf/users.auth.php\")); exit(password_verify(\"Smoke-test-pass-123\", explode(\":\", reset(\$l))[1]) ? 0 : 1);'"
+  check "install phpBB in /forum" agent_job apps.install "$(app_params apps.test phpbb forum en)"
+  check "phpBB board answers" bash -c "curl -s -L -H 'Host: apps.test' http://127.0.0.1/forum/ | grep -qi phpbb"
+  check "phpBB installer is gone, config.php is closed" bash -c "test ! -e /var/www/vhosts/apps.test/public/forum/install && [[ \$(code apps.test /forum/config.php) == 404 ]]"
+  check "install FreshRSS (nl) in /rss" agent_job apps.install "$(app_params apps.test freshrss rss nl)"
+  RSS_ID=$(jq -r .result.id /tmp/app-job.json)
+  check "FreshRSS login page answers" bash -c "curl -s -L -H 'Host: apps.test' http://127.0.0.1/rss/ | grep -qi freshrss"
+  check "FreshRSS data is not served" bash -c "[[ \$(code apps.test /rss/data/config.php) == 404 ]]"
+  check "FreshRSS admin password hash verifies" bash -c "php8.4 -r '\$c = include \"/var/www/vhosts/apps.test/public/rss/data/users/smoke/config.php\"; exit(password_verify(\"Smoke-test-pass-123\", \$c[\"passwordHash\"]) ? 0 : 1);'"
+  check "FreshRSS feed refresh timer is active" systemctl is-active --quiet "whp-app-$RSS_ID.timer"
+  check "FreshRSS feed refresh runs as the site user" bash -c "systemctl start whp-app-$RSS_ID.service && [[ \$(systemctl show -p User --value whp-app-$RSS_ID.service) == s_apps_test ]]"
+  check "app list reports versions from disk" bash -c 'agent apps.list "{\"domain\":\"apps.test\"}" | jq -e "(.apps | length) > 0 and all(.apps[]; .version != null and .update_available == false)"'
+  check "page cache is off for apps with their own sessions" bash -c "whp-site show apps.test --json | jq -e '.cache == false'"
+  check "no admin password left in jobs, app state or site tmp" bash -c "! grep -rq 'Smoke-test-pass-123' /var/lib/webhosting-panel/jobs /var/lib/webhosting-panel/apps /var/www/vhosts/apps.test/tmp"
+  check "remove FreshRSS: timer is gone" bash -c "agent_job apps.remove '{\"domain\":\"apps.test\",\"id\":\"$RSS_ID\"}' && test ! -e /etc/systemd/system/whp-app-$RSS_ID.timer"
+  check "add a site for WooCommerce" whp-site add woo.test --php 8.4 --no-ssl --json
+  check "install WooCommerce (nl)" agent_job apps.install "$(app_params woo.test woocommerce '' nl)"
+  check "WooCommerce plugin is active" bash -c "runuser -u s_woo_test -- php8.4 /usr/local/bin/wp --path=/var/www/vhosts/woo.test/public plugin is-active woocommerce"
+  check "WooCommerce shop uses euros" bash -c "[[ \$(runuser -u s_woo_test -- php8.4 /usr/local/bin/wp --path=/var/www/vhosts/woo.test/public option get woocommerce_currency) == EUR ]]"
 
   echo "== file manager"
   whp-site add files.test --php 8.4 --no-ssl --json >/dev/null

@@ -71,6 +71,11 @@ def site_php(params):
         refresh_cron_units(domain)
     except ActionError:
         pass
+    try:
+        from .apps import refresh_app_timers  # app background tasks (FreshRSS feeds)
+        refresh_app_timers(domain)
+    except ActionError:
+        pass
     return result
 
 
@@ -127,6 +132,11 @@ def site_owner(params):
     try:
         from .wordpress import refresh_cron_units
         refresh_cron_units(domain)
+    except ActionError:
+        pass
+    try:
+        from .apps import refresh_app_timers  # app background tasks (FreshRSS feeds)
+        refresh_app_timers(domain)
     except ActionError:
         pass
     return result
