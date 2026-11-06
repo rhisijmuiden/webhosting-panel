@@ -102,6 +102,7 @@ run_suite() {
 			CREATE TABLE whp_test_$tgt.t (id INT PRIMARY KEY, v VARCHAR(20)); INSERT INTO whp_test_$tgt.t VALUES (1,'one'),(2,'two');"
 		out="$(wb run --target "$tgt" --scope "db:whp_test_$tgt")"
 		check "$tgt: database backup ok" jq -e '.data.status == "ok"' <<<"$out"
+		jq -r '.data.targets[0].items[]? | select(.status == "failed") | "  reason: \(.reason)"' <<<"$out" >&2
 		mariadb -e "DELETE FROM whp_test_$tgt.t; INSERT INTO whp_test_$tgt.t VALUES (3,'three');"
 		sid="$(wb snapshots --target "$tgt" --scope "db:whp_test_$tgt" | jq -r '.data[0].short_id')"
 		wb restore --target "$tgt" --snapshot "$sid" --in-place >/dev/null
