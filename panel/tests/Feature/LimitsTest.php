@@ -59,20 +59,21 @@ class LimitsTest extends TestCase
             ->assertSessionHasErrors('traffic_action');
     }
 
-    public function test_changing_resource_caps_applies_them_to_customers(): void
+    public function test_changing_resource_caps_applies_them_to_subscriptions(): void
     {
         $this->actingAsAdmin();
         $p = HostingPackage::create(['name' => 'Start']);
-        $c = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test', 'hosting_package_id' => $p->id]);
-        Website::create(['customer_id' => $c->id, 'domain' => 'jan.nl', 'status' => 'active']);
+        $c = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test']);
+        $site = $this->withPackage(Website::create(['customer_id' => $c->id, 'domain' => 'jan.nl', 'status' => 'active']), $p);
+        $sub = $site->subscription;
 
         $unlimited = array_fill_keys(array_diff(HostingPackage::limitKeys(), ['cpu_percent', 'memory_mb', 'db_connections']), 1);
         $this->put("/admin/packages/{$p->id}", ['name' => 'Start', 'traffic_action' => 'notify', 'unlimited' => $unlimited,
             'cpu_percent' => 150, 'memory_mb' => 1024, 'db_connections' => 20])->assertRedirect();
 
-        $slice = $this->calls('customer.limits')->last()['params'];
-        $this->assertSame(['customer_id' => $c->id, 'cpu_percent' => 150, 'memory_mb' => 1024, 'io_mbps' => null, 'max_processes' => null], $slice);
-        $this->assertSame(['domain' => 'jan.nl', 'customer_id' => $c->id], $this->calls('site.owner')->last()['params']);
+        $slice = $this->calls('subscription.limits')->last()['params'];
+        $this->assertSame(['subscription_id' => $sub->id, 'cpu_percent' => 150, 'memory_mb' => 1024, 'io_mbps' => null, 'max_processes' => null], $slice);
+        $this->assertSame(['domain' => 'jan.nl', 'subscription_id' => $sub->id], $this->calls('site.owner')->last()['params']);
         $this->assertSame(20, $this->calls('db.limits')->last()['params']['max_connections']);
         $this->assertSame('jan.nl', $this->calls('site.php_settings')->last()['params']['domain']);
     }
@@ -81,10 +82,13 @@ class LimitsTest extends TestCase
     {
         $a = HostingPackage::create(['name' => 'A']);
         $b = HostingPackage::create(['name' => 'B', 'memory_mb' => 512]);
-        $c = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test', 'hosting_package_id' => $a->id]);
-        Website::create(['customer_id' => $c->id, 'domain' => 'jan.nl', 'status' => 'active']);
-        $c->update(['hosting_package_id' => $b->id]);
-        $this->assertSame(512, $this->calls('customer.limits')->last()['params']['memory_mb']);
+        $b->update(['disk_mb' => 2048]);
+        $c = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test']);
+        $site = $this->withPackage(Website::create(['customer_id' => $c->id, 'domain' => 'jan.nl', 'status' => 'active']), $a);
+        app(\App\Services\SubscriptionManager::class)->changePackage($site->subscription, $b);
+        $this->assertSame(512, $this->calls('subscription.limits')->last()['params']['memory_mb']);
+        $this->assertSame(['domain' => 'jan.nl', 'quota_mb' => 2048], $this->calls('site.quota')->last()['params']);
+        $this->assertSame(2048, $site->fresh()->disk_quota_mb);
     }
 
     public function test_php_server_settings_and_site_values_within_maximum(): void
@@ -143,21 +147,25 @@ class LimitsTest extends TestCase
         Mail::fake();
         User::factory()->admin()->create(['email' => 'admin@example.test']);
         $p = HostingPackage::create(['name' => 'Klein', 'traffic_gb_month' => 1, 'traffic_action' => 'suspend']);
-        $c = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test', 'hosting_package_id' => $p->id]);
-        $site = Website::create(['customer_id' => $c->id, 'domain' => 'jan.nl', 'status' => 'active']);
+        $c = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test']);
+        $site = $this->withPackage(Website::create(['customer_id' => $c->id, 'domain' => 'jan.nl', 'status' => 'active']), $p);
+        // Another website of the same customer on a package without traffic limit stays online.
+        $other = Website::create(['customer_id' => $c->id, 'domain' => 'jan.be', 'status' => 'active']);
         $month = now()->utc()->format('Y-m');
-        $this->agent()->respond('traffic.report', ['month' => $month, 'sites' => ['jan.nl' => 2 * 1024 ** 3, 'unknown.nl' => 5]]);
+        $this->agent()->respond('traffic.report', ['month' => $month, 'sites' => ['jan.nl' => 2 * 1024 ** 3, 'jan.be' => 9 * 1024 ** 3, 'unknown.nl' => 5]]);
 
         app(Traffic::class)->collect();
         $this->assertSame(2 * 1024 ** 3, WebsiteTraffic::where('website_id', $site->id)->value('bytes'));
         $this->assertSame('suspended', $site->fresh()->status);
+        $this->assertSame(['suspended', Traffic::SUSPENDED], [$site->subscription->fresh()->status, $site->subscription->fresh()->suspended_reason]);
+        $this->assertSame('active', $other->fresh()->status);
         $this->assertSame(['domain' => 'jan.nl'], $this->calls('site.suspend')->last()['params']);
         Mail::assertSent(TrafficLimitReached::class, fn ($m) => $m->hasTo('admin@example.test') && $m->suspended);
 
         // Only once per month.
         app(Traffic::class)->collect();
         $this->assertCount(1, $this->calls('site.suspend'));
-        $this->assertSame(200.0, round($c->fresh()->trafficPercent()));
+        $this->assertSame(200.0, round($site->subscription->fresh()->trafficPercent()));
 
         $this->actingAsAdmin();
         $this->get("/admin/customers/{$c->id}")->assertSee('Put online now');
@@ -166,10 +174,12 @@ class LimitsTest extends TestCase
 
         // Next month: the counter starts again and suspended sites come back by themselves.
         $site->update(['status' => 'suspended', 'last_error' => Traffic::SUSPENDED]);
+        $site->subscription()->update(['status' => 'suspended', 'suspended_reason' => Traffic::SUSPENDED]);
         $this->agent()->respond('traffic.report', ['month' => '2099-01', 'sites' => []]);
         app(Traffic::class)->collect();
         $this->assertSame('active', $site->fresh()->status);
-        $this->assertNull($c->fresh()->traffic_alert_month);
+        $this->assertNull($site->subscription->fresh()->traffic_alert_month);
+        $this->assertSame('active', $site->subscription->fresh()->status);
     }
 
     public function test_traffic_notify_keeps_sites_online(): void
@@ -177,8 +187,8 @@ class LimitsTest extends TestCase
         Mail::fake();
         User::factory()->admin()->create();
         $p = HostingPackage::create(['name' => 'Klein', 'traffic_gb_month' => 1]);
-        $c = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test', 'hosting_package_id' => $p->id]);
-        $site = Website::create(['customer_id' => $c->id, 'domain' => 'jan.nl', 'status' => 'active']);
+        $c = Customer::create(['name' => 'Jan', 'email' => 'jan@example.test']);
+        $site = $this->withPackage(Website::create(['customer_id' => $c->id, 'domain' => 'jan.nl', 'status' => 'active']), $p);
         $this->agent()->respond('traffic.report', ['month' => now()->utc()->format('Y-m'), 'sites' => ['jan.nl' => 3 * 1024 ** 3]]);
         app(Traffic::class)->collect();
         $this->assertSame('active', $site->fresh()->status);

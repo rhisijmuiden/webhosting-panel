@@ -18,10 +18,11 @@ class SiteOverviewTest extends TestCase
     private function site(array $package = []): array
     {
         $plan = HostingPackage::create(array_merge(['name' => 'Webhosting M', 'disk_mb' => 5000, 'max_websites' => 3], $package));
-        $customer = Customer::create(['name' => 'Arie', 'company' => 'Arie & Zn.', 'email' => 'arie@example.test', 'hosting_package_id' => $plan->id]);
+        $customer = Customer::create(['name' => 'Arie', 'company' => 'Arie & Zn.', 'email' => 'arie@example.test']);
         $user = User::factory()->create(['customer_id' => $customer->id]);
         $site = $customer->websites()->create(['domain' => 'arie.nl', 'status' => 'active', 'php_version' => '8.4', 'ssl_status' => 'active',
             'system_user' => 'arie', 'document_root' => '/var/www/vhosts/arie.nl/public_html', 'disk_used_mb' => 680]);
+        $site = $this->withPackage($site, $plan);
 
         return [$customer, $user, $site];
     }
@@ -75,7 +76,7 @@ class SiteOverviewTest extends TestCase
         [$customer, $user, $site] = $this->site();
         $this->actingAs($user)->get("/websites/{$site->id}")->assertDontSee('Web terminal');
 
-        $customer->package->update(['allow_ssh' => true]);
+        $site->package->update(['allow_ssh' => true]);
         $this->actingAs($user)->get("/websites/{$site->id}")->assertSee('Web terminal');
     }
 

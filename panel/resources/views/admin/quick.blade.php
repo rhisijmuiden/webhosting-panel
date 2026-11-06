@@ -78,7 +78,7 @@
                             <li><a href="{{ route('admin.customers.show', $c) }}" class="m-item">
                                 <span class="m-avatar" aria-hidden="true">{{ strtoupper(mb_substr($c->displayName(), 0, 1)) }}</span>
                                 <span class="m-text"><strong>{{ $c->displayName() }}</strong>
-                                    <small>{{ $c->package?->name ?? '–' }} · {{ trans_choice(':count website|:count websites', $c->websites_count) }}</small></span>
+                                    <small>{{ trans_choice(':count subscription|:count subscriptions', $c->subscriptions_count) }}</small></span>
                                 <span @class(['m-dot', 'is-'.$c->status]) title="{{ __(ucfirst($c->status)) }}"></span>
                                 <x-icon name="chevron" />
                             </a></li>

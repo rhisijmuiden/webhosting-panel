@@ -85,7 +85,7 @@ Actions added by phase 2:
 | `crowdsec.decisions`, `crowdsec.metrics`, `crowdsec.ban`, `crowdsec.unban` | Through `/usr/bin/cscli` |
 | `security.apply`, `security.site_activity`, `security.site_release`, `security.check_ip` | Login protection, see below |
 | `site.list`, `site.add`, `site.show`, `site.php`, `site.cache`, `site.ssl`, `site.quota`, `site.remove`, `site.suspend`, `site.unsuspend` | Through the installer's `whp-site … --json` |
-| `site.owner`, `customer.limits`, `site.php_settings`, `db.limits`, `traffic.report` | Package limits: resource jail per customer, PHP settings, traffic (see `docs/limits.md`) |
+| `site.owner`, `subscription.limits` (`customer.limits`), `site.php_settings`, `db.limits`, `traffic.report` | Package limits: resource jail per subscription, PHP settings, traffic (see `docs/limits.md`, `docs/subscriptions.md`) |
 | `php.extensions.list`, `.search_pecl`, `.install`, `.remove`, `.toggle` | Extra PHP extensions per version (apt or PECL; install/remove are jobs) |
 | `stats.sample` | Server and per-site usage, rates since the previous call |
 | `panel.version`, `panel.check_update`, `panel.update`, `panel.set_channel` | Updates and release channel |

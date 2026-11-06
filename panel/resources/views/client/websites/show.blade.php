@@ -3,7 +3,8 @@
     $site = $o->website;
     [$from, $to] = $o->hues();
     $wp = $o->wordpress->first();
-    $pkg = $site->customer?->package;
+    $sub = $site->subscription;
+    $pkg = $sub?->package;
     $tabs = $o->tabs();
 @endphp
 <x-layouts.client :title="$site->domain">
@@ -110,17 +111,16 @@
                     <dt>{{ __('Package') }}</dt><dd>{{ $pkg?->name ?? '–' }}</dd>
                     <dt>{{ __('Status') }}</dt><dd><x-ui.pill :status="$site->status">{{ $site->status === 'active' ? __('Active') : __(ucfirst($site->status)) }}</x-ui.pill></dd>
                     <dt>{{ __('Holder') }}</dt><dd>{{ $site->customer?->displayName() }}</dd>
+                    @if ($sub?->created_at)<dt>{{ __('Setup date') }}</dt><dd>{{ $sub->created_at->isoFormat('LL') }}</dd>@endif
+                    @if ($sub?->expires_on)<dt>{{ __('Expiry date') }}</dt><dd>{{ $sub->expires_on->isoFormat('LL') }}</dd>@endif
                 </dl>
-                @if ($site->customer)
-                    @php $c = $site->customer; @endphp
-                    <div class="usage">
-                        <div><span>{{ __('Disk space') }}</span><strong>{{ \Illuminate\Support\Number::fileSize($c->diskUsedMb() * 1024 * 1024) }} / {{ $pkg ? $pkg->limitLabel('disk_mb') : __('Unlimited') }}</strong></div>
-                        @if ($pkg?->disk_mb)<x-ui.meter label="" :percent="$c->diskUsedMb() / $pkg->disk_mb * 100" />@endif
-                        <div><span>{{ __('Data traffic') }}</span><strong>{{ \Illuminate\Support\Number::fileSize($c->trafficBytes(), 1) }} / {{ $pkg ? $pkg->limitLabel('traffic_gb_month') : __('Unlimited') }}</strong></div>
-                        @if ($c->trafficPercent() !== null)<x-ui.meter label="" :percent="$c->trafficPercent()" />@endif
-                        <div><span>{{ __('Websites') }}</span><strong>{{ $c->websites()->count() }} / {{ $pkg ? $pkg->limitLabel('max_websites') : __('Unlimited') }}</strong></div>
-                    </div>
-                @endif
+                <div class="usage">
+                    <div><span>{{ __('Disk space') }}</span><strong>{{ \Illuminate\Support\Number::fileSize($site->disk_used_mb * 1024 * 1024) }} / {{ $pkg ? $pkg->limitLabel('disk_mb') : __('Unlimited') }}</strong></div>
+                    @if ($sub?->diskPercent() !== null)<x-ui.meter label="" :percent="$sub->diskPercent()" />@endif
+                    <div><span>{{ __('Data traffic') }}</span><strong>{{ \Illuminate\Support\Number::fileSize($site->trafficBytes(), 1) }} / {{ $pkg ? $pkg->limitLabel('traffic_gb_month') : __('Unlimited') }}</strong></div>
+                    @if ($sub?->trafficPercent() !== null)<x-ui.meter label="" :percent="$sub->trafficPercent()" />@endif
+                    <div><span>{{ __('Databases') }}</span><strong>{{ $site->databases()->count() }} / {{ $pkg ? $pkg->limitLabel('max_databases') : __('Unlimited') }}</strong></div>
+                </div>
                 @if ($o->has('client.shop.index'))
                     <a class="btn btn-sm" href="{{ route('client.shop.index') }}" style="align-self:flex-start">{{ __('More space? Upgrade your package') }}</a>
                 @endif

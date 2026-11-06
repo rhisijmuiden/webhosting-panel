@@ -3,28 +3,30 @@
 ## Limits of a package
 
 Every limit of a hosting package is `NULL` for **unlimited** (the default for new
-packages). Usage limits: disk space, data traffic per month, websites,
-mailboxes, databases, cron jobs. The CRM API reads and writes the same columns
-(`null` = unlimited).
+packages). A package is assigned **per website** through its subscription (see
+[subscriptions.md](subscriptions.md)), so every limit applies to one website.
+Usage limits: disk space, data traffic per month, mailboxes, databases, cron
+jobs. The CRM API reads and writes the same columns (`null` = unlimited).
 
-## Resource jail per customer
+## Resource jail per subscription
 
-All websites of customer 12 run in `whp-sites-c12.slice` (below
+Subscription 12 (one website) runs in `whp-sites-s12.slice` (below
 `whp-sites.slice`, below `whp.slice`):
 
 ```
 whp.slice
 └── whp-sites.slice            MemoryHigh=90 %: sites never take the last 10 % from MariaDB/mail/panel
-    ├── whp-sites-c12.slice    CPUQuota, MemoryHigh/Max, IO bandwidth, TasksMax from the package
+    ├── whp-sites-s12.slice    CPUQuota, MemoryHigh/Max, IO bandwidth, TasksMax from the package
     │   ├── whp-site-shop_nl.service      (PHP-FPM master of the site)
     │   ├── wp-cron / WP-CLI units of the site
-    └── whp-sites-c13.slice
+    └── whp-sites-s13.slice
 ```
 
-- No caps (unlimited): every customer slice has the same CPU and IO weight, so
-  under load each customer gets an equal share, however many processes it starts.
-- Caps: `whp-site slice c12 --cpu 200% --memory 2048 --io 50 --tasks 512`
-  (agent `customer.limits`). Memory throttles at 90 % and stops the heaviest
+- No caps (unlimited): every subscription slice has the same CPU and IO weight, so
+  under load each website gets an equal share, however many processes it starts.
+- Caps: `whp-site slice s12 --cpu 200% --memory 2048 --io 50 --tasks 512`
+  (agent `subscription.limits`; the older per-customer `c<id>` slices and
+  `customer.limits` still work, installer migration 0003 removes unused ones). Memory throttles at 90 % and stops the heaviest
   process at 100 %. IO is limited on the disk that holds `/var/www/vhosts`.
 - SSH/SFTP sessions of a site user (logind, `user-<uid>.slice`) get the same
   caps through a drop-in.
@@ -32,8 +34,9 @@ whp.slice
 - MariaDB: `MAX_USER_CONNECTIONS` for every database user of a website
   (agent `db.limits`), also for databases created later.
 
-The panel applies this when a package changes, when a customer gets another
-package, when a website is created and on every deploy (`php artisan whp:limits:apply`).
+The panel applies this when a package changes, when a subscription gets another
+package, when a website is created and on every deploy (`php artisan whp:limits:apply`,
+optionally one subscription id or `--customer=<id>`).
 
 ## Data traffic
 
@@ -41,8 +44,8 @@ Nginx writes `$server_name $bytes_sent $request_length` for every request
 (static files included) to `/var/log/nginx/whp-traffic.log`. The agent reads the
 new part every 15 minutes (`traffic.report`, follows logrotate by inode) and
 keeps totals per site per month. The panel stores them in `website_traffic`.
-At the package limit the admins get an e-mail; with "suspend" the customer's
-websites are suspended until the first of next month or until the admin
+At the package limit of a subscription the admins get an e-mail; with "suspend"
+that website is suspended until the first of next month or until the admin
 clicks "Put online now". Mail and FTP traffic are not counted.
 
 ## PHP settings

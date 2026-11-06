@@ -135,7 +135,7 @@ class CrmApiTest extends TestCase
         $website = Website::where('domain', 'jansen.nl')->first();
         $this->assertSame('active', $website->status);
         $this->assertSame($customer['id'], (string) $website->customer_id);
-        $this->assertSame((int) $plan['id'], Customer::find($customer['id'])->hosting_package_id);
+        $this->assertSame((int) $plan['id'], $website->subscription->hosting_package_id);
         $this->api('GET', '/jobs/'.$res->json('job.id'))->assertOk()->assertJsonPath('status', 'succeeded');
 
         Http::assertSent(function (HttpRequest $r) use ($secret) {

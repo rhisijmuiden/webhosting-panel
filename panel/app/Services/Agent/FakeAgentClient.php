@@ -92,9 +92,9 @@ class FakeAgentClient implements AgentClient
             'site.remove', 'site.quota' => ['domain' => $params['domain'] ?? ''],
             'site.list' => ['sites' => []],
             'site.suspend', 'site.unsuspend' => ['domain' => $params['domain'], 'suspended' => $action === 'site.suspend'],
-            'site.owner' => ['domain' => $params['domain'], 'owner' => isset($params['customer_id']) ? 'c'.$params['customer_id'] : null],
+            'site.owner' => ['domain' => $params['domain'], 'owner' => isset($params['subscription_id']) ? 's'.$params['subscription_id'] : (isset($params['customer_id']) ? 'c'.$params['customer_id'] : null)],
             'site.php_settings' => ['domain' => $params['domain'], 'php_ini' => $params['settings'] ?? [], 'php_workers' => $params['php_workers'] ?? 10],
-            'customer.limits' => ['owner' => 'c'.($params['customer_id'] ?? 0), 'cpu' => isset($params['cpu_percent']) ? $params['cpu_percent'].'%' : null,
+            'customer.limits', 'subscription.limits' => ['owner' => isset($params['subscription_id']) ? 's'.$params['subscription_id'] : 'c'.($params['customer_id'] ?? 0), 'cpu' => isset($params['cpu_percent']) ? $params['cpu_percent'].'%' : null,
                 'memory_mb' => $params['memory_mb'] ?? null, 'io_mbps' => $params['io_mbps'] ?? null, 'tasks' => $params['max_processes'] ?? null],
             'db.limits' => ['domain' => $params['domain'], 'max_connections' => $params['max_connections'] ?? null, 'users' => []],
             'traffic.report' => ['month' => now()->utc()->format('Y-m'), 'sites' => Website::pluck('domain')

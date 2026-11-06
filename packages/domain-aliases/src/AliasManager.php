@@ -57,7 +57,7 @@ final class AliasManager
         if ($override !== null) {
             return (int) $override;
         }
-        $raw = $website->customer?->package?->getAttribute('crm_limits');
+        $raw = $website->package?->getAttribute('crm_limits');
         $planLimits = is_array($raw) ? $raw : (is_string($raw) ? (json_decode($raw, true) ?: []) : []);
         if (isset($planLimits['domain_aliases'])) {
             return (int) $planLimits['domain_aliases'];
@@ -218,10 +218,13 @@ final class AliasManager
 
     // ---- converting into a website of its own --------------------------------
 
-    /** The customer's package has room for another website: no order needed. */
+    /**
+     * A website of its own is a new subscription (billed per website), so a customer
+     * orders it through the CRM; only the admin converts directly.
+     */
     public function canConvertDirectly(DomainAlias $alias): bool
     {
-        return (bool) $alias->website?->customer?->canAddWebsite();
+        return false;
     }
 
     /** Products the CRM offers for converting an alias (catalog kind alias_upgrade). */
@@ -273,9 +276,10 @@ final class AliasManager
             ]);
             $website = $sub->website;
         } else {
+            // A new subscription on the same package as the website the alias came from.
             $website = app(WebsiteManager::class)->create($customer, [
                 'domain' => $snapshot->domain, 'php_version' => $site->php_version, 'profile' => 'php',
-                'ssl' => true, 'www_alias' => $snapshot->www,
+                'ssl' => true, 'www_alias' => $snapshot->www, 'hosting_package_id' => $site->subscription?->hosting_package_id,
             ]);
         }
         ActivityLog::record('domain_alias.converted', $snapshot->domain, ['from' => $site->domain, 'by' => $by, 'order' => $orderId], $customer->id);

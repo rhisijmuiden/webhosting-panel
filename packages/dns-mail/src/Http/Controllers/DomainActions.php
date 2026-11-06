@@ -59,7 +59,7 @@ abstract class DomainActions extends Controller
 
     public function show(Request $request, int|string $mailDomain): View
     {
-        $domain = $this->findDomain($mailDomain)->load(['customer.package', 'website', 'mailboxes', 'aliases', 'senderRules', 'onboarding']);
+        $domain = $this->findDomain($mailDomain)->load(['customer', 'website.subscription.package', 'aliasOf.website.subscription.package', 'mailboxes', 'aliases', 'senderRules', 'onboarding']);
         $tab = in_array($request->query('tab'), self::TABS, true) ? $request->query('tab') : 'mail';
         $settings = $this->records->settings($domain);
         $profile = $this->records->profile();
@@ -76,8 +76,8 @@ abstract class DomainActions extends Controller
             'hasCloudflare' => $this->config->hasCloudflare(),
             'm365OrderUrl' => $this->config->get('m365_order_url'),
             'm365Price' => $this->config->get('m365_price'),
-            'mailboxLimit' => $domain->customer->package?->max_mailboxes,
-            'mailboxCount' => Mailbox::whereHas('domain', fn ($q) => $q->where('customer_id', $domain->customer_id))->count(),
+            'mailboxLimit' => self::mailboxLimit($domain),
+            'mailboxCount' => $domain->mailboxes()->count(),
             'inspect' => null,
             'adopt' => false,
         ];
@@ -332,7 +332,7 @@ abstract class DomainActions extends Controller
 
     public function storeMailbox(Request $request, int|string $mailDomain): RedirectResponse
     {
-        $domain = $this->findDomain($mailDomain)->load('customer.package');
+        $domain = $this->findDomain($mailDomain)->load('customer', 'website.subscription.package');
         if (!$domain->hasLocalMail()) {
             return back()->withErrors(['local_part' => __('Mailboxes can only be added when mail for this domain is hosted here.')]);
         }
@@ -344,8 +344,8 @@ abstract class DomainActions extends Controller
             'password' => ['required', 'string', 'min:10', 'max:200', 'confirmed'],
             'quota_mb' => ['required', 'integer', 'min:0', 'max:1048576'],
         ], [], ['local_part' => __('address')]);
-        $limit = $domain->customer->package?->max_mailboxes;
-        $count = Mailbox::whereHas('domain', fn ($q) => $q->where('customer_id', $domain->customer_id))->count();
+        $limit = self::mailboxLimit($domain);
+        $count = $domain->mailboxes()->count();
         if ($limit !== null && $count >= $limit) {
             return back()->withErrors(['local_part' => __('The hosting package allows :count mailboxes. Remove one or upgrade the package.', ['count' => $limit])]);
         }
@@ -601,5 +601,13 @@ abstract class DomainActions extends Controller
             MailProvider::Microsoft365 => 'Microsoft 365',
             MailProvider::External => 'Other provider',
         };
+    }
+
+    /** Mailboxes the package of the domain's website allows (an alias domain uses its main domain's website; null = unlimited). */
+    protected static function mailboxLimit(MailDomain $domain): ?int
+    {
+        $website = $domain->website ?? $domain->aliasOf?->website;
+
+        return $website?->package?->max_mailboxes;
     }
 }

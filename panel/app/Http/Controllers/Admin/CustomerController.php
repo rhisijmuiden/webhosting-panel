@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Customer;
-use App\Models\HostingPackage;
 use App\Models\User;
 use App\Support\Locales;
 use Illuminate\Http\RedirectResponse;
@@ -19,14 +18,15 @@ class CustomerController extends Controller
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('q'));
-        $customers = Customer::with('package')->withCount('websites')
+        $customers = Customer::withCount('websites')
             ->when($search, fn ($q) => $q->where(fn ($q) => $q
                 ->where('name', 'like', "%{$search}%")
                 ->orWhere('company', 'like', "%{$search}%")
                 ->orWhere('email', 'like', "%{$search}%")
                 ->orWhereHas('websites', fn ($w) => $w->where('domain', 'like', "%{$search}%"))))
             ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
-            ->when($request->integer('package'), fn ($q, $p) => $q->where('hosting_package_id', $p))
+            // Customers with at least one subscription on this package.
+            ->when($request->integer('package'), fn ($q, $p) => $q->whereHas('websites.subscription', fn ($s) => $s->where('hosting_package_id', $p)))
             ->orderBy('name')
             ->paginate(25)->withQueryString();
 
@@ -48,7 +48,7 @@ class CustomerController extends Controller
 
     public function show(Customer $customer): View
     {
-        $customer->load(['package', 'websites', 'users']);
+        $customer->load(['websites.subscription.package', 'users']);
 
         return view('admin.customers.show', [
             'customer' => $customer,
@@ -107,7 +107,6 @@ class CustomerController extends Controller
     private function formData(): array
     {
         return [
-            'packages' => HostingPackage::where('is_active', true)->orderBy('name')->get(),
             'locales' => Locales::available(),
         ];
     }
@@ -120,7 +119,6 @@ class CustomerController extends Controller
             'email' => ['required', 'email', 'max:190'],
             'phone' => ['nullable', 'string', 'max:40'],
             'crm_id' => ['nullable', 'string', 'max:64', Rule::unique('customers')->ignore($customer?->id)],
-            'hosting_package_id' => ['nullable', 'exists:hosting_packages,id'],
             'status' => ['required', Rule::in(['active', 'suspended'])],
             'locale' => ['required', Rule::in(array_keys(Locales::available()))],
             'notes' => ['nullable', 'string', 'max:5000'],
