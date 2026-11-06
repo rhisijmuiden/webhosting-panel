@@ -53,6 +53,15 @@ if ! runuser -u www-data -- test -r "$PANEL/public/assets/app.css" 2>/dev/null; 
   false
 fi
 
+# Bring the server itself up to date with the new code: new packages, config
+# templates, systemd units, directories and numbered server migrations. Runs the
+# installer with the saved answers in its own transient unit, outside the
+# agent's cgroup and sandbox, so nothing ever has to be run by hand after an update.
+echo "==> Provisioning the server (installer --upgrade)"
+systemd-run --wait --pipe --collect --quiet --unit "whp-provision-$(date +%s)" \
+  --setenv=WHP_LANG=en --setenv=TERM=dumb \
+  /bin/bash "$ROOT/installer/install.sh" --upgrade </dev/null
+
 echo "==> Installing dependencies"
 (cd "$PANEL" && as_panel composer install --no-dev --no-interaction --optimize-autoloader --quiet)
 

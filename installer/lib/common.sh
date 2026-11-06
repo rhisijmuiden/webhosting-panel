@@ -79,6 +79,7 @@ load_lang() {
 # ---------------------------------------------------------------- prompts
 
 WHP_INTERACTIVE=${WHP_INTERACTIVE:-auto}
+WHP_UPGRADE=${WHP_UPGRADE:-no}
 
 _tty() { [[ $WHP_INTERACTIVE != no ]] && { : </dev/tty; } 2>/dev/null; }
 
@@ -115,7 +116,25 @@ is_container() { systemd-detect-virt --container --quiet 2>/dev/null; }
 virt_type()    { systemd-detect-virt 2>/dev/null || echo none; }
 
 svc_enable() { run systemctl enable --now "$@"; }
-svc_restart() { run systemctl restart "$@"; }
+# On --upgrade (run by the panel updater) services are reloaded where they can be,
+# so customer sites and mail keep running; only services without reload restart.
+# svc_restart_if_changed <service> <file...>: restart after a config change.
+# On --upgrade a service whose files did not change keeps running untouched
+# (MariaDB and Valkey have no reload, a restart drops every connection).
+# Call files_sum before rendering and pass the result in WHP_SUM_BEFORE.
+files_sum() { { cat "$@" 2>/dev/null || true; } | sha256sum | cut -d' ' -f1; }
+svc_restart_if_changed() {
+  local svc=$1; shift
+  if [[ ${WHP_UPGRADE:-no} == yes && $(files_sum "$@") == "${WHP_SUM_BEFORE:-}" ]] && systemctl is-active --quiet "$svc"; then
+    _log_file "SKIP  restart $svc (configuration unchanged)"
+    return 0
+  fi
+  run systemctl restart "$svc"
+}
+
+svc_restart() {
+  if [[ ${WHP_UPGRADE:-no} == yes ]]; then run systemctl reload-or-restart "$@"; else run systemctl restart "$@"; fi
+}
 svc_reload() {
   local s
   for s in "$@"; do

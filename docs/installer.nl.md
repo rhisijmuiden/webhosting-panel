@@ -86,6 +86,21 @@ De installer formatteert nooit een schijf met partities of een bestandssysteem. 
 projectquota wordt de limiet opgeslagen en gerapporteerd maar niet afgedwongen (de
 installer waarschuwt; met `--require-quota` stopt hij).
 
+## Updates
+
+Een update vanuit het panel (Info → Bijwerken, of een ander kanaal kiezen) draait
+`agent/scripts/update.sh`. Na het ophalen van de nieuwe code draait die
+`installer/install.sh --upgrade` in een eigen tijdelijke systemd-unit:
+
+- alle modules draaien opnieuw met de opgeslagen antwoorden uit `/etc/webhosting-panel/installer.env`,
+  dus nieuwe pakketten, configuratie, systemd-units en mappen komen vanzelf op bestaande servers;
+- geen `apt full-upgrade` (dat doet unattended-upgrades), en diensten worden waar mogelijk
+  herladen in plaats van herstart, zodat sites en mail blijven draaien;
+- genummerde eenmalige servermigraties in `installer/migrations/` draaien één keer per server.
+
+Na een update hoef je nooit meer handmatig iets te draaien. Mislukt een stap, dan stopt
+de update en gaat de code terug naar de vorige versie.
+
 ## Overige tools
 
 | Commando | Wat |

@@ -90,6 +90,22 @@ The installer refuses to format a disk that has partitions or a filesystem. With
 project quotas the limit is stored and reported, but not enforced (the installer
 warns; `--require-quota` makes it stop instead).
 
+## Updates
+
+An update from the panel (Info → Update, or switching channel) runs
+`agent/scripts/update.sh`. After checking out the new code it runs
+`installer/install.sh --upgrade` in its own transient systemd unit:
+
+- every module runs again with the saved answers from `/etc/webhosting-panel/installer.env`,
+  so new packages, config templates, systemd units and directories reach existing servers;
+- no `apt full-upgrade` (unattended-upgrades handles package updates), and services are
+  reloaded instead of restarted where they support it, so sites and mail keep running;
+- numbered one-off server migrations in `installer/migrations/` run once per server
+  (see [installer/migrations/README.md](../installer/migrations/README.md)).
+
+Nothing has to be run by hand after an update. A failing step stops the update and the
+code is rolled back.
+
 ## Other tools
 
 | Command | What |

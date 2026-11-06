@@ -16,6 +16,7 @@ module_valkey() {
   VALKEY_DEFAULT_SHA=$(printf '%s' "$VALKEY_DEFAULT_PASS" | sha256sum | cut -d' ' -f1)
   VALKEY_WHP_SHA=$(printf '%s' "$VALKEY_WHP_PASS" | sha256sum | cut -d' ' -f1)
 
+  WHP_SUM_BEFORE=$(files_sum /etc/valkey/whp.conf /etc/valkey/users.acl /etc/valkey/valkey.conf)
   render "$TPL/valkey/whp.conf" /etc/valkey/whp.conf 0640
   render "$TPL/valkey/users.acl" /etc/valkey/users.acl 0640
   chown root:valkey /etc/valkey/whp.conf /etc/valkey/users.acl
@@ -24,7 +25,7 @@ module_valkey() {
     printf '\n# Webhosting Panel overrides (must stay last)\ninclude /etc/valkey/whp.conf\n' >>/etc/valkey/valkey.conf
   fi
   svc_enable valkey-server
-  svc_restart valkey-server
+  svc_restart_if_changed valkey-server /etc/valkey/whp.conf /etc/valkey/users.acl /etc/valkey/valkey.conf
   local i
   for i in {1..10}; do
     [[ $(REDISCLI_AUTH=$VALKEY_WHP_PASS valkey-cli --user whp ping 2>/dev/null || true) == PONG ]] && break

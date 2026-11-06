@@ -74,6 +74,31 @@ jobs:
         run: |
           docker exec whp /root/src/installer/install.sh -y --no-letsencrypt
           docker exec whp bash -c 'whp-status --plain; curl -s -H "Host: site.test" http://127.0.0.1/ | grep -q php=8.5'
+      - name: Panel update provisions the server (install.sh --upgrade)
+        run: |
+          # What agent/scripts/update.sh does after checking out new code: run the
+          # installer from the server's code dir in a transient unit. A new
+          # numbered migration must run exactly once; services are reloaded, not
+          # restarted, so MariaDB keeps its PID.
+          docker exec whp bash -c 'printf "touch /run/whp-ci-migration\n" >/opt/webhosting-panel/installer/migrations/9999-ci-check.sh'
+          before=$(docker exec whp systemctl show -p MainPID --value mariadb)
+          docker exec whp systemd-run --wait --pipe --collect --setenv=WHP_LANG=en \
+            /bin/bash /opt/webhosting-panel/installer/install.sh --upgrade </dev/null
+          after=$(docker exec whp systemctl show -p MainPID --value mariadb)
+          echo "mariadb pid $before -> $after"; [[ $before == "$after" ]]
+          docker exec whp bash -c '
+            set -e
+            test -e /run/whp-ci-migration
+            grep -qx 0001-code-permissions /var/lib/webhosting-panel/provision/migrations-applied
+            grep -qx 9999-ci-check /var/lib/webhosting-panel/provision/migrations-applied
+            rm /run/whp-ci-migration
+            /bin/bash /opt/webhosting-panel/installer/install.sh --upgrade </dev/null >/dev/null
+            test ! -e /run/whp-ci-migration   # ran once only
+            grep -q ^WHP_UPGRADED_AT= /etc/webhosting-panel/installer.env
+            grep -q ^WHP_MAIL=yes /etc/webhosting-panel/installer.env
+            whp-status --plain
+            curl -s -H "Host: site.test" http://127.0.0.1/ | grep -q php=8.5
+            [[ $(curl -sk -o /dev/null -w %{http_code} --resolve panel.example.test:8443:127.0.0.1 https://panel.example.test:8443/login) == 200 ]]'
       - name: Collect logs
         if: failure()
         run: |

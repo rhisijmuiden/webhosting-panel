@@ -65,8 +65,12 @@ module_base() {
   apt_install ca-certificates curl gnupg tzdata
   add_repositories
   run apt-get -o DPkg::Lock::Timeout=600 update -q
-  run env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 -y -q \
-    -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold full-upgrade
+  # Package upgrades are left to unattended-upgrades once installed; a panel
+  # update (--upgrade) only adds what the new code needs.
+  if [[ $WHP_UPGRADE != yes ]]; then
+    run env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 -y -q \
+      -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold full-upgrade
+  fi
 
   apt_install \
     acl apt-listchanges bash-completion bind9-dnsutils certbot cron git htop jq less \
