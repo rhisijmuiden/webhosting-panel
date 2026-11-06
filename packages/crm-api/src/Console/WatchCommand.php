@@ -23,7 +23,7 @@ final class WatchCommand extends Command
     {
         foreach (Subscription::with(['package', 'website'])->whereIn('status', ['active', 'suspended'])->get() as $s) {
             $usage = Present::usage($s);
-            foreach (['disk_mb'] as $limit) {
+            foreach (['disk_mb', 'traffic_gb_month'] as $limit) {
                 $over = $usage[$limit]['limit'] !== null && $usage[$limit]['used'] >= $usage[$limit]['limit'];
                 $key = "crm-api:over:{$s->id}:{$limit}";
                 if ($over && ! Cache::has($key)) {

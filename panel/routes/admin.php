@@ -7,6 +7,7 @@ Route::get('/', Admin\DashboardController::class)->name('dashboard');
 
 Route::resource('customers', Admin\CustomerController::class);
 Route::post('customers/{customer}/users', [Admin\CustomerController::class, 'storeUser'])->name('customers.users.store');
+Route::post('customers/{customer}/traffic-unsuspend', [Admin\CustomerController::class, 'liftTrafficSuspension'])->name('customers.traffic-unsuspend');
 Route::delete('customers/{customer}/users/{user}', [Admin\CustomerController::class, 'destroyUser'])->name('customers.users.destroy');
 
 Route::resource('packages', Admin\PackageController::class)->except('show');
@@ -16,6 +17,7 @@ Route::get('websites/create', [Admin\WebsiteController::class, 'create'])->name(
 Route::post('websites', [Admin\WebsiteController::class, 'store'])->name('websites.store');
 Route::get('websites/{website}', [Admin\WebsiteController::class, 'show'])->name('websites.show');
 Route::put('websites/{website}', [Admin\WebsiteController::class, 'update'])->name('websites.update');
+Route::put('websites/{website}/php', [Admin\WebsiteController::class, 'php'])->name('websites.php');
 Route::post('websites/{website}/ssl', [Admin\WebsiteController::class, 'ssl'])->name('websites.ssl');
 Route::delete('websites/{website}', [Admin\WebsiteController::class, 'destroy'])->name('websites.destroy');
 
@@ -42,3 +44,10 @@ Route::get('system/jobs/{job}', [Admin\SystemController::class, 'job'])->name('s
 
 Route::get('activity', Admin\ActivityController::class)->name('activity.index');
 Route::get('statistics', Admin\StatisticsController::class)->name('statistics.index');
+
+Route::get('php', [Admin\PhpController::class, 'index'])->name('php.index');
+Route::put('php', [Admin\PhpController::class, 'update'])->name('php.update');
+Route::get('php/extensions/search', [Admin\PhpController::class, 'search'])->name('php.extensions.search');
+Route::post('php/extensions', [Admin\PhpController::class, 'install'])->name('php.extensions.install');
+Route::delete('php/extensions', [Admin\PhpController::class, 'remove'])->name('php.extensions.remove');
+Route::post('php/extensions/toggle', [Admin\PhpController::class, 'toggle'])->name('php.extensions.toggle');

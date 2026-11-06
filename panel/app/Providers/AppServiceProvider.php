@@ -59,6 +59,12 @@ class AppServiceProvider extends ServiceProvider
             }
         }
 
+        // Translations of panel features live in their own file (lang/features/<feature>/nl.json),
+        // so parallel work does not keep changing lang/nl.json.
+        foreach (glob(lang_path('features/*'), GLOB_ONLYDIR) ?: [] as $dir) {
+            $this->loadJsonTranslationsFrom($dir);
+        }
+
         $this->registerMenus();
     }
 
@@ -69,6 +75,7 @@ class AppServiceProvider extends ServiceProvider
             ->add('customers', 'Customers', 'admin.customers.index', icon: 'customers', section: 'Hosting', order: 10)
             ->add('packages', 'Packages', 'admin.packages.index', icon: 'package', section: 'Hosting', order: 20)
             ->add('websites', 'Websites', 'admin.websites.index', icon: 'globe', section: 'Hosting', order: 30)
+            ->add('php', 'PHP settings', 'admin.php.index', icon: 'code', section: 'Server', order: 95)
             ->add('statistics', 'Statistics', 'admin.statistics.index', icon: 'chart', section: 'Server', order: 90)
             ->add('services', 'Services', 'admin.services.index', icon: 'server', section: 'Server', order: 100)
             ->add('security', 'Security', 'admin.security.index', icon: 'shield', section: 'Server', order: 110)

@@ -17,17 +17,27 @@ class Website extends Model
 
     protected $fillable = [
         'customer_id', 'domain', 'aliases', 'profile', 'php_version', 'page_cache', 'ssl_status',
-        'status', 'system_user', 'document_root', 'disk_used_mb', 'disk_quota_mb', 'last_error',
+        'status', 'system_user', 'document_root', 'disk_used_mb', 'disk_quota_mb', 'last_error', 'php_settings',
     ];
 
     protected function casts(): array
     {
-        return ['aliases' => 'array', 'page_cache' => 'boolean'];
+        return ['aliases' => 'array', 'page_cache' => 'boolean', 'php_settings' => 'array'];
     }
 
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function traffic(): HasMany
+    {
+        return $this->hasMany(WebsiteTraffic::class);
+    }
+
+    public function trafficBytes(?string $month = null): int
+    {
+        return (int) $this->traffic()->where('month', $month ?? now()->utc()->format('Y-m'))->value('bytes');
     }
 
     public function databases(): HasMany
