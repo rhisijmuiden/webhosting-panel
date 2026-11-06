@@ -35,7 +35,7 @@ import time
 import urllib.request
 import uuid
 
-from .. import paths
+from .. import paths, wordpress
 from .. import validate as v
 from ..jobs import start_job
 from ..registry import ActionError, action
@@ -242,7 +242,9 @@ class WordPress:
     WP_LOCALE = {"en": "en_US", "nl": "nl_NL"}
 
     def wp_cli(self):
-        """WP-CLI phar in the agent's cache, refreshed weekly, checked against its sha512."""
+        """The installer's WP-CLI (/usr/local/bin/wp); a checked copy in the agent's cache if it is missing."""
+        if os.path.exists(wordpress.WP_CLI):
+            return wordpress.WP_CLI
         dest = os.path.join(_cache_dir(), "wp-cli.phar")
         if os.path.exists(dest) and time.time() - os.path.getmtime(dest) < 7 * 86400:
             return dest
@@ -258,21 +260,29 @@ class WordPress:
     def install(self, ctx):
         p = ctx.params
         locale = self.WP_LOCALE[p["locale"]]
-        wp = [ctx.php, "-d", "memory_limit=512M", self.wp_cli(), f"--path={ctx.target}"]
+        # The shared runner of the WordPress toolkit: WP-CLI as the site user under
+        # systemd-run in whp-sites.slice, with the site's PHP version and UMask 0022.
+        wsite = wordpress.site_info(ctx.domain)
+        cli = self.wp_cli()
+
+        def wp(args, input_text=None, timeout=300):
+            argv = wordpress.wp_argv(wsite, ctx.target, args, timeout=timeout)
+            argv[argv.index(wordpress.WP_CLI)] = cli
+            return run(argv, timeout=timeout + 15, input_text=input_text)
+
         ctx.log("Downloading WordPress")
-        ctx.as_site([*wp, "core", "download", f"--locale={locale}"], timeout=600)
+        wp(["core", "download", f"--locale={locale}"], timeout=600)
         ctx.log("Writing wp-config.php")
         ctx.write_private(os.path.join(ctx.target, "wp-config.php"), self.config(ctx))
         ctx.log("Installing WordPress")
-        ctx.as_site([*wp, "core", "install", f"--url={ctx.url}", f"--title={p['title']}",
-                     f"--admin_user={p['admin_user']}", f"--admin_email={p['admin_email']}",
-                     "--skip-email", "--prompt=admin_password"],
-                    input_text=p["admin_password"] + "\n", timeout=300)
-        ctx.as_site([*wp, "rewrite", "structure", "/%postname%/"], timeout=120)
-        ctx.as_site([*wp, "plugin", "delete", "hello"], timeout=120)
+        wp(["core", "install", f"--url={ctx.url}", f"--title={p['title']}",
+            f"--admin_user={p['admin_user']}", f"--admin_email={p['admin_email']}",
+            "--skip-email", "--prompt=admin_password"], input_text=p["admin_password"] + "\n")
+        wp(["rewrite", "structure", "/%postname%/"], timeout=120)
+        wp(["plugin", "delete", "hello"], timeout=120)
         if p["locale"] == "nl":
-            ctx.as_site([*wp, "option", "update", "timezone_string", "Europe/Amsterdam"], timeout=120)
-        ctx.version = ctx.as_site([*wp, "core", "version"], timeout=60).stdout.strip()
+            wp(["option", "update", "timezone_string", "Europe/Amsterdam"], timeout=120)
+        ctx.version = wordpress.read_version(ctx.target) or wp(["core", "version"], timeout=60).stdout.strip()
 
     def config(self, ctx):
         db = ctx.db

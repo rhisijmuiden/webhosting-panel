@@ -117,25 +117,51 @@ final class DnsSync
         if (!str_ends_with('.' . $record->name, '.' . $d->domain)) {
             throw new RuntimeException(__('The record must be inside :domain.', ['domain' => $d->domain]));
         }
+        $this->guardProxy($d, $record);
         $this->client()->createRecord($zoneId, $record);
         ActivityLog::record('dns.record_added', $record->type . ' ' . $record->name, [], $d->customer_id);
+    }
+
+    /** Change one of the customer's own records (value, TTL, Cloudflare proxy). */
+    public function updateOwnRecord(MailDomain $d, string $recordId, DnsRecord $record): void
+    {
+        $zoneId = $this->zoneId($d) ?? throw new RuntimeException(__('This domain is not in the connected Cloudflare account.'));
+        $current = $this->ownRecord($d, $zoneId, $recordId);
+        if (!str_ends_with('.' . $record->name, '.' . $d->domain)) {
+            throw new RuntimeException(__('The record must be inside :domain.', ['domain' => $d->domain]));
+        }
+        $this->guardProxy($d, $record);
+        $this->client()->updateRecord($zoneId, $recordId, $record->with(comment: $current->comment));
+        ActivityLog::record('dns.record_updated', $record->type . ' ' . $record->name, ['proxied' => $record->proxied], $d->customer_id);
+    }
+
+    private function guardProxy(MailDomain $d, DnsRecord $record): void
+    {
+        if ($record->proxied && !DnsRecord::mayProxy($record->type, $record->name, $d->domain)) {
+            throw new RuntimeException(__(':name carries mail or other non-web traffic and cannot go through the Cloudflare proxy.', ['name' => $record->relativeName($d->domain)]));
+        }
+    }
+
+    private function ownRecord(MailDomain $d, string $zoneId, string $recordId): DnsRecord
+    {
+        foreach ($this->scoped($d, $this->client()->listRecords($zoneId)) as $r) {
+            if ($r->id === $recordId) {
+                if ($r->isManaged()) {
+                    throw new RuntimeException(__('This record is managed by the panel. Change the mail or website settings instead.'));
+                }
+
+                return $r;
+            }
+        }
+        throw new RuntimeException(__('Record not found.'));
     }
 
     public function deleteOwnRecord(MailDomain $d, string $recordId): void
     {
         $zoneId = $this->zoneId($d) ?? throw new RuntimeException(__('This domain is not in the connected Cloudflare account.'));
         // Only records of this domain: a zone can also hold other customers' subdomains.
-        foreach ($this->scoped($d, $this->client()->listRecords($zoneId)) as $r) {
-            if ($r->id === $recordId) {
-                if ($r->isManaged()) {
-                    throw new RuntimeException(__('This record is managed by the panel. Change the mail or website settings instead.'));
-                }
-                $this->client()->deleteRecord($zoneId, $recordId);
-                ActivityLog::record('dns.record_deleted', $r->type . ' ' . $r->name, [], $d->customer_id);
-
-                return;
-            }
-        }
-        throw new RuntimeException(__('Record not found.'));
+        $r = $this->ownRecord($d, $zoneId, $recordId);
+        $this->client()->deleteRecord($zoneId, $recordId);
+        ActivityLog::record('dns.record_deleted', $r->type . ' ' . $r->name, [], $d->customer_id);
     }
 }

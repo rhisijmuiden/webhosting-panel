@@ -96,11 +96,36 @@ final class MailDnsProfile
         if ($s->dkim !== null) {
             $records[] = new DnsRecord('TXT', $s->dkim->recordName($d), $s->dkim->txt());
         }
+        array_push($records, ...$this->customerMailHost($d));
         if ($s->clientSetupRecords) {
             array_push($records, ...$this->clientSetup($d, $host));
         }
         if ($this->server->webmailHost !== null) {
             $records[] = new DnsRecord('CNAME', 'webmail.' . $d, $this->server->webmailHost, proxied: false);
+        }
+
+        return $records;
+    }
+
+    /**
+     * mail.<domain> points at this server, DNS only (Cloudflare's proxy only
+     * carries HTTP, so IMAP/SMTP through it would fail). Customers can use it
+     * as their own mail server name.
+     *
+     * @return list<DnsRecord>
+     */
+    private function customerMailHost(string $d): array
+    {
+        $name = 'mail.' . $d;
+        if ($name === $this->server->mailHost) {
+            return []; // The server's own name: it already has its address records.
+        }
+        $records = [];
+        if ($this->server->ipv4) {
+            $records[] = new DnsRecord('A', $name, $this->server->ipv4, proxied: false);
+        }
+        if ($this->server->ipv6) {
+            $records[] = new DnsRecord('AAAA', $name, $this->server->ipv6, proxied: false);
         }
 
         return $records;

@@ -54,6 +54,7 @@ class SettingsController extends Controller
             'm365_order_url' => ['nullable', 'url:https', 'max:300'],
             'm365_price' => ['nullable', 'string', 'max:60'],
             'default_quarantine_score' => ['nullable', 'integer', 'min:6', 'max:50'],
+            'cloudflare_account_id' => ['nullable', 'string', 'regex:/^[a-f0-9]{32}$/'],
         ]);
         $data['dane'] = $this->config->daneEnabled() ? '1' : null; // changed with the DANE buttons only
         foreach (DnsMailConfig::KEYS as $key) {
@@ -118,6 +119,19 @@ class SettingsController extends Controller
             return back()->withErrors(['cloudflare_token' => __('Cloudflare refused the token: :error', ['error' => $e->getMessage()])]);
         }
 
-        return back()->with('status', __('Connected to Cloudflare (token :status). :count zones found.', ['status' => $token['status'], 'count' => count($zones)]));
+        try {
+            $accounts = $client->listAccounts();
+        } catch (Throwable) {
+            $accounts = [];
+        }
+        $status = __('Connected to Cloudflare (token :status). :count zones found.', ['status' => $token['status'], 'count' => count($zones)]);
+        $warnings = [];
+        if ($accounts === []) {
+            $warnings[] = __('The token cannot see any Cloudflare account, so the DNS wizard cannot add new domains. Add "Account Settings: Read" and "Zone: Edit".');
+        } elseif (count($accounts) > 1 && !$this->config->get('cloudflare_account_id')) {
+            $warnings[] = __('The token sees more than one account. Fill in the account ID new domains go to.');
+        }
+
+        return back()->with('status', $status)->with('warnings', $warnings);
     }
 }
