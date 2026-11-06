@@ -29,6 +29,9 @@ module_php() {
   # Composer for Laravel and other modern PHP apps.
   apt_install composer
 
+  # Git deployments: ssh-keygen for deploy keys, Node.js and npm for build steps (npm run build).
+  apt_install openssh-client nodejs npm
+
   # WP-CLI for the WordPress toolkit and the app installer (pinned release, checksum checked).
   install_wp_cli
   printf '%s\n' "${PHP_VERSIONS[@]}" >"$WHP_STATE/php-versions"

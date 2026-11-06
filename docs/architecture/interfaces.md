@@ -158,6 +158,10 @@ server (SSL state `imported`) until Let's Encrypt succeeds. Websites own their
 databases through the core table `site_databases` (`App\Models\SiteDatabase`).
 The screens live in `packages/migration` (`Rhis\Migration\`, admin `/admin/migration`).
 
+Git deployments (`git.py`, screens in `packages/git`, `Rhis\Git\`, admin `/admin/git`, client `/git`,
+public webhook `POST /git/webhook/<uuid>`): `git.key`, `git.check`, `git.fetch`, `git.status`,
+`git.rollback`, `git.remove`, `git.tools` and the job `git.deploy`. See `docs/git.md`.
+
 ## Release channels
 
 | Channel | Git branch |

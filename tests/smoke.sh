@@ -93,6 +93,10 @@ mariadb -e "CREATE DATABASE IF NOT EXISTS wp_smoke; CREATE USER IF NOT EXISTS 'w
 rm -f /var/www/vhosts/wp.test/public/index.html
 check "toolkit end to end (detect, status, cron, password, login link, update)" python3 "$(dirname "$0")/wp_smoke.py" wp.test
 
+echo "== git deployments"
+check "git, ssh-keygen and npm installed" bash -c "command -v git && command -v ssh-keygen && command -v npm"
+check "deploy, zero downtime switch, failed build, rollback, remove" python3 "$(dirname "$0")/git_smoke.py" site.test
+
 echo "== mail"
 printf 'example.test OK\n' >>/etc/postfix/whp/virtual_domains
 printf 'info@example.test example.test/info/\n' >>/etc/postfix/whp/virtual_mailboxes
