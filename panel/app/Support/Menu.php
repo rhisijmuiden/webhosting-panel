@@ -20,6 +20,9 @@ class Menu
 
     private array $placements = [];
 
+    /** @var list<\Closure(array): bool> Extra checks an item must pass, such as team member access. */
+    private array $filters = [];
+
     public static function admin(): self
     {
         return self::$menus['admin'] ??= new self;
@@ -64,6 +67,14 @@ class Menu
         return $this;
     }
 
+    /** Hide items for which the check returns false (it gets the item array). */
+    public function filter(\Closure $check): self
+    {
+        $this->filters[] = $check;
+
+        return $this;
+    }
+
     public function remove(string $key): self
     {
         unset($this->items[$key]);
@@ -81,6 +92,7 @@ class Menu
         $items = collect($this->items)
             ->filter(fn ($i) => Route::has($i['route']))
             ->filter(fn ($i) => $i['visible'] === null || ($i['visible'])())
+            ->filter(fn ($i) => collect($this->filters)->every(fn ($check) => $check($i)))
             ->map(function ($i) {
                 $place = $this->placements[$i['key']] ?? null;
                 if ($place === null) {

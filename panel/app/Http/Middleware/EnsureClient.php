@@ -16,6 +16,7 @@ class EnsureClient
         }
         abort_unless($user?->customer_id, 403);
 
-        return $next($request);
+        // Team members only reach their own areas and websites; every change is audited.
+        return app(TeamGate::class)->handle($request, $next);
     }
 }
