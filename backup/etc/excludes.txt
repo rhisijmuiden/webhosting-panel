@@ -1,0 +1,12 @@
+# restic exclude patterns for site and mail backups (one per line).
+**/wp-content/cache
+**/wp-content/upgrade
+**/wp-content/updraft
+**/wp-content/ai1wm-backups
+**/node_modules/.cache
+**/storage/framework/cache
+**/storage/framework/sessions
+**/var/cache
+**/.cache
+**/*.tmp
+**/.trash-*

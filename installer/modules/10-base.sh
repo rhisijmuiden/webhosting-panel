@@ -61,11 +61,11 @@ module_base() {
     | debconf-set-selections
   printf '%s\n' "$WHP_HOSTNAME" >/etc/mailname
 
-  run apt-get update -q
+  run apt-get -o DPkg::Lock::Timeout=600 update -q
   apt_install ca-certificates curl gnupg tzdata
   add_repositories
-  run apt-get update -q
-  run env DEBIAN_FRONTEND=noninteractive apt-get -y -q \
+  run apt-get -o DPkg::Lock::Timeout=600 update -q
+  run env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 -y -q \
     -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold full-upgrade
 
   apt_install \

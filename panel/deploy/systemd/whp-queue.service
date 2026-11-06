@@ -1,0 +1,14 @@
+[Unit]
+Description=Webhosting Panel queue worker
+After=network.target mariadb.service valkey-server.service whp-agent.service
+
+[Service]
+User=whp
+Group=whp
+WorkingDirectory=/opt/webhosting-panel/panel
+ExecStart=/usr/bin/php artisan queue:work --sleep=1 --tries=1 --timeout=900 --max-time=3600
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

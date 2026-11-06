@@ -12,6 +12,9 @@ module_finish() {
     echo
     echo "Hostname      $WHP_HOSTNAME"
     echo "Panel         https://$WHP_HOSTNAME:8443"
+    if [[ -e $WHP_STATE/panel/.admin-created ]]; then
+      echo "Panel admin   $WHP_EMAIL (password: grep PANEL_ADMIN_PASS $WHP_ETC/secrets.env)"
+    fi
     echo "Channel       $WHP_CHANNEL"
     echo "PHP           ${PHP_VERSIONS[*]} (panel: $PANEL_PHP)"
     echo "Mail relay    ${WHP_RELAY_HOST:-none (direct delivery)}"

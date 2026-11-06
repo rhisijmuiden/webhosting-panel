@@ -1,0 +1,9 @@
+[Unit]
+Description=Webhosting Panel scheduler
+
+[Service]
+Type=oneshot
+User=whp
+Group=whp
+WorkingDirectory=/opt/webhosting-panel/panel
+ExecStart=/usr/bin/php artisan schedule:run

@@ -124,7 +124,7 @@ svc_reload() {
 }
 
 apt_install() {
-  run env DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+  run env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y -q \
     -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
     --no-install-recommends "$@"
 }

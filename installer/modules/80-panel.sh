@@ -127,8 +127,14 @@ module_panel() {
   for c in agent/install.sh panel/deploy/install.sh webmail/snappymail/install.sh backup/install.sh; do
     if [[ -f $WHP_CODE_DIR/$c ]]; then
       info "running $c"
-      run env WHP_HOSTNAME="$WHP_HOSTNAME" WHP_CHANNEL="$WHP_CHANNEL" WHP_ETC="$WHP_ETC" \
-        bash "$WHP_CODE_DIR/$c"
+      local admin=()
+      # First panel install: create the admin account (later runs keep its password).
+      if [[ $c == panel/deploy/install.sh && ! -e $WHP_STATE/panel/.admin-created ]]; then
+        admin=(WHP_ADMIN_EMAIL="$WHP_EMAIL" WHP_ADMIN_PASSWORD="$(secret PANEL_ADMIN_PASS 24)")
+      fi
+      run_secret "bash $c" env WHP_HOSTNAME="$WHP_HOSTNAME" WHP_CHANNEL="$WHP_CHANNEL" WHP_ETC="$WHP_ETC" \
+        "${admin[@]}" bash "$WHP_CODE_DIR/$c"
+      if ((${#admin[@]})); then touch "$WHP_STATE/panel/.admin-created"; fi
     else
       info "$(t component_missing "$c")"
     fi
