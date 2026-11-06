@@ -88,7 +88,17 @@ final class DomainRecords
             (array) $d->website->aliases,
         )));
 
-        return WebRecords::forSite($d->domain, $server->ipv4, $server->ipv6, $d->proxied, $aliases ?: ['www']);
+        // Subdomain websites (test.example.com) live in this zone too.
+        $subdomains = [];
+        if (method_exists($d->website, 'subdomains')) {
+            foreach ($d->website->subdomains()->pluck('domain') as $sub) {
+                if (str_ends_with($sub, '.' . $d->domain)) {
+                    $subdomains[] = substr($sub, 0, -strlen($d->domain) - 1);
+                }
+            }
+        }
+
+        return WebRecords::forSite($d->domain, $server->ipv4, $server->ipv6, $d->proxied, [...($aliases ?: ['www']), ...$subdomains]);
     }
 
     /** @return list<DnsRecord> */

@@ -21,6 +21,11 @@
             'icon' => 'git', 'label' => __('Git deployments'), 'sub' => $o->gitRepos->isEmpty() ? __('Deploy on every push') : trans_choice(':count repository|:count repositories', $o->gitRepos->count())])
         @include('client.websites.overview.tile', ['href' => $o->canUseTerminal() ? route('client.files.terminal', $site) : null, 'icon' => 'terminal', 'label' => __('Web terminal'), 'sub' => __('Command line in your browser')])
         @include('client.websites.overview.tile', ['href' => $o->has('client.apps.index') ? route('client.apps.index') : null, 'icon' => 'apps', 'label' => __('App installer'), 'sub' => __('WordPress, Joomla, Nextcloud')])
+        @if ($o->has('client.clones.create'))
+            @include('client.websites.overview.tile', ['href' => config('subdomains.customer_clone') && $site->status === 'active' ? route('client.clones.create', $site) : null, 'icon' => 'migrate', 'label' => __('Clone website'), 'sub' => __('Test copy on a subdomain')])
+            @include('client.websites.overview.tile', ['href' => route('client.websites.show', [$site, 'tab' => 'hosting']).'#subdomains', 'icon' => 'globe', 'label' => __('Subdomains'),
+                'sub' => $site->isSubdomain() ? __('Subdomain of :domain', ['domain' => $site->parent?->domain]) : trans_choice(':count subdomain|:count subdomains', $site->subdomains()->count())])
+        @endif
         @include('client.websites.overview.tile', ['href' => $o->wordpress->isNotEmpty() ? route('client.websites.show', [$site, 'tab' => 'wordpress']) : null, 'icon' => 'wordpress', 'label' => 'WordPress',
             'sub' => $o->wordpress->sum(fn ($i) => $i->outdatedCount()) ? trans_choice(':count update|:count updates', $o->wordpress->sum(fn ($i) => $i->outdatedCount())) : __('Up to date'),
             'tone' => $o->wordpress->contains(fn ($i) => $i->isOutdated()) ? 'warn' : null])
