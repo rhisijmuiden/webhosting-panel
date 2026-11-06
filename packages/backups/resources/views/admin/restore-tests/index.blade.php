@@ -92,7 +92,7 @@
                             <td><x-ui.pill :status="$h->tone()">{{ $h->statusLabel() }}</x-ui.pill></td>
                             <td class="num">{{ $h->tested }}</td>
                             <td class="num">{{ $h->problems ?: '–' }}</td>
-                            <td class="num small">{{ $h->durationForHumans() ?? '–' }}</td>
+                            <td class="num small" style="white-space:nowrap">{{ $h->durationForHumans() ?? '–' }}</td>
                         </tr>
                     @endforeach
                 </x-ui.table>

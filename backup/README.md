@@ -148,6 +148,51 @@ sudo WHP_TEST_SFTP=user@host:22 WHP_TEST_SFTP_KEY=~/.ssh/id_ed25519 backup/tests
 sudo WHP_TEST_FTPS=user@host:21 WHP_TEST_FTPS_PASSWORD_FILE=pw backup/tests/run.sh
 ```
 
+## Automatic restore tests
+
+A backup is only proven when it has been restored. `whp-backup verify`
+restores a sample of the newest restore points of every location into an
+isolated scratch folder, checks them and removes them again. The panel runs
+it on a schedule (Backups → Restore tests, default every Wednesday 06:00),
+keeps the history and mails the administrators when a test fails.
+
+```sh
+whp-backup verify                                    # every enabled location, sample from backup.conf
+whp-backup verify --target nas --sites 5 --databases 0 --kinds latest
+whp-backup verify --target nas --scope site:example.nl --scope db:example_wp
+```
+
+Per location:
+
+1. **Coverage**: every website, mail domain and database on this server must
+   have a backup (failed when one has none) that is not older than
+   `VERIFY_MAX_AGE_HOURS` (warning).
+2. **Pick**: the server configuration plus `VERIFY_SITES` websites,
+   `VERIFY_MAIL` mail domains and `VERIFY_DATABASES` databases, the ones tested
+   longest ago first (`verify-history.json`), so a few runs cover everything.
+   With `VERIFY_KINDS="both"` the newest restore point *and* the newest full
+   one are tested, so both the incremental and the full chain are proven.
+3. **Restore in isolation**: files go to `VERIFY_DIR`
+   (`/var/lib/webhosting-panel/restore-test/run-*`, never a live path) with
+   `restic restore --verify`, which checks the content of every file against
+   its hash. Databases are imported into a private, throw-away MariaDB
+   instance (own data directory, unix socket only, `--skip-networking`, client
+   in `--sandbox` mode); the live MariaDB is never touched.
+4. **Checks**: file count and total size equal the snapshot listing, symbolic
+   links, random PHP files parse (`php -l`), wp-config.php readable, Maildir
+   messages, configuration folders; dumps must end with the `-- Dump
+   completed` marker, import without errors, have every table and pass
+   `CHECK TABLE`.
+5. **Clean up**: the scratch folder is removed and the private MariaDB stopped,
+   also after a failure; leftovers of an interrupted run are removed at the
+   start of the next one.
+
+It holds the same lock as backups, so it never runs at the same time as a
+backup or restore (the panel tries again 15 minutes later), runs with low CPU
+and I/O priority, and skips an item (warning) when restoring it would leave
+less than `VERIFY_MIN_FREE_PERCENT` of the disk free. The report is printed as
+JSON and kept in `/var/lib/webhosting-panel/backup/verify-last.json`.
+
 ## Customer backups (own locations)
 
 Separate from the server backups above, customers can back up their own
