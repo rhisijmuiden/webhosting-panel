@@ -13,6 +13,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Throwable;
 
@@ -31,6 +32,16 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // The panel runs on its own port (:8443). Build every URL from APP_URL, so
+        // asset links and redirects never lose the port, whatever Host the web
+        // server passes on.
+        if (! $this->app->runningUnitTests() && ($root = config('app.url'))) {
+            URL::forceRootUrl($root);
+            if (str_starts_with($root, 'https://')) {
+                URL::forceScheme('https');
+            }
+        }
+
         Gate::define('admin', fn (User $user) => $user->isAdmin());
 
         RateLimiter::for('login', function (Request $request) {
