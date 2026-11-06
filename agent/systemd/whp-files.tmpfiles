@@ -1,0 +1,4 @@
+# File manager (packages/files): spool files older than a day are removed,
+# web terminal sockets live in /run/whp-terminal/<token>/.
+d /var/lib/webhosting-panel/files-spool 0700 whp whp 1d
+d /run/whp-terminal 0711 root root -

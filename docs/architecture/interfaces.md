@@ -151,6 +151,18 @@ server (SSL state `imported`) until Let's Encrypt succeeds. Websites own their
 databases through the core table `site_databases` (`App\Models\SiteDatabase`).
 The screens live in `packages/migration` (`Rhis\Migration\`, admin `/admin/migration`).
 
+Actions added by the file manager (`files.py`, `terminal.py`, see `docs/file-manager.md`;
+screens in `packages/files`, `Rhis\Files\`, client `/files`, admin `/admin/files`):
+`files.list`, `files.search`, `files.read`, `files.write`, `files.upload`,
+`files.download`, `files.mkdir`, `files.rename`, `files.move`, `files.copy`,
+`files.delete`, `files.chmod` and the jobs `files.compress`, `files.extract`. Every
+operation runs `agent/whp_agent/fileworker.py` as the site user, jailed to
+`/var/www/vhosts/<domain>`. File contents pass through spool files in
+`/var/lib/webhosting-panel/files-spool` (owner `whp`, 0700): params carry a spool
+name (`up-`, `wr-`, `rd-`, `dl-` + 32 hex), never the data. `terminal.status`,
+`terminal.start` (ttyd + bubblewrap as the site user, socket in
+`/run/whp-terminal/<token>/`), `terminal.stop`.
+
 ## Release channels
 
 | Channel | Git branch |

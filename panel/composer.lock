@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9ad879686ab321a6743a0df9b4b216fa",
+    "content-hash": "440aaadc2949bb3f9161a0e045f424ee",
     "packages": [
         {
             "name": "brick/math",
@@ -3307,7 +3307,7 @@
         },
         {
             "name": "rhis/apps",
-            "version": "dev-claude/project-thread-nqaa7a",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/apps",
@@ -3340,7 +3340,7 @@
         },
         {
             "name": "rhis/backups",
-            "version": "dev-claude/project-thread-nqaa7a",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/backups",
@@ -3373,7 +3373,7 @@
         },
         {
             "name": "rhis/crm-api",
-            "version": "dev-claude/project-thread-nqaa7a",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/crm-api",
@@ -3406,7 +3406,7 @@
         },
         {
             "name": "rhis/dns-mail",
-            "version": "dev-claude/project-thread-nqaa7a",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/dns-mail",
@@ -3453,8 +3453,41 @@
             }
         },
         {
+            "name": "rhis/files",
+            "version": "dev-claude/project-thread-0lz2y1",
+            "dist": {
+                "type": "path",
+                "url": "../packages/files",
+                "reference": "20fc5e5ec9eb5ba3572e1ecb4d34b6a4c8495fbd"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Files\\FilesServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Files\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Client file manager for the Webhosting Panel: browse, upload, download, zip/unzip, a code editor and an optional sandboxed web terminal.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "rhis/migration",
-            "version": "dev-claude/project-thread-nqaa7a",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/migration",
@@ -3487,7 +3520,7 @@
         },
         {
             "name": "rhis/wordpress",
-            "version": "dev-claude/project-thread-nqaa7a",
+            "version": "dev-claude/project-thread-0lz2y1",
             "dist": {
                 "type": "path",
                 "url": "../packages/wordpress",
@@ -8696,6 +8729,7 @@
         "rhis/backups": 20,
         "rhis/crm-api": 20,
         "rhis/dns-mail": 20,
+        "rhis/files": 20,
         "rhis/migration": 20,
         "rhis/wordpress": 20
     },

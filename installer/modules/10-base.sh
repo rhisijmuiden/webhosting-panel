@@ -72,6 +72,9 @@ module_base() {
     acl apt-listchanges bash-completion bind9-dnsutils certbot cron git htop jq less \
     locales logrotate nano openssl python3 rsync ssl-cert sudo unattended-upgrades \
     unzip xz-utils zstd
+  # Web terminal of the file manager: ttyd (terminal over WebSocket) and bubblewrap (sandbox).
+  mapfile -t term_pkgs < <(apt_available ttyd bubblewrap)
+  ((${#term_pkgs[@]})) && apt_install "${term_pkgs[@]}"
 
   ln -sf "/usr/share/zoneinfo/$WHP_TZ" /etc/localtime
   printf '%s\n' "$WHP_TZ" >/etc/timezone
