@@ -57,6 +57,7 @@ whp-site cache voorbeeld.nl off
 whp-site quota voorbeeld.nl 5120                 # harde limiet van 5 GB
 whp-site ssl voorbeeld.nl                        # Let's Encrypt nu opnieuw proberen
 whp-site list --json
+whp-site suspend voorbeeld.nl    # 503-pagina, PHP gestopt, inloggen geblokkeerd (unsuspend draait het terug)
 whp-site remove voorbeeld.nl
 ```
 

@@ -63,6 +63,10 @@ check "site has its own systemd unit in whp-sites.slice" bash -c "systemctl is-a
 check "per-site memory accounting" bash -c "whp-site show site.test | jq -e '.resources.memory_bytes > 0'"
 check "per-site limits" bash -c "whp-site limits site.test --cpu 150% --memory 512M && [[ \$(systemctl show -p CPUQuotaPerSecUSec --value whp-site-site_test) == 1.500000s ]]"
 check "site still answers after limits" bash -c "curl -s -H 'Host: site.test' http://127.0.0.1/ | grep -q php="
+check "suspend shows the 503 page" bash -c "whp-site suspend site.test --json | jq -e .suspended >/dev/null && [[ \$(curl -s -o /tmp/s.html -w %{http_code} -H 'Host: site.test' http://127.0.0.1/x.php) == 503 ]] && grep -q 'temporarily unavailable' /tmp/s.html"
+check "suspend stops PHP and locks login" bash -c "! systemctl is-active --quiet whp-site-site_test && [[ \$(chage -l s_site_test | grep -i 'account expires') != *never* ]]"
+check "suspend is idempotent" bash -c "whp-site suspend site.test --json | jq -e .suspended >/dev/null"
+check "unsuspend restores the site" bash -c "whp-site unsuspend site.test --json | jq -e '.suspended == false' >/dev/null && curl -s -H 'Host: site.test' http://127.0.0.1/ | grep -q php= && [[ \$(chage -l s_site_test | grep -i 'account expires') == *never* ]]"
 check "no HSTS or Alt-Svc on plain HTTP" bash -c "! curl -s -D - -o /dev/null -H 'Host: site.test' http://127.0.0.1/ | grep -qiE 'strict-transport|alt-svc'"
 check "security headers" bash -c "curl -sI -H 'Host: site.test' http://127.0.0.1/ | grep -qi x-content-type-options"
 check "add laravel site" whp-site add app.test --profile laravel --no-ssl --json

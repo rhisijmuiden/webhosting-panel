@@ -59,6 +59,7 @@ whp-site cache example.com off
 whp-site quota example.com 5120                 # 5 GB hard limit
 whp-site ssl example.com                        # retry Let's Encrypt now
 whp-site list --json
+whp-site suspend example.com     # 503 page, PHP stopped, login locked (unsuspend undoes it)
 whp-site remove example.com
 ```
 

@@ -41,6 +41,9 @@ module_nginx() {
     render "$TPL/nginx/snippets/$f" "/etc/nginx/whp/$f"
   done
 
+  install -d -m 0755 /etc/nginx/whp/pages
+  install -m 0644 "$TPL/nginx/pages/suspended.html" /etc/nginx/whp/pages/suspended.html
+
   rm -f /etc/nginx/sites-enabled/default
   render "$TPL/nginx/default-server.conf" /etc/nginx/sites-available/00-whp-default.conf
   ln -sf ../sites-available/00-whp-default.conf /etc/nginx/sites-enabled/00-whp-default.conf

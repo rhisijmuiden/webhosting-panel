@@ -11,6 +11,7 @@
 #   whp-site quota <domain> <MB>     (0 = unlimited; hard limit when the filesystem
 #                                     has project quotas, see docs/installer.md)
 #   whp-site limits <domain> [--cpu 200%] [--memory 1G]   (empty value removes the cap)
+#   whp-site suspend <domain> | unsuspend <domain>   (503 page, PHP stopped, SFTP/SSH login locked)
 #   whp-site remove <domain> [--keep-files]
 #   whp-site list [--json]
 #   whp-site show <domain>
@@ -54,7 +55,7 @@ site_load() {
   f=$(site_file "$1")
   [[ -f $f ]] || die "$(t site_missing "$1")"
   local k
-  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED; do
+  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED; do
     printf -v "$k" '%s' "$(env_get "$f" "$k" || true)"
   done
   SITE_ROOT=$WHP_VHOSTS/$SITE_DOMAIN
@@ -64,7 +65,7 @@ site_save() {
   local f k
   f=$(site_file "$SITE_DOMAIN")
   [[ -f $f ]] || install -m 0640 /dev/null "$f"
-  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED; do
+  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED; do
     env_set "$f" "$k" "${!k}"
   done
 }
@@ -116,16 +117,23 @@ site_apply() {
   render "$TPL/systemd/whp-site.service" "/etc/systemd/system/$unit.service"
   site_limits_write
   systemctl daemon-reload
-  systemctl enable "$unit" >/dev/null 2>&1
-  if [[ -n $old_php || ${SITE_RESTART:-no} == yes ]]; then systemctl restart "$unit"
-  else systemctl reload-or-restart "$unit"; fi
-
-  # Wait for the socket before nginx sends traffic to it.
-  local i
-  for i in {1..20}; do [[ -S /run/php/site-$SITE_ID.sock ]] && break; sleep 0.25; done
-
   local body
-  body=$(render_string "$TPL/nginx/site-body.conf")
+  if [[ ${SITE_SUSPENDED:-no} == yes ]]; then
+    systemctl disable --now "$unit" >/dev/null 2>&1 || true
+    install -d -m 0755 /etc/nginx/whp/pages
+    [[ -f /etc/nginx/whp/pages/suspended.html ]] \
+      || install -m 0644 "$TPL/nginx/pages/suspended.html" /etc/nginx/whp/pages/suspended.html
+    body=$(render_string "$TPL/nginx/site-suspended.conf")
+  else
+    systemctl enable "$unit" >/dev/null 2>&1
+    if [[ -n $old_php || ${SITE_RESTART:-no} == yes ]]; then systemctl restart "$unit"
+    else systemctl reload-or-restart "$unit"; fi
+
+    # Wait for the socket before nginx sends traffic to it.
+    local i
+    for i in {1..20}; do [[ -S /run/php/site-$SITE_ID.sock ]] && break; sleep 0.25; done
+    body=$(render_string "$TPL/nginx/site-body.conf")
+  fi
   if [[ $SITE_SSL == active ]]; then
     SITE_CERT=/etc/letsencrypt/live/$SITE_DOMAIN/fullchain.pem
     SITE_KEY=/etc/letsencrypt/live/$SITE_DOMAIN/privkey.pem
@@ -209,9 +217,10 @@ print_site() {
     --argjson quota "${SITE_QUOTA_MB:-0}" --arg qmode "$(quota_mode)" \
     --argjson res "$(site_resources)" \
     --arg cpu_limit "$SITE_CPU" --arg mem_limit "$SITE_MEM" \
+    --arg suspended "${SITE_SUSPENDED:-no}" \
     --argjson used "$(du -sm --one-file-system "$SITE_ROOT" 2>/dev/null | cut -f1 || echo 0)" \
     '{domain:$domain, user:$user, php:$php, aliases:($aliases|split(",")|map(select(length>0))),
-      cache:($cache=="on"), profile:$profile, root:$root, docroot:$docroot, ssl:$ssl,
+      cache:($cache=="on"), suspended:($suspended=="yes"), profile:$profile, root:$root, docroot:$docroot, ssl:$ssl,
       socket:$socket, created:$created, unit:$unit,
       cgroup:("/sys/fs/cgroup/whp.slice/whp-sites.slice/" + $unit),
       disk:{used_mb:$used, quota_mb:$quota, enforced:($qmode!="none" and $quota>0), mode:$qmode},
@@ -438,6 +447,29 @@ hostname_cert_installed() {
   info "$(t cert_ok "$WHP_HOSTNAME")"
 }
 
+# Suspend: visitors get a 503 page, PHP-FPM is stopped, the site user cannot
+# log in (SFTP/SSH) and its processes are ended. Files, mail and certificates stay.
+cmd_suspend() {
+  local domain=${1:-} want=${2:-yes}
+  [[ -n $domain ]] || usage
+  site_load "$domain"
+  if [[ ${SITE_SUSPENDED:-no} != "$want" ]]; then
+    SITE_SUSPENDED=$want
+    site_save
+    if [[ $want == yes ]]; then
+      usermod --expiredate 1 "$SITE_USER" >/dev/null 2>&1 || true
+      site_apply
+      pkill -u "$SITE_USER" 2>/dev/null || true
+      cache_purge
+    else
+      usermod --expiredate '' "$SITE_USER" >/dev/null 2>&1 || true
+      SITE_RESTART=yes site_apply
+    fi
+  fi
+  if [[ $want == yes ]]; then ok "$(t site_suspended "$domain")"; else ok "$(t site_unsuspended "$domain")"; fi
+  if [[ $JSON == yes ]]; then print_site "$domain"; fi
+}
+
 cmd_remove() {
   local domain=${1:-} keep=no
   [[ -n $domain ]] || usage
@@ -485,6 +517,8 @@ case $cmd in
   ssl) cmd_ssl "$@" ;;
   quota) cmd_quota "$@" ;;
   limits) cmd_limits "$@" ;;
+  suspend) cmd_suspend "${1:-}" yes ;;
+  unsuspend) cmd_suspend "${1:-}" no ;;
   remove) cmd_remove "$@" ;;
   list) cmd_list "$@" ;;
   show) print_site "${1:-}" ;;

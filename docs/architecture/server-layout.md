@@ -14,6 +14,7 @@ Complements [interfaces.md](interfaces.md).
 | Nginx vhost | `/etc/nginx/sites-available/whp-<domain>.conf`, extra snippets in `/etc/nginx/whp/sites/<domain>/*.conf` |
 | Certificate | `/etc/letsencrypt/live/<domain>/` |
 | Tool | `whp-site` (all subcommands accept `--json`: JSON on stdout, progress on stderr, exit code != 0 on error) |
+| Suspend | `whp-site suspend <domain>` / `unsuspend <domain>`: idempotent; 503 page (`/etc/nginx/whp/pages/suspended.html`), PHP-FPM unit stopped, site user expired (no SFTP/SSH login). JSON has `suspended: true\|false`. |
 
 Site JSON: `{domain, user, php, aliases[], cache, profile, root, docroot, ssl: active|pending|off, socket, created, disk: {used_mb, quota_mb, enforced, mode}}`.
 
