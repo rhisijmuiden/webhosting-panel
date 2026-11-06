@@ -277,3 +277,58 @@ def backup_get_schedule(params):
         "full": {"enabled": full_on, "day": full_parts[0] if len(full_parts) == 3 else "Sun",
                  "time": full_parts[-1][:5]},
     }
+
+
+_ORDER = {"system": 0, "site": 1, "mail": 2, "db": 3}
+
+
+@action("backup.restore_many")
+def backup_restore_many(params):
+    """Restore several restore points in one job (the admin backup browser).
+
+    items: [{"snapshot": id, "scope": "site:example.nl"}, ...]. Server
+    configuration first, then websites, mail and databases. A failed item does
+    not stop the others; the job fails at the end when any item failed.
+    """
+    target = _target(params)
+    mode = v.choice(params, "mode", ["copy", "in_place"])
+    raw = v.list_of(params, "items", lambda x: x, max_items=2000)
+    items = []
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise ActionError("invalid_params", f"items[{i}] must be an object")
+        items.append({
+            "snapshot": v.string(item, "snapshot", max_len=64, pattern=SNAPSHOT),
+            "scope": v.string(item, "scope", max_len=270, pattern=SCOPE),
+        })
+    if not items:
+        raise ActionError("invalid_params", "Nothing selected to restore")
+    items.sort(key=lambda it: _ORDER.get(it["scope"].split(":", 1)[0], 9))
+    to = None
+    if mode == "copy":
+        to = v.string(params, "to", max_len=500, pattern=r"/[A-Za-z0-9._/-]*")
+        if ".." in to.split("/"):
+            raise ActionError("invalid_params", "to may not contain ..")
+
+    def work(_params, log):
+        done, failed = [], []
+        for n, item in enumerate(items, 1):
+            argv = ["restore", "--target", target, "--snapshot", item["snapshot"]]
+            if mode == "copy":
+                argv += ["--to", f"{to}/{item['scope'].replace(':', '_')}"]
+            else:
+                argv.append("--in-place")
+            log(f"[{n}/{len(items)}] {item['scope']} ({item['snapshot'][:8]})")
+            try:
+                _backup(argv, timeout=24 * 3600)
+                done.append(item["scope"])
+            except ActionError as exc:
+                log(f"  failed: {exc.message}")
+                failed.append({"scope": item["scope"], "error": exc.message})
+        log(f"{len(done)} restored, {len(failed)} failed")
+        if failed:
+            raise ActionError("command_failed", f"{len(failed)} of {len(items)} items could not be restored",
+                              {"restored": done, "failed": failed})
+        return {"restored": done, "failed": []}
+
+    return start_job("backup.restore_many", work, params)
