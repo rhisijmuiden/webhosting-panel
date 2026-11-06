@@ -2,6 +2,10 @@
 # Update the panel to the latest commit of a branch (main = production, test = test).
 # Run by whp-agent as root: update.sh <branch>
 set -euo pipefail
+# The agent runs with UMask=0027 (group whp). Code files must be readable for
+# Nginx (www-data) too, or changed CSS/JS/images give 403 and the panel loses
+# its styling. Write them like the installer does: 0644 files, 0755 folders.
+umask 022
 
 BRANCH="${1:?usage: update.sh <branch>}"
 case "$BRANCH" in main|test) ;; *) echo "Unknown branch: $BRANCH" >&2; exit 2 ;; esac
@@ -33,10 +37,21 @@ echo "==> Checking out origin/$BRANCH"
 "${GIT[@]}" checkout --quiet -B "$BRANCH" "origin/$BRANCH"
 "${GIT[@]}" reset --quiet --hard "origin/$BRANCH"
 
+# Repair files that earlier updates wrote with the agent's umask (0640 root:whp).
+"${GIT[@]}" ls-files -z | (cd "$ROOT" && xargs -0r chmod a+r)
+find "$ROOT" \( -path "$ROOT/.git" -o -path "$PANEL/storage" -o -path "$PANEL/vendor" -o -path "$PANEL/bootstrap/cache" \) -prune \
+  -o -type d -print0 | xargs -0r chmod a+rx
+
 ln -sf "$CONFIG/panel.env" "$PANEL/.env"
 chown -R "$PANEL_USER:$PANEL_USER" "$PANEL/storage" "$PANEL/bootstrap/cache"
 chown "$PANEL_USER:$PANEL_USER" "$PANEL"
 [ -d "$PANEL/vendor" ] && chown -R "$PANEL_USER:$PANEL_USER" "$PANEL/vendor"
+
+# Nginx serves public/ itself: make sure it can read the stylesheet.
+if ! runuser -u www-data -- test -r "$PANEL/public/assets/app.css" 2>/dev/null; then
+  echo "!! Nginx (www-data) cannot read $PANEL/public/assets/app.css" >&2
+  false
+fi
 
 echo "==> Installing dependencies"
 (cd "$PANEL" && as_panel composer install --no-dev --no-interaction --optimize-autoloader --quiet)
