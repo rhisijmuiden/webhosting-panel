@@ -20,7 +20,7 @@ class ApplyPhpSettings implements ShouldQueue
 
     public function handle(PhpSettings $php): void
     {
-        Website::with('customer.package')->where('status', 'active')->orderBy('id')->each(function (Website $website) use ($php) {
+        Website::with('customer', 'subscription.package')->where('status', 'active')->orderBy('id')->each(function (Website $website) use ($php) {
             try {
                 $php->apply($website);
             } catch (AgentException $e) {

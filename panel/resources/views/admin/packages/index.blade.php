@@ -3,7 +3,7 @@
         <div class="page-head">
             <div>
                 <h1>{{ __('Service plans') }}</h1>
-                <p class="sub">{{ __('Hosting packages with the limits per customer. Prices and invoices live in the CRM.') }}</p>
+                <p class="sub">{{ __('Hosting packages with the limits per website (subscription). Prices and invoices live in the CRM.') }}</p>
             </div>
             <div class="actions">
                 <x-ui.button variant="primary" icon="plus" :href="route('admin.packages.create')">{{ __('Add plan') }}</x-ui.button>
@@ -33,11 +33,10 @@
                     <th>{{ __('Plan name') }}</th>
                     <th class="num">{{ __('Disk space') }}</th>
                     <th class="num">{{ __('Data traffic') }}</th>
-                    <th class="num">{{ __('Websites') }}</th>
                     <th class="num">{{ __('Mailboxes') }}</th>
                     <th>{{ __('Resources') }}</th>
                     <th>{{ __('Source') }}</th>
-                    <th class="num">{{ __('Customers') }}</th>
+                    <th class="num">{{ __('Subscriptions') }}</th>
                     <th class="actions-col"><span class="sr-only">{{ __('Actions') }}</span></th>
                 </x-slot:head>
                 @foreach ($packages as $p)
@@ -51,18 +50,17 @@
                         </td>
                         <td class="num">{{ $p->limitLabel('disk_mb') }}</td>
                         <td class="num">{{ $p->limitLabel('traffic_gb_month') }}</td>
-                        <td class="num">{{ $p->limitLabel('max_websites') }}</td>
                         <td class="num">{{ $p->limitLabel('max_mailboxes') }}</td>
                         <td>{{ $p->hasResourceCaps() ? collect(['cpu_percent', 'memory_mb'])->filter(fn ($k) => $p->{$k} !== null)->map(fn ($k) => $p->limitLabel($k))->implode(' · ') ?: __('Capped') : __('Fair share') }}</td>
                         <td>@if ($p->crm_id)<span class="mono small" title="{{ __('Linked to the CRM') }}">CRM {{ $p->crm_id }}</span>@else<span class="muted">{{ __('Panel') }}</span>@endif</td>
-                        <td class="num"><a href="{{ route('admin.customers.index', ['package' => $p->id]) }}">{{ $p->customers_count }}</a></td>
+                        <td class="num"><a href="{{ route('admin.subscriptions.index', ['package' => $p->id]) }}">{{ $p->subscriptions_count }}</a></td>
                         <td class="actions-col">
                             <div class="quick-actions">
                                 <a href="{{ route('admin.packages.edit', $p) }}" title="{{ __('Edit') }}" aria-label="{{ __('Edit') }} {{ $p->name }}"><x-icon name="edit" /></a>
                                 <form method="POST" action="{{ route('admin.packages.duplicate', $p) }}">@csrf
                                     <button type="submit" class="icon-link" title="{{ __('Clone') }}" aria-label="{{ __('Clone') }} {{ $p->name }}"><x-icon name="apps" /></button>
                                 </form>
-                                @if ($p->customers_count === 0)
+                                @if ($p->subscriptions_count === 0)
                                     <form method="POST" action="{{ route('admin.packages.destroy', $p) }}" onsubmit="return confirm(@js(__('Delete plan :name?', ['name' => $p->name])))">@csrf @method('DELETE')
                                         <button type="submit" class="icon-link is-danger" title="{{ __('Delete') }}" aria-label="{{ __('Delete') }} {{ $p->name }}"><x-icon name="trash" /></button>
                                     </form>

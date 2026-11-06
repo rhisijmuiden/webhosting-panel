@@ -122,9 +122,9 @@ class AppsTest extends TestCase
     public function test_client_installs_only_into_own_sites_within_the_package(): void
     {
         $package = HostingPackage::create(['name' => 'Start', 'max_databases' => 1]);
-        $mine = Customer::create(['name' => 'Mine', 'email' => 'mine@klant.test', 'hosting_package_id' => $package->id]);
+        $mine = Customer::create(['name' => 'Mine', 'email' => 'mine@klant.test']);
         $other = Customer::create(['name' => 'Other', 'email' => 'other@klant.test']);
-        $site = $this->site($mine);
+        $site = $this->withPackage($this->site($mine), $package);
         $foreign = $this->site($other, 'ander.test');
         $this->site($mine, 'nieuw.test', 'provisioning');
         $user = User::factory()->create(['customer_id' => $mine->id]);

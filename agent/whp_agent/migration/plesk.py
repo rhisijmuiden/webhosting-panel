@@ -57,12 +57,21 @@ QUERIES = {
     "dns": "SELECT dns_recs.dns_zone_id, dns_recs.type, dns_recs.host, dns_recs.val, {dns_recs.opt:''} FROM dns_recs",
     "certificates": "SELECT h.dom_id, {c.name:''}, IFNULL(c.cert_file,''), {c.ca_file:''} FROM hosting h JOIN certificates c ON c.id=h.certificate_id",
     "ips": "SELECT ip_address FROM IP_Addresses",
+    # Subscriptions (webspaces): service plan, setup date and expiry date (unix time, -1 = never).
+    "subscriptions": (
+        "SELECT sb.object_id, IFNULL(t.name,''), {d.cr_date:''}, IFNULL(l.value,'')"
+        " FROM Subscriptions sb JOIN domains d ON d.id=sb.object_id"
+        " LEFT JOIN PlansSubscriptions ps ON ps.subscription_id=sb.id"
+        " LEFT JOIN Templates t ON t.id=ps.plan_id AND t.type='domain'"
+        " LEFT JOIN Limits l ON l.id={d.limits_id:0} AND l.limit_name='expiration'"
+        " WHERE sb.object_type='domain'"
+    ),
 }
 
 # Table behind each alias used in QUERIES.
 ALIASES = {
     "d": "domains", "h": "hosting", "su": "sys_users", "db": "data_bases", "s": "DatabaseServers",
-    "m": "mail", "a": "accounts", "c": "certificates",
+    "m": "mail", "a": "accounts", "c": "certificates", "sb": "Subscriptions", "t": "Templates", "l": "Limits",
 }
 
 _OPTIONAL = re.compile(r"\{(\w+)\.(\w+):([^}]*)\}")
@@ -190,6 +199,24 @@ def _dns_record(zone_domain: str, rtype: str, host: str, val: str, opt: str) -> 
     return rec
 
 
+def _date(value: str) -> str | None:
+    """Plesk cr_date (YYYY-MM-DD or a datetime) as YYYY-MM-DD."""
+    m = re.match(r"^(\d{4}-\d{2}-\d{2})", (value or "").strip())
+    return m.group(1) if m and not m.group(1).startswith("0000") else None
+
+
+def _expiry(value: str) -> str | None:
+    """Limits.value of 'expiration': a unix timestamp, -1 (or empty) for never."""
+    import datetime
+    try:
+        ts = int(str(value).strip())
+    except ValueError:
+        return None
+    if ts <= 0:
+        return None
+    return datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).strftime("%Y-%m-%d")
+
+
 def build_inventory(rows: dict[str, list[list[str]]], meta: dict, sizes: dict[str, int], apps: dict[str, str]) -> dict:
     """Turn the raw query results into the source independent inventory (pure, unit tested)."""
     owners = {}
@@ -233,11 +260,25 @@ def build_inventory(rows: dict[str, list[list[str]]], meta: dict, sizes: dict[st
         by_id[dom_id]["_webspace"] = webspace
         if zone not in ("", "0"):
             zone_of[zone] = dom_id
-    for d in by_id.values():
+    # Plesk subscription per webspace: service plan, setup date, expiry date.
+    subs: dict[str, dict] = {}
+    for r in rows.get("subscriptions", []):
+        if len(r) < 4 or r[0] not in by_id:
+            continue
+        sub = subs.setdefault(r[0], {"plan": None, "created": None, "expires": None})
+        sub["plan"] = sub["plan"] or (r[1].strip() or None)  # add-on plans have no 'domain' template row
+        sub["created"] = sub["created"] or _date(r[2])
+        sub["expires"] = sub["expires"] or _expiry(r[3])
+    for dom_id, d in by_id.items():
         p = by_id.get(d.pop("_parent"))
         d["parent"] = p["name"] if p else None
-        w = by_id.get(d.pop("_webspace"))
+        webspace = d.pop("_webspace")
+        w = by_id.get(webspace)
         d["subscription"] = w["name"] if w else d["parent"] or d["name"]
+        info = subs.get(webspace if w else dom_id, {})
+        d["plan"] = info.get("plan")
+        d["created"] = info.get("created")
+        d["expires"] = info.get("expires")
 
     for r in rows.get("aliases", []):
         if len(r) >= 4 and r[0] in by_id:

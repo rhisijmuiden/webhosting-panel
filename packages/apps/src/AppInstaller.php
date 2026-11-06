@@ -41,16 +41,34 @@ final class AppInstaller
         return $this->catalog()[$id] ?? null;
     }
 
-    /** How many more apps with a database the customer's package allows (null = no limit). */
+    /**
+     * How many more apps with a database the packages of the customer's websites allow
+     * (null = no limit on at least one website). The limit itself is per website: see databasesLeftFor().
+     */
     public function databasesLeft(Customer $customer): ?int
     {
-        $max = $customer->package?->max_databases;
+        $left = 0;
+        foreach ($customer->websites()->with('subscription.package')->get() as $website) {
+            $site = $this->databasesLeftFor($website);
+            if ($site === null) {
+                return null;
+            }
+            $left += $site;
+        }
+
+        return $left;
+    }
+
+    /** How many more databases the package of this website's subscription allows (null = no limit). */
+    public function databasesLeftFor(Website $website): ?int
+    {
+        $max = $website->package?->max_databases;
         if ($max === null) {
             return null;
         }
-        // Every database of the customer's websites (apps, migrated, ...) plus installs still running.
-        $used = SiteDatabase::whereIn('website_id', $customer->websites()->select('id'))->count()
-            + AppInstallation::where('customer_id', $customer->id)->where('status', 'installing')->count();
+        // Every database of the website (apps, migrated, ...) plus installs still running.
+        $used = SiteDatabase::where('website_id', $website->id)->count()
+            + AppInstallation::where('website_id', $website->id)->where('status', 'installing')->count();
 
         return max(0, $max - $used);
     }

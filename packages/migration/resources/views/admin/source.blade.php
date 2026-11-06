@@ -80,7 +80,7 @@
                     @if ($groups->isEmpty())<tr><td></td><td colspan="4" class="muted">{{ $show === 'todo' ? __('Every domain of this server is migrated or on its way.') : __('No domains match.') }}</td></tr>@endif
                     @foreach ($groups as $subscription => $domains)
                         @php $owner = $owners->get($domains->first()['owner_id'] ?? null); @endphp
-                        <tr class="mig-group"><td></td><td colspan="4">{{ $subscription }} <span class="muted">· {{ $owner && $owner['kind'] !== 'admin' ? ($owner['company'] ?: $owner['name']).' ('.$owner['email'].')' : __('Owned by the Plesk admin') }}</span></td></tr>
+                        <tr class="mig-group"><td></td><td colspan="4">{{ $subscription }}@if ($domains->first()['plan'] ?? null) <span class="pill pill-info">{{ $domains->first()['plan'] }}</span>@endif <span class="muted">· {{ $owner && $owner['kind'] !== 'admin' ? ($owner['company'] ?: $owner['name']).' ('.$owner['email'].')' : __('Owned by the Plesk admin') }}</span></td></tr>
                         @foreach ($domains as $d)
                             @php $item = $items->get($d['name']); $key = \Rhis\Migration\Http\MigrationController::key($d['name']); $blocked = $item && $item->status !== 'failed'; @endphp
                             <tr @class(['mig-sub' => $d['name'] !== $subscription])>

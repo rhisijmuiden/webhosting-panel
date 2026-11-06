@@ -2,33 +2,23 @@
 
 namespace App\Models;
 
-use App\Jobs\ApplyCustomerLimits;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Customer extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'name', 'company', 'email', 'phone', 'crm_id', 'hosting_package_id', 'status', 'locale', 'notes',
+        'name', 'company', 'email', 'phone', 'crm_id', 'status', 'locale', 'notes',
     ];
 
-    protected static function booted(): void
+    /** The subscriptions (website + package) this customer owns. */
+    public function subscriptions(): HasManyThrough
     {
-        // A new package means new resource limits on the server.
-        static::updated(function (Customer $customer) {
-            if ($customer->wasChanged('hosting_package_id') && $customer->websites()->exists()) {
-                ApplyCustomerLimits::dispatch($customer);
-            }
-        });
-    }
-
-    public function package(): BelongsTo
-    {
-        return $this->belongsTo(HostingPackage::class, 'hosting_package_id');
+        return $this->hasManyThrough(Subscription::class, Website::class);
     }
 
     public function websites(): HasMany
@@ -53,23 +43,8 @@ class Customer extends Model
             ->where('month', $month ?? now()->utc()->format('Y-m'))->sum('bytes');
     }
 
-    /** Traffic used as a percentage of the package limit (null: unlimited). */
-    public function trafficPercent(): ?float
-    {
-        $limit = $this->package?->traffic_gb_month;
-
-        return $limit ? $this->trafficBytes() / ($limit * 1024 ** 3) * 100 : null;
-    }
-
     public function diskUsedMb(): int
     {
         return (int) $this->websites->sum('disk_used_mb');
-    }
-
-    public function canAddWebsite(): bool
-    {
-        $max = $this->package?->max_websites;
-
-        return $max === null || $this->websites()->count() < $max;
     }
 }

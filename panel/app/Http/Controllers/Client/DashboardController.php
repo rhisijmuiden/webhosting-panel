@@ -10,7 +10,7 @@ class DashboardController extends Controller
 {
     public function __invoke(Request $request): View
     {
-        $customer = $request->user()->customer->load('package', 'websites');
+        $customer = $request->user()->customer->load('websites.subscription.package');
 
         return view('client.dashboard', ['customer' => $customer]);
     }

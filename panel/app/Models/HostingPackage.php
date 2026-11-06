@@ -9,24 +9,28 @@ use Illuminate\Support\Number;
 
 /**
  * A hosting package. Every limit is NULL for "unlimited" (the default for new packages).
+ * A package is assigned per website through its subscription, so every limit
+ * applies to one website (like a Plesk service plan).
  */
 class HostingPackage extends Model
 {
     use HasFactory;
 
-    /** What the customer may create or use. key => [label, unit, form min, form max]. */
+    /**
+     * What one subscription may create or use. key => [label, unit, form min, form max].
+     * (max_websites is kept for the CRM API only: one subscription is one website.)
+     */
     public const USAGE_LIMITS = [
         'disk_mb' => ['Disk space', 'MB', 100, 10_000_000],
         'traffic_gb_month' => ['Data traffic per month', 'GB', 1, 1_000_000],
-        'max_websites' => ['Websites', null, 0, 10_000],
         'max_mailboxes' => ['Mailboxes', null, 0, 100_000],
         'max_databases' => ['Databases', null, 0, 10_000],
         'max_cronjobs' => ['Cron jobs', null, 0, 1_000],
     ];
 
     /**
-     * Resource jail: the most all websites of one customer may use together,
-     * so one customer can never take down the server.
+     * Resource jail: the most one subscription (its website, cron jobs and SSH)
+     * may use, so one website can never take down the server.
      */
     public const RESOURCE_LIMITS = [
         'cpu_percent' => ['CPU', '%', 10, 10_000],
@@ -52,9 +56,9 @@ class HostingPackage extends Model
         return ['allow_ssh' => 'boolean', 'is_active' => 'boolean'];
     }
 
-    public function customers(): HasMany
+    public function subscriptions(): HasMany
     {
-        return $this->hasMany(Customer::class);
+        return $this->hasMany(Subscription::class);
     }
 
     public static function limitKeys(): array

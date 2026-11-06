@@ -2,24 +2,26 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Customer;
+use App\Models\Subscription;
 use App\Services\ResourceLimits;
 use Illuminate\Console\Command;
 
 class ApplyLimits extends Command
 {
-    protected $signature = 'whp:limits:apply {customer? : Customer id (default: all customers with websites)}';
+    protected $signature = 'whp:limits:apply {subscription? : Subscription id (default: all subscriptions)} {--customer= : Only the subscriptions of this customer id}';
 
     protected $description = 'Put the resource limits and PHP settings of the packages in place on the server';
 
     public function handle(ResourceLimits $limits): int
     {
-        $customers = Customer::with('package')->whereHas('websites')
-            ->when($this->argument('customer'), fn ($q, $id) => $q->whereKey($id))->get();
+        $subscriptions = Subscription::with('package', 'website')
+            ->when($this->argument('subscription'), fn ($q, $id) => $q->whereKey($id))
+            ->when($this->option('customer'), fn ($q, $id) => $q->ownedBy((int) $id))
+            ->orderBy('id')->get();
         $failed = 0;
-        foreach ($customers as $customer) {
-            $errors = $limits->apply($customer);
-            $this->line(($errors ? '<error>✗</error> ' : '<info>✓</info> ').$customer->displayName());
+        foreach ($subscriptions as $subscription) {
+            $errors = $limits->apply($subscription);
+            $this->line(($errors ? '<error>✗</error> ' : '<info>✓</info> ').$subscription->label());
             foreach ($errors as $error) {
                 $this->line('    '.$error);
             }
