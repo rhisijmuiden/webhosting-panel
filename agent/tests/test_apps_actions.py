@@ -237,6 +237,19 @@ class AppsTest(unittest.TestCase):
         self.assertFalse(any("a-very-long-secret" in a or "db-secret-pw" in a for c in self.commands for a in c))
         self.assertEqual(ctx.version, "1.44.2")
 
+    def test_phpbb_release_date_comes_from_the_download_listing(self):
+        pages = {
+            apps.PHPBB_VERSIONS: json.dumps({"stable": {"3.0": {"current": "3.0.14", "eol": None},
+                                                        "3.3": {"current": "3.3.19", "eol": None}}}),
+            apps.PHPBB_RELEASES.format(branch="3.3"):
+                '<tr><td><a href="3.3.18/">3.3.18/</a></td><td align="right">2026-05-01 10:00  </td></tr>\n'
+                '<tr><td><a href="3.3.19/">3.3.19/</a></td><td align="right">2026-10-20 14:30  </td></tr>\n',
+        }
+        with mock.patch.object(apps, "fetch_text", lambda url, **kw: pages[url]):
+            info = apps.PhpBB().release_info()
+        self.assertEqual(info["version"], "3.3.19")
+        self.assertEqual(time.strftime("%Y-%m-%d %H:%M", time.gmtime(info["released"])), "2026-10-20 14:30")
+
     def test_phpbb_config_is_valid_and_escaped(self):
         ctx = apps.Context(self.site, "phpbb", "forum", self.params(title='Mijn "forum"'), lambda _l: None)
         ctx.db = {"name": "klant_nl_phpbb_ab12", "user": "klant_nl_phpbb_ab12", "password": "p\"w:d #x"}

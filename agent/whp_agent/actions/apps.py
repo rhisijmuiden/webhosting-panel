@@ -71,7 +71,10 @@ PIWIGO_DOWNLOAD = "https://piwigo.org/download/dlcounter.php?code={}"
 MEDIAWIKI_RELEASES = "https://releases.wikimedia.org/mediawiki/"
 DOKUWIKI_URL = "https://download.dokuwiki.org/src/dokuwiki/dokuwiki-stable.tgz"
 PHPBB_VERSIONS = "https://version.phpbb.com/phpbb/versions.json"
-PHPBB_DOWNLOAD = "https://download.phpbb.com/pub/release/{branch}/{version}/phpBB-{version}.zip"
+PHPBB_RELEASES = "https://download.phpbb.com/pub/release/{branch}/"
+PHPBB_DOWNLOAD = PHPBB_RELEASES + "{version}/phpBB-{version}.zip"
+# download.phpbb.com answers 403 to unknown user agents; it serves the curl that ships with Debian.
+PHPBB_HEADERS = {"User-Agent": "curl/8.14.1"}
 FRESHRSS_DOWNLOAD = "https://github.com/FreshRSS/FreshRSS/archive/refs/tags/{}.tar.gz"
 
 DEFAULT_MAX_AGE_DAYS = 365
@@ -143,9 +146,9 @@ def random_password(length=24):
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
-def download(url, dest, timeout=300):
+def download(url, dest, timeout=300, headers=None):
     """Download url to dest (in the agent's own cache). Returns the sha256 and sha512."""
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **(headers or {})})
     tmp = f"{dest}.{uuid.uuid4().hex}.part"
     sha256, sha512 = hashlib.sha256(), hashlib.sha512()
     try:
@@ -283,7 +286,7 @@ def maintained(entry, max_age_days):
     return None
 
 
-def cached_download(name, url, sha256=None, timeout=900, max_age=None):
+def cached_download(name, url, sha256=None, timeout=900, max_age=None, headers=None):
     """Download into the agent's cache once. Checked against sha256 when the project publishes one;
     without a checksum a versioned file is kept, an unversioned one (max_age) is fetched again."""
     name = re.sub(r"[^A-Za-z0-9._-]", "_", name)
@@ -293,7 +296,7 @@ def cached_download(name, url, sha256=None, timeout=900, max_age=None):
             return dest
         if not sha256 and (max_age is None or time.time() - os.path.getmtime(dest) < max_age):
             return dest
-    got, _ = download(url, dest + ".new", timeout=timeout)
+    got, _ = download(url, dest + ".new", timeout=timeout, headers=headers)
     if sha256 and got != sha256:
         os.unlink(dest + ".new")
         raise ActionError("command_failed", f"Checksum of {name} does not match")
@@ -1011,8 +1014,15 @@ class PhpBB:
     def release_info(self):
         stable = json.loads(fetch_text(PHPBB_VERSIONS, timeout=RELEASE_TIMEOUT))["stable"]
         branch = max(stable, key=version_key)
-        entry = stable[branch]
-        return {"version": entry.get("current"), "released": None, "eol": bool(entry.get("eol"))}
+        version = stable[branch].get("current")
+        # versions.json marks no branch as end of life (not even 3.0), so the date of the
+        # release folder on the download server is what tells whether phpBB is still maintained.
+        listing = fetch_text(PHPBB_RELEASES.format(branch=branch), timeout=RELEASE_TIMEOUT, headers=PHPBB_HEADERS)
+        released = None
+        for line in listing.splitlines():
+            if f'href="{version}/"' in line:
+                released = MediaWiki._listing_date(line)
+        return {"version": version, "released": released}
 
     def installed_version(self, target):
         return read_version_file(os.path.join(target, "includes", "constants.php"),
@@ -1064,8 +1074,8 @@ class PhpBB:
         branch = ".".join(version.split(".")[:2])
         url = PHPBB_DOWNLOAD.format(branch=branch, version=version)
         ctx.log(f"Downloading phpBB {version}")
-        expected = first_hex(fetch_text(url + ".sha256"), 64)
-        ctx.extract(cached_download(f"phpBB-{version}.zip", url, sha256=expected))
+        expected = first_hex(fetch_text(url + ".sha256", headers=PHPBB_HEADERS), 64)
+        ctx.extract(cached_download(f"phpBB-{version}.zip", url, sha256=expected, headers=PHPBB_HEADERS))
         ctx.log("Installing phpBB")
         config_file = ctx.private_tmp(self.config(ctx))
         cli = os.path.join(ctx.target, "install", "phpbbcli.php")
