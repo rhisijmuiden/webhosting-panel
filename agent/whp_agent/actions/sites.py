@@ -56,7 +56,15 @@ def site_show(params):
 
 @action("site.php")
 def site_php(params):
-    return _site(["php", v.domain(params, "domain"), v.choice(params, "php", PHP_VERSIONS)])
+    domain = v.domain(params, "domain")
+    result = _site(["php", domain, v.choice(params, "php", PHP_VERSIONS)])
+    # WP-cron timers start the site's PHP binary directly: point them at the new version.
+    try:
+        from .wordpress import refresh_cron_units
+        refresh_cron_units(domain)
+    except ActionError:
+        pass
+    return result
 
 
 @action("site.cache")

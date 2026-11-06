@@ -113,8 +113,97 @@ class FakeAgentClient implements AgentClient
             'mail.quarantine_delete' => ['user' => $params['user'] ?? '', 'deleted' => count($params['uids'] ?? []), 'learned' => 0],
             'mail.tlsa' => ['usage' => 3, 'selector' => 1, 'matching_type' => 1, 'certificate' => hash('sha256', 'fake-mail-key'),
                 'cert_file' => '/etc/letsencrypt/live/mail.example.test/fullchain.pem', 'not_after' => 'Feb  3 12:00:00 2027 GMT', 'reuse_key' => true],
+            'apps.catalog' => ['apps' => [
+                ['id' => 'wordpress', 'name' => 'WordPress', 'subdir' => true, 'locales' => ['en', 'nl']],
+                ['id' => 'joomla', 'name' => 'Joomla', 'subdir' => true, 'locales' => ['en']],
+                ['id' => 'nextcloud', 'name' => 'Nextcloud', 'subdir' => false, 'locales' => ['en', 'nl']],
+            ]],
+            'apps.list' => ['apps' => []],
+            'apps.install', 'apps.remove' => ['job' => (string) Str::uuid()],
+            'db.list' => ['databases' => []],
+            'site.show' => ['domain' => $params['domain'] ?? '', 'ssl' => 'imported', 'disk' => ['used_mb' => 412]],
+            'migrate.key' => ['public_key' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeKeyForDevelopmentOnly webhosting-panel-migration@web01', 'fingerprint' => 'SHA256:fakefingerprint'],
+            'migrate.connect' => ['type' => 'plesk', 'version' => '18.0.74', 'hostname' => 'plesk.example.test', 'rsync' => true, 'host_key' => 'ED25519 SHA256:fakehostkey'],
+            'migrate.forget_host' => ['host' => $params['host'] ?? '', 'forgotten' => true],
+            'migrate.inventory', 'migrate.transfer' => ['job' => (string) Str::uuid()],
+            'migrate.credentials' => ['domain' => $params['domain'] ?? '', 'mailboxes' => [
+                ['local' => 'info', 'scheme' => 'plain', 'secret' => 'Geheim-123'],
+                ['local' => 'jan', 'scheme' => 'crypt', 'secret' => '$6$abcdefgh$'.str_repeat('A', 86)],
+            ]],
+            'wp.detect' => ['domain' => $params['domain'] ?? '', 'installs' => Website::where('domain', $params['domain'] ?? '')->where('profile', 'wordpress')->exists()
+                ? [['path' => '', 'version' => '6.6.2']] : []],
+            'wp.status' => $this->wordpressStatus($params),
+            'wp.update', 'wp.update_many', 'wp.restore' => ['job' => (string) Str::uuid()],
+            'wp.cron_get', 'wp.cron_set' => ['mode' => $params['mode'] ?? 'wordpress', 'interval' => ($params['mode'] ?? 'wordpress') === 'system' ? ($params['interval'] ?? 5) : null,
+                'timer' => 'whp-wpcron-fake.timer', 'timer_active' => ($params['mode'] ?? '') === 'system', 'last_run' => null, 'last_result' => null],
+            'wp.users' => ['users' => [['id' => 1, 'login' => 'beheerder', 'email' => 'info@'.($params['domain'] ?? 'example.test'), 'name' => 'Beheerder']]],
+            'wp.set_password' => ['user' => ['id' => $params['user_id'] ?? 1, 'login' => 'beheerder', 'email' => '', 'name' => '']]
+                + (isset($params['password']) ? [] : ['password' => 'Fake-Generated-Pass-2026']),
+            'wp.login_link' => ['url' => 'https://'.($params['domain'] ?? 'example.test').'/wp-login.php?whp_sso='.Str::random(43), 'user' => ['id' => 1, 'login' => 'beheerder'], 'expires_in' => 120],
+            'wp.snapshots' => ['snapshots' => [['id' => now()->subDay()->format('Ymd-His'), 'size' => 48 * 1024 * 1024]]],
             default => throw new AgentException('unknown_action', "Unknown action: {$action}"),
         };
+    }
+
+    /** A small Plesk server, the shape migrate.inventory returns (docs/migration.md). */
+    public static function pleskInventory(): array
+    {
+        $site = fn (string $name, string $sub, array $extra = []) => array_merge([
+            'name' => $name, 'kind' => 'site', 'is_subdomain' => false, 'parent' => null, 'subscription' => $name, 'owner_id' => '3',
+            'active' => true, 'size_mb' => 412, 'php' => '8.2',
+            'web' => ['root' => "/var/www/vhosts/{$name}/httpdocs", 'vhost' => $name, 'base' => "/var/www/vhosts/{$name}/httpdocs", 'sub' => $sub, 'system_user' => 'klant', 'app' => 'wordpress'],
+            'aliases' => [], 'databases' => [], 'mailboxes' => [], 'forwarders' => [], 'dns' => [], 'ssl' => null, 'notes' => [],
+        ], $extra);
+
+        return [
+            'source' => ['type' => 'plesk', 'version' => '18.0.74', 'hostname' => 'plesk.example.test'],
+            'server_ips' => ['203.0.113.5'],
+            'owners' => [['id' => '3', 'login' => 'bakkerij', 'kind' => 'client', 'name' => 'Piet Bakker', 'company' => 'Bakkerij Bakker', 'email' => 'piet@bakkerij.test', 'phone' => '']],
+            'domains' => [
+                $site('bakkerij.test', '', [
+                    'aliases' => [['name' => 'bakkerij-bakker.test', 'web' => true, 'mail' => false]],
+                    'databases' => [['name' => 'wp_bakkerij', 'type' => 'mysql', 'server' => 'local', 'users' => ['wp_bakkerij']]],
+                    'mailboxes' => [
+                        ['local' => 'info', 'quota_mb' => 1024, 'size_mb' => 230, 'password' => 'plain', 'aliases' => ['bestellingen'], 'forward' => []],
+                        ['local' => 'jan', 'quota_mb' => 0, 'size_mb' => 12, 'password' => 'hash', 'aliases' => [], 'forward' => []],
+                    ],
+                    'forwarders' => [['local' => 'factuur', 'targets' => ['boekhouder@example.org']]],
+                    'dns' => [
+                        ['type' => 'A', 'name' => 'bakkerij.test', 'content' => '203.0.113.5'],
+                        ['type' => 'MX', 'name' => 'bakkerij.test', 'content' => 'mail.bakkerij.test', 'priority' => 10],
+                        ['type' => 'TXT', 'name' => 'bakkerij.test', 'content' => 'v=spf1 +a +mx -all'],
+                        ['type' => 'TXT', 'name' => 'bakkerij.test', 'content' => 'google-site-verification=abc123'],
+                        ['type' => 'CNAME', 'name' => 'shop.bakkerij.test', 'content' => 'shops.myshopify.com'],
+                    ],
+                    'ssl' => ['name' => 'Lets Encrypt bakkerij.test', 'lets_encrypt' => true],
+                ]),
+                $site('api.bakkerij.test', 'public', ['is_subdomain' => true, 'parent' => 'bakkerij.test', 'subscription' => 'bakkerij.test', 'php' => '8.4',
+                    'web' => ['root' => '/var/www/vhosts/bakkerij.test/api.bakkerij.test/public', 'vhost' => 'bakkerij.test', 'base' => '/var/www/vhosts/bakkerij.test/api.bakkerij.test', 'sub' => 'public', 'system_user' => 'klant', 'app' => 'laravel']]),
+            ],
+            'totals' => ['domains' => 2, 'sites' => 2, 'databases' => 1, 'mailboxes' => 2, 'size_mb' => 824],
+            'warnings' => [],
+        ];
+    }
+
+    private function wordpressStatus(array $params): array
+    {
+        $plugins = [
+            ['name' => 'woocommerce', 'title' => 'WooCommerce', 'status' => 'active', 'version' => '9.1.2', 'update' => true, 'update_version' => '9.4.1', 'auto_update' => false],
+            ['name' => 'contact-form-7', 'title' => 'Contact Form 7', 'status' => 'active', 'version' => '5.9.8', 'update' => true, 'update_version' => '6.0.1', 'auto_update' => false],
+            ['name' => 'wordfence', 'title' => 'Wordfence Security', 'status' => 'active', 'version' => '8.0.1', 'update' => false, 'update_version' => null, 'auto_update' => true],
+            ['name' => 'hello-dolly', 'title' => 'Hello Dolly', 'status' => 'inactive', 'version' => '1.7.2', 'update' => false, 'update_version' => null, 'auto_update' => false],
+        ];
+        $themes = [
+            ['name' => 'astra', 'title' => 'Astra', 'status' => 'active', 'version' => '4.7.0', 'update' => true, 'update_version' => '4.8.3', 'auto_update' => false],
+            ['name' => 'twentytwentyfour', 'title' => 'Twenty Twenty-Four', 'status' => 'inactive', 'version' => '1.2', 'update' => false, 'update_version' => null, 'auto_update' => false],
+        ];
+
+        return [
+            'domain' => $params['domain'] ?? '', 'path' => $params['path'] ?? '', 'version' => '6.6.2',
+            'core_update' => ['version' => '6.7.1', 'type' => 'major'], 'plugins' => $plugins, 'themes' => $themes,
+            'outdated' => ['core' => true, 'plugins' => 2, 'themes' => 1],
+            'cron' => ['mode' => 'wordpress', 'interval' => null], 'checked_at' => time(), 'errors' => [],
+        ];
     }
 
     private function quarantine(string $domain): array

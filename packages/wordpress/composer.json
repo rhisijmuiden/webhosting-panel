@@ -1,0 +1,24 @@
+{
+    "name": "rhis/wordpress",
+    "description": "WordPress toolkit for the Webhosting Panel: one-click updates, WP-cron takeover, admin passwords and one-click login, outdated plugins in the security screen.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rhis\\WordPress\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rhis\\WordPress\\WordPressServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

@@ -7,8 +7,10 @@ $paths = [
     'globe' => '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
     'mail' => '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
     'database' => '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+    'migrate' => '<path d="M4 8h13M13 4l4 4-4 4M20 16H7M11 12l-4 4 4 4"/>',
     'cloud' => '<path d="M7 18a5 5 0 0 1-.5-10A7 7 0 0 1 20 10a4 4 0 0 1-1 8H7Z"/>',
     'code' => '<path d="m8 7-5 5 5 5M16 7l5 5-5 5"/>',
+    'wordpress' => '<circle cx="12" cy="12" r="9"/><path d="M4.5 8.5h4M15 8.5h4M6.5 8.5 10 18l2-5.5L14 18l3.5-9.5M10.2 8.5l3.8 9.5"/>',
     'shield' => '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z"/>',
     'firewall' => '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 15h18M9 4v5M15 9v6M9 15v5"/>',
     'backup' => '<path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/>',
@@ -33,6 +35,7 @@ $paths = [
     'edit' => '<path d="M4 20h4L19 9l-4-4L4 16v4Z"/>',
     'check' => '<path d="m5 12 5 5 9-10"/>',
     'chart' => '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    'apps' => '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><path d="M17.5 14v7M14 17.5h7"/>',
     'dot' => '<circle cx="12" cy="12" r="3"/>',
     'chevron' => '<path d="m9 6 6 6-6 6"/>',
 ];

@@ -20,6 +20,8 @@
         <div class="alert alert-bad" role="alert"><x-icon name="info" /><div><strong>{{ __('Something went wrong') }}</strong><p class="small mono">{{ $website->last_error }}</p></div></div>
     @endif
 
+    @includeIf('wordpress::partials.website-card', ['website' => $website])
+
     <section class="grid grid-2" style="align-items:start">
         <x-ui.card :title="__('PHP and caching')">
             <form method="POST" action="{{ route('admin.websites.update', $website) }}" class="form">
@@ -49,6 +51,17 @@
             </dl>
         </x-ui.card>
     </section>
+
+    @if ($website->databases->isNotEmpty())
+        <x-ui.card :title="__('Databases')" flush>
+            <x-ui.table>
+                <x-slot:head><th>{{ __('Database') }}</th><th>{{ __('Users') }}</th><th>{{ __('Origin') }}</th></x-slot:head>
+                @foreach ($website->databases as $db)
+                    <tr><td class="mono">{{ $db->name }}</td><td class="mono small">{{ implode(', ', $db->users ?? []) ?: '–' }}</td><td>{{ $db->origin === 'migration' ? __('Migration') : __('Panel') }}</td></tr>
+                @endforeach
+            </x-ui.table>
+        </x-ui.card>
+    @endif
 
     <x-ui.card :title="__('Remove website')">
         <p class="muted small">{{ __('Removes the Nginx site, PHP pool and certificate. This cannot be undone.') }}</p>

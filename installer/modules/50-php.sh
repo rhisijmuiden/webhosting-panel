@@ -28,5 +28,30 @@ module_php() {
 
   # Composer for Laravel and other modern PHP apps.
   apt_install composer
+
+  # WP-CLI for the WordPress toolkit and the app installer (pinned release, checksum checked).
+  install_wp_cli
   printf '%s\n' "${PHP_VERSIONS[@]}" >"$WHP_STATE/php-versions"
+}
+
+WP_CLI_VERSION=2.12.0
+
+install_wp_cli() {
+  local url=https://github.com/wp-cli/wp-cli/releases/download/v$WP_CLI_VERSION/wp-cli-$WP_CLI_VERSION.phar
+  local tmp have compat=()
+  have=$(php /usr/local/bin/wp --allow-root --version 2>/dev/null | awk '{print $2}' || true)
+  if [[ $have == "$WP_CLI_VERSION" ]]; then ok "wp-cli $have"; return 0; fi
+  tmp=$(mktemp -d)
+  if curl -fsSL --retry 3 -o "$tmp/wp.phar" "$url" && curl -fsSL --retry 3 -o "$tmp/wp.phar.sha512" "$url.sha512" \
+     && [[ $(sha512sum "$tmp/wp.phar" | cut -d' ' -f1) == "$(tr -d ' \n' <"$tmp/wp.phar.sha512")" ]]; then
+    install -m 0755 "$tmp/wp.phar" /usr/local/bin/wp
+    ok "wp-cli $WP_CLI_VERSION"
+  else
+    warn "wp-cli $WP_CLI_VERSION could not be downloaded or verified; the WordPress toolkit needs /usr/local/bin/wp"
+  fi
+  rm -rf "$tmp"
+  # wp db export/import call mysqldump/mysql; MariaDB 11 ships those names in the compat package.
+  mapfile -t compat < <(apt_available mariadb-client-compat)
+  ((${#compat[@]})) && apt_install "${compat[@]}"
+  return 0
 }

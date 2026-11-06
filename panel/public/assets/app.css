@@ -278,6 +278,22 @@ dialog.modal::backdrop { background: rgba(14, 22, 38, .55); }
 .chart-empty { padding: 40px 0; text-align: center; }
 .rank-bar { height: 6px; border-radius: 99px; background: var(--series-1); min-width: 2px; }
 
+/* App installer */
+.app-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
+.app-tile { gap: 12px; transition: border-color .15s, box-shadow .15s; }
+.app-tile:hover { border-color: var(--ink-muted); box-shadow: var(--shadow); }
+.app-tile-head { display: flex; align-items: center; gap: 12px; }
+.app-tile-head h2 { font-size: 17px; }
+.app-tile > p { flex: 1; }
+.app-tile-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.app-logo {
+  --app-color: var(--ink); display: inline-grid; place-items: center; flex: none; width: 44px; height: 44px;
+  border-radius: 12px; background: var(--app-color); color: #fff; font-weight: 800; font-size: 20px; font-stretch: 125%;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / .15);
+}
+.app-logo-sm { width: 26px; height: 26px; border-radius: 7px; font-size: 13px; }
+.app-name { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; }
+
 /* Step-by-step wizards (DNS onboarding) */
 .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; counter-reset: step; }
 .steps > li { position: relative; padding: 0 0 18px 48px; counter-increment: step; }

@@ -1,0 +1,24 @@
+{
+    "name": "rhis/apps",
+    "description": "One-click app installer for the Webhosting Panel (WordPress, Joomla, Nextcloud), on top of the agent's apps.* actions.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rhis\\Apps\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rhis\\Apps\\AppsServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
