@@ -1,0 +1,85 @@
+name: Panel
+
+# Fast checks for the Laravel panel, its packages and the server agent.
+# The slow full install lives in installer.yml; this workflow takes about a
+# minute so every panel PR gets a green or red check before it is merged.
+on:
+  push:
+    branches: [test, main]
+    paths: ["panel/**", "packages/**", "agent/**", ".github/workflows/panel.yml"]
+  pull_request:
+    paths: ["panel/**", "packages/**", "agent/**", ".github/workflows/panel.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: panel-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  panel-tests:
+    name: Panel tests (PHP 8.4)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: panel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        # Same PHP version the installer runs the panel on (PANEL_PHP in installer/install.sh).
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: bcmath, ctype, curl, dom, fileinfo, intl, mbstring, pdo_sqlite, sqlite3, xml, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer downloads and vendor
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/composer/files
+            panel/vendor
+          key: panel-composer-${{ runner.os }}-php8.4-${{ hashFiles('panel/composer.lock', 'packages/*/composer.json') }}
+          restore-keys: panel-composer-${{ runner.os }}-php8.4-
+
+      - name: Install Composer packages
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --ansi
+
+      - name: Run tests
+        run: php artisan test
+
+      - name: Package tests (dns-mail)
+        # The package has its own PHPUnit suite; it runs on the panel's vendor
+        # with the package's test namespace added to the autoloader.
+        working-directory: packages/dns-mail
+        run: |
+          cat > "$RUNNER_TEMP/bootstrap.php" <<'PHP'
+          <?php
+          $loader = require getenv('GITHUB_WORKSPACE').'/panel/vendor/autoload.php';
+          $loader->addPsr4('Rhis\\DnsMail\\Tests\\', getcwd().'/tests/');
+          PHP
+          ../../panel/vendor/bin/phpunit --bootstrap "$RUNNER_TEMP/bootstrap.php" -c phpunit.xml.dist
+
+  agent-tests:
+    name: Agent unit tests (Python)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # Debian 13 ships Python 3.13.
+          python-version: "3.13"
+      - name: Run agent tests
+        working-directory: agent
+        run: python3 -m unittest discover -s tests
