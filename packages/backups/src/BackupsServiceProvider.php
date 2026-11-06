@@ -14,6 +14,9 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Rhis\Backups\Console\ClientBackupTick;
+use Rhis\Backups\Console\RestoreTestTick;
+use Rhis\Backups\Models\RestoreTest;
+use Illuminate\Support\Facades\Schema;
 
 final class BackupsServiceProvider extends ServiceProvider
 {
@@ -38,18 +41,30 @@ final class BackupsServiceProvider extends ServiceProvider
             ->group(__DIR__.'/../routes/client.php');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ClientBackupTick::class]);
+            $this->commands([ClientBackupTick::class, RestoreTestTick::class]);
         }
         $this->callAfterResolving(Schedule::class, static function (Schedule $schedule): void {
             $schedule->command('backups:client-tick')->everyFiveMinutes()->withoutOverlapping(30);
+            $schedule->command('backups:restore-test-tick')->everyFiveMinutes()->withoutOverlapping(30);
         });
         $this->fakeAgentDefaults();
 
         Menu::admin()->add('backups', 'Backups', 'admin.backups.index', icon: 'backup', section: 'Server', order: 85,
-            activePatterns: ['admin.backups.*']);
+            activePatterns: ['admin.backups.*'], badge: self::restoreTestBadge(...));
         Menu::client()->add('backups', 'Backups', 'client.backups.index', icon: 'backup', order: 40,
             activePatterns: ['client.backups.*'],
             visible: fn () => (bool) (config('backups.customer_restore') || config('backups.customer_targets')));
+    }
+
+    /** "!" on the Backups menu item while the newest restore test failed. */
+    public static function restoreTestBadge(): ?string
+    {
+        if (! Schema::hasTable('backup_restore_tests')) {
+            return null;
+        }
+        $last = RestoreTest::whereIn('status', RestoreTest::FINISHED)->latest('id')->first();
+
+        return $last?->isProblem() ? '!' : null;
     }
 
     /** Answers of the development/test agent for the customer backup actions (kept here, next to the feature). */
@@ -84,6 +99,8 @@ final class BackupsServiceProvider extends ServiceProvider
                 'size' => 52_000_000, 'contains' => ['databases', 'files', 'mail'], 'database_files' => ['example_wp_1a2b'],
             ]);
             $agent->respond('backup.restore_many', $job);
+            $agent->respond('backup.verify', $job);
+            $agent->respond('backup.verify_last', ['report' => null]);
             // Without a scope: restore points of everything on this (development) panel, for a week.
             $agent->respond('backup.list', function (array $p) {
                 $scopes = isset($p['scope']) ? [$p['scope']] : array_merge(['system'],

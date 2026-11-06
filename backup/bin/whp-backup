@@ -928,7 +928,7 @@ verify_files() {
 	total="$(df -PB1 "${CFG[VERIFY_DIR]}" | awk 'NR==2 {print $2}')"
 	need=$(( ebytes + total * CFG[VERIFY_MIN_FREE_PERCENT] / 100 ))
 	if (( need > free )); then
-		checks+=("$(verify_check disk_space warn "not enough free space to restore $ebytes bytes (free: $free)")")
+		checks+=("$(verify_check disk_space warn "restoring $ebytes bytes would leave less than ${CFG[VERIFY_MIN_FREE_PERCENT]}% of the disk free ($free bytes free now)")")
 		printf '%s\n' "${checks[@]}" | jq -cs --argjson e "$expected" '{checks:., files:$e.files, bytes:$e.bytes, skipped:"disk_space"}'
 		return
 	fi

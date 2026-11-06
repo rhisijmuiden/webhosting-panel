@@ -23,6 +23,7 @@ SYSTEM_PATHS="$T/sysconf"
 DATABASES="${WHP_TEST_DB:+yes}"
 DB_EXCLUDE="information_schema performance_schema sys mysql"
 VERIFY_DIR="$T/verify"
+VERIFY_MIN_FREE_PERCENT="0"
 EOF
 [[ -n "${WHP_TEST_DB:-}" ]] || sed -i 's/^DATABASES=.*/DATABASES="no"/' "$WHP_ETC/backup/backup.conf"
 
@@ -114,7 +115,7 @@ run_suite() {
 			check "$tgt: truncated dump fails the restore test" \
 				jq -e '.data.status == "failed" and any(.data.targets[0].items[0].checks[]; .check == "dump_complete" and .result == "failed")' <<<"$out"
 		fi
-		check "$tgt: private MariaDB instance is stopped afterwards" bash -c "! pgrep -f -- '[-]-datadir=$T/verify' >/dev/null"
+		check "$tgt: private MariaDB instance is stopped afterwards" bash -c "! grep -qs -- '[-]-datadir=$T/verify' /proc/[0-9]*/cmdline"
 		out="$(wb run --target "$tgt" --scope "db:does_not_exist")" || true
 		check "$tgt: failing dump is reported as failed" jq -e '.data.status == "failed"' <<<"$out"
 		check "$tgt: failing dump leaves no snapshot" \
@@ -150,7 +151,7 @@ reset_fixture
 wb run --full --target local1 >/dev/null
 echo "changed" >"$SITES/example.com/public/index.html"
 wb run --incremental --target local1 >/dev/null
-out="$(wb verify --target local1 --sites 5 --mail 5 --databases 0)"
+out="$(wb verify --target local1 --sites 5 --mail 5 --databases 0)"; [[ -n "${WHP_TEST_VERBOSE:-}" ]] && jq -c ".data.targets[0].items[] | [.scope,.status,.checks]" <<<"$out"
 check "restore test passes" jq -e '.ok and .data.status == "ok" and .data.targets[0].status == "ok"' <<<"$out"
 check "restore test covers system, both sites and mail" \
 	jq -e '[.data.targets[0].items[].scope] | unique == ["mail:example.com","site:example.com","site:shop.example.nl","system"]' <<<"$out"

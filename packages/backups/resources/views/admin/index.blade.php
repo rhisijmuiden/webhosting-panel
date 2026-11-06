@@ -32,6 +32,8 @@
         </div>
     @endif
 
+    @include('backups::partials.restore-test-summary')
+
     <section class="grid grid-2" style="align-items:start">
         <x-ui.card :title="__('Last backup')">
             @if ($last)
