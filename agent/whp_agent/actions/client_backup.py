@@ -29,6 +29,7 @@ Security:
 """
 
 import fcntl
+import hashlib
 import ipaddress
 import json
 import os
@@ -64,7 +65,8 @@ VMAIL_USER = "vmail"
 SECRETS_TMP = "/run/whp-agent"
 CONFIG_FILE = os.path.join(paths.CONFIG_DIR, "client-backup.conf")
 
-TYPES = ["sftp", "scp", "ftp", "ftps"]
+TYPES = ["sftp", "scp", "ftp", "ftps", "onedrive"]
+DRIVE_TYPES = ["personal", "business", "documentLibrary"]
 PARTS = ["files", "databases", "mail"]
 MANIFEST = "whp-backup.json"
 FORMAT = "whp-site-backup"
@@ -190,6 +192,8 @@ def parse_target(params, key="target"):
     if not isinstance(t, dict):
         raise ActionError("invalid_params", f"{key} must be an object")
     kind = v.choice(t, "type", TYPES)
+    if kind == "onedrive":
+        return _parse_onedrive(t, key)
     target = {
         "type": kind,
         "host": v.string(t, "host", max_len=253, pattern=r"[A-Za-z0-9.-]+|\[?[0-9A-Fa-f:]+\]?").strip("[]"),
@@ -217,6 +221,68 @@ def parse_target(params, key="target"):
     if target["port"] is None:
         target["port"] = 22 if kind in ("sftp", "scp") else (990 if kind == "ftps" and target["tls"] == "implicit" else 21)
     return target
+
+
+def _parse_onedrive(t, key):
+    """A OneDrive location: an OAuth token from the panel's Microsoft app (rclone format)."""
+    token = t.get("token")
+    if isinstance(token, str):
+        try:
+            token = json.loads(token)
+        except ValueError:
+            token = None
+    if not isinstance(token, dict) or not isinstance(token.get("refresh_token"), str) or not token.get("access_token"):
+        raise ActionError("invalid_params", f"{key}.token must be a OneDrive token with a refresh token")
+    target = {
+        "type": "onedrive",
+        "id": v.integer(t, "id", required=False, minimum=1, maximum=2 ** 31),
+        "client_id": v.string(t, "client_id", required=False, max_len=100, pattern=r"[A-Za-z0-9-]+"),
+        "client_secret": t.get("client_secret") or None,
+        "token": {k: token[k] for k in ("access_token", "token_type", "refresh_token", "expiry") if k in token},
+        "drive_id": v.string(t, "drive_id", max_len=200, pattern=r"[A-Za-z0-9!._-]+"),
+        "drive_type": v.choice(t, "drive_type", DRIVE_TYPES),
+        "path": _clean_path(t.get("path")),
+    }
+    secret = target["client_secret"]
+    if secret is not None and (not isinstance(secret, str) or len(secret) > 500 or re.search(r"[\x00-\x1f]", secret)):
+        raise ActionError("invalid_params", f"{key}.client_secret is invalid")
+    if len(json.dumps(target["token"])) > 16384:
+        raise ActionError("invalid_params", f"{key}.token is too large")
+    return target
+
+
+def _token_file(target):
+    return STATE / "onedrive" / f"t{target['id']}.json"
+
+
+def _token_for(target):
+    """rclone renews the token while it works; use the renewed one we kept, unless the panel has a new connection."""
+    if not target.get("id"):
+        return target["token"]
+    try:
+        with open(_token_file(target)) as fh:
+            kept = json.load(fh)
+    except (FileNotFoundError, ValueError):
+        return target["token"]
+    if kept.get("for") == _fingerprint(target["token"]) and isinstance(kept.get("token"), dict):
+        return kept["token"]
+    return target["token"]
+
+
+def _fingerprint(token):
+    return hashlib.sha256(token["refresh_token"].encode()).hexdigest()
+
+
+def _keep_token(target, token):
+    if not target.get("id"):
+        return
+    d = STATE / "onedrive"
+    d.mkdir(parents=True, exist_ok=True, mode=0o700)
+    tmp = d / f".t{target['id']}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        json.dump({"for": _fingerprint(target["token"]), "token": token}, fh)
+    os.replace(tmp, _token_file(target))
 
 
 def resolve_host(host):
@@ -257,13 +323,45 @@ class Remote:
         return self
 
     def __exit__(self, *exc):
-        shutil.rmtree(self.dir, ignore_errors=True)
+        try:
+            if self.t["type"] == "onedrive":
+                self._collect_token()
+        finally:
+            shutil.rmtree(self.dir, ignore_errors=True)
+
+    def _collect_token(self):
+        """rclone writes a renewed token back into its config; keep it for the next run."""
+        self.renewed_token = None
+        try:
+            with open(self.conf) as fh:
+                for line in fh:
+                    if line.startswith("token = "):
+                        token = json.loads(line[len("token = "):])
+                        break
+                else:
+                    return
+        except (OSError, ValueError):
+            return
+        if isinstance(token, dict) and token.get("refresh_token") and token != self.written_token:
+            _keep_token(self.t, token)
+            self.renewed_token = token
 
     def _obscure(self, secret):
         return run([RCLONE, "obscure", "-"], input_text=secret, timeout=30).stdout.strip()
 
     def _configure(self):
         t = self.t
+        self.conf = os.path.join(self.dir, "rclone.conf")
+        if t["type"] == "onedrive":
+            self.written_token = _token_for(t)
+            lines = ["[remote]", "type = onedrive", f"token = {json.dumps(self.written_token, separators=(',', ':'))}",
+                     f"drive_id = {t['drive_id']}", f"drive_type = {t['drive_type']}"]
+            if t.get("client_id"):
+                lines.append(f"client_id = {t['client_id']}")
+            if t.get("client_secret"):
+                lines.append(f"client_secret = {t['client_secret']}")
+            _write_private(self.conf, "\n".join(lines) + "\n")
+            return
         address = resolve_host(t["host"])
         lines = ["[remote]"]
         if t["type"] in ("sftp", "scp"):
@@ -287,7 +385,6 @@ class Remote:
                       f"pass = {self._obscure(t['password'])}"]
             if t["type"] == "ftps":
                 lines.append("explicit_tls = true" if t["tls"] == "explicit" else "tls = true")
-        self.conf = os.path.join(self.dir, "rclone.conf")
         _write_private(self.conf, "\n".join(lines) + "\n")
 
     def path(self, name=""):
@@ -994,7 +1091,7 @@ def client_backup_target_test(params):
         remote.delete(probe)
         backups = remote.list()
     return {"reachable": True, "writable": True, "duration_ms": int((time.time() - started) * 1000),
-            "host_key": host_key, "fingerprints": host_key_fingerprints(host_key) if host_key else [],
+            "token": getattr(remote, "renewed_token", None), "host_key": host_key, "fingerprints": host_key_fingerprints(host_key) if host_key else [],
             "backups": len(backups)}
 
 

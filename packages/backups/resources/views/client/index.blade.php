@@ -61,7 +61,7 @@
                         @foreach ($targets as $t)
                             <tr>
                                 <td><a class="strong" href="{{ route('client.backups.locations.show', $t->id) }}">{{ $t->name }}</a><br>
-                                    <span class="small muted mono">{{ strtoupper($t->type) }} · {{ $t->location() }}</span>
+                                    <span class="small muted mono">{{ $t->type === 'onedrive' ? '' : strtoupper($t->type).' · ' }}{{ $t->location() }}</span>
                                     <br><span class="small">{{ $schedules[$t->schedule] ?? $t->schedule }}@if ($t->schedule !== 'off') {{ $t->schedule_time }} · {{ __('full on :day', ['day' => __($t->full_day)]) }}@endif</span>
                                     @if ($t->last_error)<br><span class="small" style="color:var(--bad, #c0392b)">{{ \Illuminate\Support\Str::limit($t->last_error, 120) }}</span>@endif</td>
                                 <td class="num">
