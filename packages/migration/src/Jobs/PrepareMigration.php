@@ -27,6 +27,8 @@ class PrepareMigration implements ShouldQueue
 
     public function failed(?\Throwable $e): void
     {
-        $this->item->fresh()?->update(['status' => 'failed', 'error' => $e?->getMessage() ?? 'Job failed']);
+        $item = $this->item->fresh();
+        $item?->log($e?->getMessage() ?? 'Job failed', [], 'error');
+        $item?->update(['status' => 'failed', 'error' => $e?->getMessage() ?? 'Job failed']);
     }
 }

@@ -148,6 +148,7 @@ def migrate_transfer(params):
                 for login in db["users"]:
                     entry["users"].append(transfer.ensure_db_user(login, db["target"], source.mysql_user_hash(conn, login)))
                 entry["ok"] = True
+                log(f"database {db['name']}: done")
             except ActionError as exc:
                 entry["error"] = exc.message
                 result["errors"].append(f"database {db['name']}: {exc.message}")
@@ -157,6 +158,7 @@ def migrate_transfer(params):
         if plan["mail"]:
             for local in plan["mail"]["mailboxes"]:
                 src = f"{source.MAILNAMES}/{domain}/{local}/Maildir"
+                log(f"mail {local}@{domain}: start")
                 try:
                     r = transfer.copy_maildir(conn, src, domain, local, plan["mail"]["mode"])
                     result["mail"].append({"local": local, "ok": True, "stats": r["stats"]})

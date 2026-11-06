@@ -2,8 +2,11 @@
 
 use Illuminate\Support\Facades\Route;
 use Rhis\Migration\Http\MigrationController as C;
+use Rhis\Migration\Http\StatusController as S;
 
 Route::get('/', [C::class, 'index'])->name('index');
+Route::get('/status', [S::class, 'index'])->name('status');
+Route::get('/status/feed', [S::class, 'feed'])->name('status.feed');
 Route::post('/sources', [C::class, 'storeSource'])->name('sources.store');
 Route::get('/sources/{source}', [C::class, 'showSource'])->name('sources.show');
 Route::post('/sources/{source}/test', [C::class, 'testSource'])->name('sources.test');

@@ -2,11 +2,38 @@
     <div class="page-head">
         <div><h1>{{ __('Migration') }}</h1><p class="sub">{{ __('Move websites, databases, mailboxes, certificates and DNS from a Plesk server to this panel.') }}</p></div>
     </div>
+    @include('migration::admin.partials.tabs')
 
     @foreach ($agentErrors as $e)<div class="alert alert-bad" role="alert"><x-icon name="info" />{{ $e }}</div>@endforeach
     @error('agent')<div class="alert alert-bad" role="alert"><x-icon name="info" />{{ $message }}</div>@enderror
     @if (session('status'))<div class="alert alert-ok" role="status">{{ session('status') }}</div>@endif
 
+    <x-ui.card :title="__('Source servers')" flush>
+        @if ($sources->isEmpty())
+            <x-ui.empty icon="migrate">{{ __('No source server yet.') }}</x-ui.empty>
+        @else
+            <x-ui.table>
+                <x-slot:head><th>{{ __('Server') }}</th><th>{{ __('Type') }}</th><th>{{ __('Status') }}</th><th>{{ __('Migrated') }}</th><th class="num">{{ __('Running') }}</th><th class="num">{{ __('Failed') }}</th><th></th></x-slot:head>
+                @foreach ($sources as $s)
+                    <tr>
+                        <td><a class="strong" href="{{ route('admin.migration.sources.show', $s) }}">{{ $s->name }}</a><div class="small muted mono">{{ $s->user.'@'.$s->host }}:{{ $s->port }}</div></td>
+                        <td>{{ $types[$s->type] ?? $s->type }} {{ $s->version }}</td>
+                        <td><x-ui.pill :status="['connected' => 'ok', 'error' => 'bad'][$s->status] ?? 'neutral'">{{ __(ucfirst($s->status)) }}</x-ui.pill></td>
+                        @php $total = (int) ($s->inventory['totals']['domains'] ?? 0); $started = $s->items_count - $s->failed_count; @endphp
+                        <td style="min-width:170px">
+                            @if ($total)
+                                <div class="mig-bar-line" role="progressbar" aria-label="{{ __('Migrated') }}" aria-valuemin="0" aria-valuemax="{{ $total }}" aria-valuenow="{{ $started }}"><span style="width: {{ min(100, round($started / $total * 100)) }}%"></span></div>
+                                <div class="small muted">{{ __(':done of :total domains started, :switched switched', ['done' => $started, 'total' => $total, 'switched' => $s->done_count]) }}</div>
+                            @else<span class="small muted">{{ __('Not read yet') }}</span>@endif
+                        </td>
+                        <td class="num">{{ $s->active_count }}</td>
+                        <td class="num">{{ $s->failed_count }}</td>
+                        <td class="num"><a class="btn btn-sm" href="{{ route('admin.migration.sources.show', ['source' => $s, 'show' => 'todo']) }}"><x-icon name="migrate" />{{ __('Migrate next domains') }}</a></td>
+                    </tr>
+                @endforeach
+            </x-ui.table>
+        @endif
+    </x-ui.card>
     <x-ui.card :title="__('How it works')">
         <ol class="mig-steps">
             <li><strong>{{ __('Connect') }}</strong><span>{{ __('Add the panel key to the Plesk server and test the SSH login.') }}</span></li>
@@ -45,25 +72,5 @@
         </x-ui.card>
     </section>
 
-    <x-ui.card :title="__('Source servers')" flush>
-        @if ($sources->isEmpty())
-            <x-ui.empty icon="migrate">{{ __('No source server yet.') }}</x-ui.empty>
-        @else
-            <x-ui.table>
-                <x-slot:head><th>{{ __('Server') }}</th><th>{{ __('Type') }}</th><th>{{ __('Status') }}</th><th class="num">{{ __('Domains') }}</th><th class="num">{{ __('Running') }}</th><th class="num">{{ __('Switched') }}</th><th class="num">{{ __('Failed') }}</th></x-slot:head>
-                @foreach ($sources as $s)
-                    <tr>
-                        <td><a class="strong" href="{{ route('admin.migration.sources.show', $s) }}">{{ $s->name }}</a><div class="small muted mono">{{ $s->user.'@'.$s->host }}:{{ $s->port }}</div></td>
-                        <td>{{ $types[$s->type] ?? $s->type }} {{ $s->version }}</td>
-                        <td><x-ui.pill :status="['connected' => 'ok', 'error' => 'bad'][$s->status] ?? 'neutral'">{{ __(ucfirst($s->status)) }}</x-ui.pill></td>
-                        <td class="num">{{ $s->inventory['totals']['domains'] ?? '–' }}</td>
-                        <td class="num">{{ $s->active_count }}</td>
-                        <td class="num">{{ $s->done_count }}</td>
-                        <td class="num">{{ $s->failed_count }}</td>
-                    </tr>
-                @endforeach
-            </x-ui.table>
-        @endif
-    </x-ui.card>
     @include('migration::admin.styles')
 </x-layouts.admin>
