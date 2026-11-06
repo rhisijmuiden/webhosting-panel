@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9b4571341e7fd12b686fd6c6ad8302fd",
+    "content-hash": "aa9e0fa5ad41d2441837c21e34840a56",
     "packages": [
         {
             "name": "brick/math",
@@ -3579,6 +3579,39 @@
                 "proprietary"
             ],
             "description": "Server migration for the Webhosting Panel: move websites, databases, mailboxes, certificates and DNS from a Plesk server.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/reports",
+            "version": "dev-claude/project-thread-9rbcxt",
+            "dist": {
+                "type": "path",
+                "url": "../packages/reports",
+                "reference": "025bebc751fd9ff484ac7d7132b3e9a3b5c7a85d"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Reports\\ReportsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Reports\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Monthly hosting report for the Webhosting Panel: one RHIS branded mail per customer with visitors, uptime, backups, security, mail and updates of the past month, a web version in the client panel, opt-out per customer and an admin preview.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8931,6 +8964,7 @@
         "rhis/files": 20,
         "rhis/git": 20,
         "rhis/migration": 20,
+        "rhis/reports": 20,
         "rhis/security": 20,
         "rhis/server-admin": 20,
         "rhis/subdomains": 20,
