@@ -7,13 +7,25 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Route;
 
 /**
- * Everything the client's domain page shows about one website, gathered from
- * the core and from the optional feature packages. A package that is not
- * installed (or switched off for customers) simply leaves its part out.
+ * Everything the domain page shows about one website, gathered from the core
+ * and from the optional feature packages. A package that is not installed (or
+ * switched off for customers) simply leaves its part out.
+ *
+ * The same page serves the client panel and the admin panel. Views ask for
+ * routes without their area prefix (has('files.browse'), url('files.browse'))
+ * and get the client or the admin twin; a client route without an admin twin
+ * is simply not there for admins.
  */
 class SiteOverview
 {
-    public const TABS = ['wordpress', 'tools', 'hosting', 'mail', 'start'];
+    public const TABS = ['wordpress', 'tools', 'hosting', 'mail', 'start', 'admin'];
+
+    /** Client routes whose admin twin has another name; null means "no admin twin". */
+    private const ADMIN_ROUTES = [
+        'backups.index' => 'admin.backups.browse',
+        'protection.show' => 'admin.protection.edit',
+        'shop.index' => null,
+    ];
 
     public readonly Collection $wordpress;
 
@@ -29,22 +41,22 @@ class SiteOverview
 
     public readonly ?string $webmailHost;
 
-    public function __construct(public readonly Website $website)
+    public function __construct(public readonly Website $website, public readonly string $area = 'client')
     {
-        $this->wordpress = $this->safe(fn () => $this->has('client.wordpress.index') && config('wordpress.customer_toolkit')
+        $this->wordpress = $this->safe(fn () => $this->has('wordpress.index') && $this->allows('wordpress.customer_toolkit')
             ? \Rhis\WordPress\Models\WordPressInstall::where('website_id', $website->id)->orderBy('path')->get() : null) ?? collect();
 
-        $this->gitRepos = $this->safe(fn () => $this->has('client.git.index') && config('git.customer_access')
+        $this->gitRepos = $this->safe(fn () => $this->has('git.index') && $this->allows('git.customer_access')
             ? \Rhis\Git\Models\GitRepository::where('website_id', $website->id)->orderBy('name')->get() : null) ?? collect();
 
-        $this->mailDomain = $this->safe(fn () => $this->has('client.mail.domains.show')
+        $this->mailDomain = $this->safe(fn () => $this->has('mail.domains.show')
             ? \Rhis\DnsMail\Models\MailDomain::withCount('mailboxes')
                 ->where('customer_id', $website->customer_id)
                 ->where(fn ($q) => $q->where('website_id', $website->id)->orWhere('domain', $website->domain))
                 ->orderByRaw('domain = ? desc', [$website->domain])->first() : null);
 
         $this->security = $this->safe(function () use ($website) {
-            if (! $this->has('client.vulns.index')) {
+            if (! $this->has('vulns.index')) {
                 return null;
             }
             $open = \Rhis\Vulnerabilities\Models\Finding::open()->where('website_id', $website->id);
@@ -52,7 +64,7 @@ class SiteOverview
             return ['total' => (clone $open)->count(), 'malware' => (clone $open)->where('kind', 'malware')->count()];
         });
 
-        $this->lastBackup = $this->safe(fn () => $this->has('client.backups.index')
+        $this->lastBackup = $this->safe(fn () => $this->has('backups.index')
             ? \Rhis\Backups\Models\ClientBackup::where('website_id', $website->id)->where('action', 'backup')
                 ->where('status', 'succeeded')->latest('finished_at')->first() : null);
 
@@ -70,9 +82,13 @@ class SiteOverview
             'hosting' => __('Hosting & DNS'),
             'mail' => __('Email'),
             'start' => __('Get started'),
+            'admin' => __('Administration'),
         ];
         if ($this->wordpress->isEmpty()) {
             unset($tabs['wordpress']);
+        }
+        if (! $this->isAdmin()) {
+            unset($tabs['admin']);
         }
 
         return $tabs;
@@ -85,14 +101,48 @@ class SiteOverview
         return isset($tabs[$requested]) ? $requested : array_key_first($tabs);
     }
 
+    public function isAdmin(): bool
+    {
+        return $this->area === 'admin';
+    }
+
+    /** The full route name in this area, or null when the area has no such page. */
+    public function routeName(string $route): ?string
+    {
+        $route = preg_replace('/^(client|admin)\./', '', $route);
+        if (! $this->isAdmin()) {
+            return 'client.'.$route;
+        }
+
+        return array_key_exists($route, self::ADMIN_ROUTES) ? self::ADMIN_ROUTES[$route] : 'admin.'.$route;
+    }
+
+    /** Whether this page may link to a route ('files.browse'; a 'client.' prefix is accepted too). */
     public function has(string $route): bool
     {
-        return Route::has($route) && app(\App\Services\Team\TeamAccess::class)->allowsRoute($route);
+        $name = $this->routeName($route);
+        if ($name === null || ! Route::has($name)) {
+            return false;
+        }
+
+        return $this->isAdmin() || app(\App\Services\Team\TeamAccess::class)->allowsRoute($name);
+    }
+
+    /** URL of a route in this area, or null when it is not there (or not allowed). */
+    public function url(string $route, mixed $parameters = []): ?string
+    {
+        return $this->has($route) ? route($this->routeName($route), $parameters) : null;
+    }
+
+    /** A customer-facing feature switch (config key); admins always have the feature. */
+    public function allows(string $configKey): bool
+    {
+        return $this->isAdmin() || (bool) config($configKey);
     }
 
     public function canUseTerminal(): bool
     {
-        return (bool) $this->website->package?->allow_ssh && $this->has('client.files.terminal');
+        return ($this->isAdmin() || (bool) $this->website->package?->allow_ssh) && $this->has('files.terminal');
     }
 
     public function diskPercent(): ?float
@@ -110,7 +160,7 @@ class SiteOverview
     /** Link to a tab of this website's mail domain page, or null without one. */
     public function mailLink(string $tab): ?string
     {
-        return $this->mailDomain ? route('client.mail.domains.show', [$this->mailDomain->id, 'tab' => $tab]) : null;
+        return $this->mailDomain ? $this->url('mail.domains.show', [$this->mailDomain->id, 'tab' => $tab]) : null;
     }
 
     public function hasLocalMail(): bool
