@@ -77,6 +77,16 @@ check "suspend is idempotent" bash -c "whp-site suspend site.test --json | jq -e
 check "unsuspend restores the site" bash -c "whp-site unsuspend site.test --json | jq -e '.suspended == false' >/dev/null && curl -s -H 'Host: site.test' http://127.0.0.1/ | grep -q php= && [[ \$(chage -l s_site_test | grep -i 'account expires') == *never* ]]"
 check "no HSTS or Alt-Svc on plain HTTP" bash -c "! curl -s -D - -o /dev/null -H 'Host: site.test' http://127.0.0.1/ | grep -qiE 'strict-transport|alt-svc'"
 check "security headers" bash -c "curl -sI -H 'Host: site.test' http://127.0.0.1/ | grep -qi x-content-type-options"
+echo "== domain aliases"
+check "alias add" bash -c "whp-site alias add site.test alias.test --no-ssl --json | jq -e '.alias.mode == \"serve\" and .alias.www'"
+check "alias serves the site" bash -c "curl -s -H 'Host: alias.test' http://127.0.0.1/ | grep -q php= && curl -s -H 'Host: www.alias.test' http://127.0.0.1/ | grep -q php="
+check "alias listed in show" bash -c "whp-site show site.test | jq -e '.domain_aliases[0].domain == \"alias.test\"'"
+check "alias used twice is refused" bash -c "! whp-site alias add site.test alias.test --no-ssl"
+check "alias of an existing site is refused" bash -c "! whp-site alias add site.test site.test --no-ssl"
+check "alias redirect mode" bash -c "whp-site alias mode site.test alias.test redirect --json >/dev/null && curl -s -o /dev/null -D - -H 'Host: alias.test' http://127.0.0.1/a?b=1 | grep -qi '^location: http://site.test/a?b=1'"
+check "site cannot be added on an alias name" bash -c "! whp-site add alias.test --no-ssl"
+check "alias remove" bash -c "whp-site alias remove site.test alias.test --json | jq -e '.domain_aliases == []' >/dev/null && ! curl -s -H 'Host: alias.test' http://127.0.0.1/ | grep -q php="
+check "nginx config still valid" nginx -t
 check "add laravel site" whp-site add app.test --profile laravel --no-ssl --json
 printf '<?php echo "laravel-docroot";\n' >/var/www/vhosts/app.test/app/public/index.php
 check "laravel docroot app/public and pretty URLs" bash -c "curl -s -H 'Host: app.test' http://127.0.0.1/some/route | grep -q laravel-docroot"
