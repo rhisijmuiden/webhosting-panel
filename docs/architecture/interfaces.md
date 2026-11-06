@@ -13,6 +13,7 @@ in the same pull request as the code that needs the change.
 | `agent/` | phase 2 | `whp-agent`, root daemon in Python 3 (stdlib only, Debian 13 ships 3.13) |
 | `packages/<name>/` | each phase | Composer packages the panel loads through a path repository |
 | `packages/dns-mail/` | phase 3 | Namespace `Rhis\DnsMail\` |
+| `packages/apps/` | app installer | Namespace `Rhis\Apps\` |
 | `webmail/` | phase 3 | SnappyMail theme and config |
 | `backup/` | phase 4 | `whp-backup` CLI (restic + rclone, JSON output) |
 | `docs/` | all | Documentation, `docs/api/` holds the CRM OpenAPI spec |
@@ -113,6 +114,15 @@ temporary files), `backup.target_test`, `backup.target_remove`,
 `backup.get_schedule`, and the jobs `backup.run`, `backup.restore`,
 `backup.check`, `backup.prune`. The screens live in `packages/backups`
 (`Rhis\Backups\`, admin `/admin/backups`, client `/backups`).
+
+Actions added by the app installer (`databases.py`, `apps.py`, see `packages/apps/README.md`):
+
+| Action | What |
+| --- | --- |
+| `db.list`, `db.create`, `db.drop` | MariaDB database + user per site (root over the unix socket, SQL on stdin). Ownership is kept in `/var/lib/webhosting-panel/databases.json`; a site can only drop its own databases. `db.create` returns the password once. |
+| `apps.catalog`, `apps.list` | Installable apps and installed apps (state in `/var/lib/webhosting-panel/apps/<domain>.json`) |
+| `apps.install` | Job: `{domain, app, path, title, admin_user, admin_email, admin_password, locale}`. Empty folder only, runs as the site user, rolls back on failure. Result: `id, version, url, admin_url, database, page_cache_disabled` |
+| `apps.remove` | Job: `{domain, id}` removes files, database and the Nginx snippet `/etc/nginx/whp/sites/<domain>/app-<id>.conf` |
 
 Actions added by the Plesk migration (`migrate.py`, see `docs/migration.md`):
 `migrate.key`, `migrate.connect`, `migrate.forget_host`, `migrate.credentials`

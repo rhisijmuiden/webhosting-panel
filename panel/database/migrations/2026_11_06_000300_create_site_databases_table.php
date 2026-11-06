@@ -13,7 +13,7 @@ return new class extends Migration
             $table->foreignId('website_id')->constrained()->cascadeOnDelete();
             $table->string('name', 64)->unique();
             $table->json('users')->nullable();
-            $table->string('origin')->default('panel'); // panel, migration
+            $table->string('origin')->default('panel'); // panel, migration, app
             $table->timestamps();
         });
     }
