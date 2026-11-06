@@ -127,6 +127,7 @@ class RenderTest(unittest.TestCase):
         files = security.render_all(self.cfg())
         names = {str(p.relative_to(security.CROWDSEC_DIR)) for p in files}
         self.assertIn("acquis.d/whp-panel-auth.yaml", names)
+        self.assertIn("acquis.d/whp-mail-journal.yaml", names)
         self.assertIn("postoverflows/s01-whitelist/whp-hub-overrides.yaml", names)
         site = docs(files[security.CROWDSEC_DIR / "parsers/s02-enrich/whp-site.yaml"])[0]
         self.assertNotIn("onsuccess", site)  # must not skip the other enrich parsers

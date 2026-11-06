@@ -257,6 +257,7 @@ for _ in range(4):
     except Exception as e:
         print("imap:", type(e).__name__)
 PY
+  echo "     CrowdSec acquisition:"; cat /etc/crowdsec/acquis.yaml /etc/crowdsec/acquis.d/*.yaml 2>/dev/null | grep -vE '^\s*(#|$)' | sed 's/^/       /'
   check "failed SMTP logins (submission) get the address blocked" wait_ban 203.0.113.60 whp/mail-bf
   check "failed IMAP logins get the address blocked" wait_ban 203.0.113.61 whp/mail-bf
   cscli decisions delete --ip 203.0.113.50 >/dev/null 2>&1 || true

@@ -369,6 +369,16 @@ ACQUIS = {
 }
 
 
+# Debian 13 logs to the journal only (no /var/log/mail.log), and CrowdSec's own
+# setup does not pick up Postfix and Dovecot there. Without this, failed SMTP and
+# IMAP logins are never seen.
+JOURNAL_ACQUIS = {
+    "source": "journalctl",
+    "journalctl_filter": ["_SYSTEMD_UNIT=postfix@-.service", "_SYSTEMD_UNIT=dovecot.service"],
+    "labels": {"type": "syslog"},
+}
+
+
 def render_all(cfg):
     c = CROWDSEC_DIR
     return {
@@ -380,6 +390,7 @@ def render_all(cfg):
         c / "postoverflows" / "s01-whitelist" / "whp-hub-overrides.yaml": _docs([HUB_OVERRIDES]),
         c / "contexts" / "whp.yaml": _docs([CONTEXT]),
         c / "acquis.d" / "whp-panel-auth.yaml": _docs([ACQUIS]),
+        c / "acquis.d" / "whp-mail-journal.yaml": _docs([JOURNAL_ACQUIS]),
     }
 
 
