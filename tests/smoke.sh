@@ -158,20 +158,20 @@ PY
 
   export -f agent app_params
   check "app catalog" bash -c 'agent apps.catalog | jq -e "[.apps[].id] == [\"wordpress\",\"joomla\",\"nextcloud\"]"'
-  whp-site add wp.test --php 8.4 --no-ssl --json >/dev/null
-  check "install WordPress (nl) through the agent" agent_job apps.install "$(app_params wp.test wordpress '' nl)"
+  check "add a site for the app installer" whp-site add appwp.test --php 8.4 --no-ssl --json
+  check "install WordPress (nl) through the agent" agent_job apps.install "$(app_params appwp.test wordpress '' nl)"
   WP_ID=$(jq -r .result.id /tmp/app-job.json); WP_DB=$(jq -r .result.database /tmp/app-job.json)
-  check "WordPress home page answers" bash -c "curl -s -H 'Host: wp.test' http://127.0.0.1/ | grep -q 'wp-content'"
-  check "WordPress is in Dutch" bash -c "curl -s -H 'Host: wp.test' http://127.0.0.1/ | grep -q 'lang=\"nl-NL\"'"
-  check "WordPress login page" bash -c "[[ \$(curl -s -o /dev/null -w %{http_code} -H 'Host: wp.test' http://127.0.0.1/wp-login.php) == 200 ]]"
-  check "WordPress files belong to the site user and nginx can read them" bash -c "[[ \$(stat -c %U /var/www/vhosts/wp.test/public/wp-includes/version.php) == s_wp_test && \$(stat -c %a /var/www/vhosts/wp.test/public/wp-includes/css) == 755 ]]"
-  check "wp-config.php is private" bash -c "[[ \$(stat -c %a /var/www/vhosts/wp.test/public/wp-config.php) == 600 ]]"
+  check "WordPress home page answers" bash -c "curl -s -H 'Host: appwp.test' http://127.0.0.1/ | grep -q 'wp-content'"
+  check "WordPress is in Dutch" bash -c "curl -s -H 'Host: appwp.test' http://127.0.0.1/ | grep -q 'lang=\"nl-NL\"'"
+  check "WordPress login page" bash -c "[[ \$(curl -s -o /dev/null -w %{http_code} -H 'Host: appwp.test' http://127.0.0.1/wp-login.php) == 200 ]]"
+  check "WordPress files belong to the site user and nginx can read them" bash -c "[[ \$(stat -c %U /var/www/vhosts/appwp.test/public/wp-includes/version.php) == s_appwp_test && \$(stat -c %a /var/www/vhosts/appwp.test/public/wp-includes/css) == 755 ]]"
+  check "wp-config.php is private" bash -c "[[ \$(stat -c %a /var/www/vhosts/appwp.test/public/wp-config.php) == 600 ]]"
   check "WordPress database and user exist" bash -c "mariadb -N -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$WP_DB'\" | grep -qv '^0$'"
   check "admin password is not in the job file" bash -c "! grep -rq 'Smoke-test-pass-123' /var/lib/webhosting-panel/jobs /var/lib/webhosting-panel/apps"
-  check "second install in a used folder is refused" bash -c '! agent apps.install "$(app_params wp.test joomla portal en)"'
-  check "remove WordPress" agent_job apps.remove "{\"domain\":\"wp.test\",\"id\":\"$WP_ID\"}"
-  check "after removal: placeholder back, database gone" bash -c "[[ \$(ls /var/www/vhosts/wp.test/public) == index.html ]] && ! mariadb -e 'USE \`$WP_DB\`' 2>/dev/null"
-  whp-site add joomla.test --php 8.4 --no-ssl --json >/dev/null
+  check "second install in a used folder is refused" bash -c '! agent apps.install "$(app_params appwp.test joomla portal en)"'
+  check "remove WordPress" agent_job apps.remove "{\"domain\":\"appwp.test\",\"id\":\"$WP_ID\"}"
+  check "after removal: placeholder back, database gone" bash -c "[[ \$(ls /var/www/vhosts/appwp.test/public) == index.html ]] && ! mariadb -e 'USE \`$WP_DB\`' 2>/dev/null"
+  check "add a site for Joomla" whp-site add joomla.test --php 8.4 --no-ssl --json
   check "install Joomla in a subfolder" agent_job apps.install "$(app_params joomla.test joomla portal en)"
   check "Joomla answers in /portal/" bash -c "curl -s -L -H 'Host: joomla.test' http://127.0.0.1/portal/ | grep -qi 'joomla'"
   check "Joomla administrator login" bash -c "[[ \$(curl -s -o /dev/null -w %{http_code} -H 'Host: joomla.test' http://127.0.0.1/portal/administrator/) == 200 ]]"
