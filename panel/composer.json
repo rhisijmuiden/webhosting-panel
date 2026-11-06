@@ -21,6 +21,7 @@
         "rhis/git": "@dev",
         "rhis/migration": "@dev",
         "rhis/security": "@dev",
+        "rhis/server-admin": "@dev",
         "rhis/vulnerabilities": "@dev",
         "rhis/wordpress": "@dev"
     },

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "53bd6726f4c15fd62113064da1c4cb7e",
+    "content-hash": "3f85c418b8615ddbbb8d5048266e7f51",
     "packages": [
         {
             "name": "brick/math",
@@ -3307,7 +3307,7 @@
         },
         {
             "name": "rhis/apps",
-            "version": "dev-claude/project-thread-0lz2y1",
+            "version": "dev-claude/project-thread-3oea1o",
             "dist": {
                 "type": "path",
                 "url": "../packages/apps",
@@ -3340,7 +3340,7 @@
         },
         {
             "name": "rhis/backups",
-            "version": "dev-claude/project-thread-0lz2y1",
+            "version": "dev-claude/project-thread-3oea1o",
             "dist": {
                 "type": "path",
                 "url": "../packages/backups",
@@ -3373,7 +3373,7 @@
         },
         {
             "name": "rhis/crm-api",
-            "version": "dev-claude/project-thread-0lz2y1",
+            "version": "dev-claude/project-thread-3oea1o",
             "dist": {
                 "type": "path",
                 "url": "../packages/crm-api",
@@ -3406,7 +3406,7 @@
         },
         {
             "name": "rhis/dns-mail",
-            "version": "dev-claude/project-thread-0lz2y1",
+            "version": "dev-claude/project-thread-3oea1o",
             "dist": {
                 "type": "path",
                 "url": "../packages/dns-mail",
@@ -3454,7 +3454,7 @@
         },
         {
             "name": "rhis/domain-aliases",
-            "version": "dev-claude/project-thread-0lz2y1",
+            "version": "dev-claude/project-thread-3oea1o",
             "dist": {
                 "type": "path",
                 "url": "../packages/domain-aliases",
@@ -3487,7 +3487,7 @@
         },
         {
             "name": "rhis/files",
-            "version": "dev-claude/project-thread-0lz2y1",
+            "version": "dev-claude/project-thread-3oea1o",
             "dist": {
                 "type": "path",
                 "url": "../packages/files",
@@ -3520,7 +3520,7 @@
         },
         {
             "name": "rhis/git",
-            "version": "dev-claude/project-thread-0lz2y1",
+            "version": "dev-claude/project-thread-3oea1o",
             "dist": {
                 "type": "path",
                 "url": "../packages/git",
@@ -3553,7 +3553,7 @@
         },
         {
             "name": "rhis/migration",
-            "version": "dev-claude/project-thread-0lz2y1",
+            "version": "dev-claude/project-thread-3oea1o",
             "dist": {
                 "type": "path",
                 "url": "../packages/migration",
@@ -3586,7 +3586,7 @@
         },
         {
             "name": "rhis/security",
-            "version": "dev-claude/project-thread-0lz2y1",
+            "version": "dev-claude/project-thread-3oea1o",
             "dist": {
                 "type": "path",
                 "url": "../packages/security",
@@ -3618,8 +3618,41 @@
             }
         },
         {
+            "name": "rhis/server-admin",
+            "version": "dev-claude/project-thread-3oea1o",
+            "dist": {
+                "type": "path",
+                "url": "../packages/server-admin",
+                "reference": "96371c06d08ffc1f8ece66fb8047bf6554c17f63"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\ServerAdmin\\ServerAdminServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\ServerAdmin\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Server management for the Webhosting Panel: Debian updates, reboot (never shutdown), a maintenance window with health checks, automatic patching of critical CVEs, PHP end-of-life handling and scheduled maintenance tasks (database optimize, cleanup).",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "rhis/vulnerabilities",
-            "version": "dev-claude/project-thread-0lz2y1",
+            "version": "dev-claude/project-thread-3oea1o",
             "dist": {
                 "type": "path",
                 "url": "../packages/vulnerabilities",
@@ -3652,7 +3685,7 @@
         },
         {
             "name": "rhis/wordpress",
-            "version": "dev-claude/project-thread-0lz2y1",
+            "version": "dev-claude/project-thread-3oea1o",
             "dist": {
                 "type": "path",
                 "url": "../packages/wordpress",
@@ -8866,6 +8899,7 @@
         "rhis/git": 20,
         "rhis/migration": 20,
         "rhis/security": 20,
+        "rhis/server-admin": 20,
         "rhis/vulnerabilities": 20,
         "rhis/wordpress": 20
     },
