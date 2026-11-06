@@ -1,0 +1,24 @@
+{
+    "name": "rhis/security",
+    "description": "Login protection for the Webhosting Panel: brute-force thresholds, per-site protection and allowlists, on top of CrowdSec through the agent.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rhis\\Security\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rhis\\Security\\SecurityServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

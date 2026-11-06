@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "50eccc8e886a74e4a12f2bef6d9fa743",
+    "content-hash": "3bb0db612c0affd8c1a2b32f53b7d748",
     "packages": [
         {
             "name": "brick/math",
@@ -3307,7 +3307,7 @@
         },
         {
             "name": "rhis/apps",
-            "version": "dev-claude/project-thread-6er7hu",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "../packages/apps",
@@ -3340,7 +3340,7 @@
         },
         {
             "name": "rhis/backups",
-            "version": "dev-claude/project-thread-6er7hu",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "../packages/backups",
@@ -3373,7 +3373,7 @@
         },
         {
             "name": "rhis/crm-api",
-            "version": "dev-claude/project-thread-6er7hu",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "../packages/crm-api",
@@ -3406,7 +3406,7 @@
         },
         {
             "name": "rhis/dns-mail",
-            "version": "dev-claude/project-thread-6er7hu",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "../packages/dns-mail",
@@ -3454,7 +3454,7 @@
         },
         {
             "name": "rhis/domain-aliases",
-            "version": "dev-claude/project-thread-6er7hu",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "../packages/domain-aliases",
@@ -3487,7 +3487,7 @@
         },
         {
             "name": "rhis/git",
-            "version": "dev-claude/project-thread-6er7hu",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "../packages/git",
@@ -3520,7 +3520,7 @@
         },
         {
             "name": "rhis/migration",
-            "version": "dev-claude/project-thread-6er7hu",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "../packages/migration",
@@ -3552,8 +3552,41 @@
             }
         },
         {
+            "name": "rhis/security",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "../packages/security",
+                "reference": "18caad504c1c6f5a9deb8c0179b35b761b8b64ba"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Security\\SecurityServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Security\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Login protection for the Webhosting Panel: brute-force thresholds, per-site protection and allowlists, on top of CrowdSec through the agent.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "rhis/vulnerabilities",
-            "version": "dev-claude/project-thread-6er7hu",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "../packages/vulnerabilities",
@@ -3586,7 +3619,7 @@
         },
         {
             "name": "rhis/wordpress",
-            "version": "dev-claude/project-thread-6er7hu",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "../packages/wordpress",
@@ -8798,6 +8831,7 @@
         "rhis/domain-aliases": 20,
         "rhis/git": 20,
         "rhis/migration": 20,
+        "rhis/security": 20,
         "rhis/vulnerabilities": 20,
         "rhis/wordpress": 20
     },

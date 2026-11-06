@@ -65,6 +65,13 @@ class FakeAgentClient implements AgentClient
             ]],
             'crowdsec.metrics' => ['alerts_24h' => 312],
             'crowdsec.ban', 'crowdsec.unban' => ['address' => $params['address'] ?? ''],
+            'security.apply' => ['changed' => [], 'warning' => null],
+            'security.site_activity' => ['domain' => $params['domain'] ?? '', 'days' => $params['days'] ?? 7, 'alerts' => [
+                ['address' => '203.0.113.7', 'country' => 'NL', 'scenario' => 'whp/wordpress-bf', 'events' => 5, 'at' => now()->subHours(2)->toIso8601String(), 'blocked_for' => '58m'],
+                ['address' => '198.51.100.23', 'country' => 'US', 'scenario' => 'crowdsecurity/http-wordpress-scan', 'events' => 12, 'at' => now()->subDay()->toIso8601String(), 'blocked_for' => null],
+            ]],
+            'security.site_release' => ['address' => $params['address'] ?? '', 'released' => 0],
+            'security.check_ip' => ['address' => $params['address'] ?? '', 'blocked' => false, 'decisions' => []],
             'panel.version' => ['version' => trim((string) @file_get_contents(base_path('../VERSION'))) ?: '0.0.0', 'channel' => config('panel.channel'), 'branch' => 'main', 'commit' => 'dev', 'commit_date' => null],
             'panel.check_update' => [
                 'channel' => $params['channel'] ?? config('panel.channel'), 'branch' => 'main',

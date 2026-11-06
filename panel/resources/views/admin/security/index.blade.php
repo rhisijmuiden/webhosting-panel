@@ -1,5 +1,6 @@
 <x-layouts.admin :title="__('Security')">
     <div class="page-head"><div><h1>{{ __('Security') }}</h1><p class="sub">{{ __('CrowdSec watches the logs and blocks attackers on SSH, mail, the panel and WordPress logins.') }}</p></div></div>
+    @includeIf('security::admin.summary-card')
     @includeIf('wordpress::admin.security-card')
     @if ($error)<div class="alert alert-bad" role="alert"><x-icon name="info" />{{ $error }}</div>@endif
     <section class="grid grid-stats">

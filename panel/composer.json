@@ -19,6 +19,7 @@
         "rhis/domain-aliases": "@dev",
         "rhis/git": "@dev",
         "rhis/migration": "@dev",
+        "rhis/security": "@dev",
         "rhis/vulnerabilities": "@dev",
         "rhis/wordpress": "@dev"
     },

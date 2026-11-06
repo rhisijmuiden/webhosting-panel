@@ -30,6 +30,7 @@
                 <div><button type="submit" class="btn btn-dark">{{ __('Save') }}</button></div>
             </form>
         </x-ui.card>
+        @includeIf('security::client.site-card', ['website' => $website])
         <x-ui.card :title="__('Details')">
             <dl class="kv">
                 <dt>{{ __('Type') }}</dt><dd>{{ __(ucfirst($website->profile)) }}</dd>
