@@ -107,8 +107,28 @@ class FakeAgentClient implements AgentClient
             'mail.dkim_generate', 'mail.dkim_get' => ['domain' => $params['domain'] ?? '', 'selector' => 'whp', 'algorithm' => 'rsa',
                 'public_key' => 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA'.substr(base64_encode(hash('sha256', (string) ($params['domain'] ?? ''), true)), 0, 40)],
             'mail.mailbox_usage' => ['usage' => []],
+            'mail.spam_policy_sync' => ['changed' => false, 'domains' => count($params['domains'] ?? [])],
+            'mail.quarantine_list' => $this->quarantine($params['domain'] ?? ''),
+            'mail.quarantine_release' => ['user' => $params['user'] ?? '', 'uid' => $params['uid'] ?? 0, 'learned' => true],
+            'mail.quarantine_delete' => ['user' => $params['user'] ?? '', 'deleted' => count($params['uids'] ?? []), 'learned' => 0],
+            'mail.tlsa' => ['usage' => 3, 'selector' => 1, 'matching_type' => 1, 'certificate' => hash('sha256', 'fake-mail-key'),
+                'cert_file' => '/etc/letsencrypt/live/mail.example.test/fullchain.pem', 'not_after' => 'Feb  3 12:00:00 2027 GMT', 'reuse_key' => true],
             default => throw new AgentException('unknown_action', "Unknown action: {$action}"),
         };
+    }
+
+    private function quarantine(string $domain): array
+    {
+        $user = 'info@'.$domain;
+
+        return ['domain' => $domain, 'truncated' => false, 'messages' => [
+            ['user' => $user, 'uid' => 12, 'guid' => 'g12', 'date' => now()->subHours(2)->format('Y-m-d H:i:s'), 'size' => 18400,
+                'from' => 'Pakketdienst <noreply@track-parcel.example>', 'to' => $user, 'subject' => 'Uw pakket kon niet worden bezorgd', 'score' => 13, 'virus' => false],
+            ['user' => $user, 'uid' => 11, 'guid' => 'g11', 'date' => now()->subDay()->format('Y-m-d H:i:s'), 'size' => 52100,
+                'from' => 'Leverancier BV <facturen@leverancier.example>', 'to' => $user, 'subject' => 'Factuur 2026-1182', 'score' => 10, 'virus' => false],
+            ['user' => $user, 'uid' => 9, 'guid' => 'g9', 'date' => now()->subDays(3)->format('Y-m-d H:i:s'), 'size' => 210000,
+                'from' => 'invoice@unknown.example', 'to' => $user, 'subject' => 'Payment overdue', 'score' => 15, 'virus' => true],
+        ]];
     }
 
     private function statsSample(): array

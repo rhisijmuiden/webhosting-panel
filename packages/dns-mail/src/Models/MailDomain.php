@@ -25,20 +25,21 @@ class MailDomain extends Model
     protected $attributes = [
         'provider' => 'rhis', 'dns_managed' => true, 'proxied' => true, 'server_sends' => true, 'spf_all' => '~',
         'dmarc_policy' => 'quarantine', 'mta_sts_mode' => 'testing', 'm365_intune' => false, 'dns_status' => 'unknown',
+        'spam_quarantine_score' => 10, 'spam_junk' => true,
     ];
 
     protected $fillable = [
         'customer_id', 'website_id', 'domain', 'provider', 'dns_managed', 'proxied', 'cloudflare_zone_id',
         'dkim_public_key', 'server_sends', 'spf_extra', 'spf_all', 'dmarc_policy', 'dmarc_rua', 'mta_sts_mode',
         'm365_tenant', 'm365_mx_host', 'm365_verification', 'm365_dkim_selector1', 'm365_dkim_selector2', 'm365_intune',
-        'dns_status', 'dns_error', 'dns_checked_at',
+        'dns_status', 'dns_error', 'dns_checked_at', 'spam_quarantine_score', 'spam_junk', 'bimi_logo_url', 'bimi_vmc_url',
     ];
 
     protected function casts(): array
     {
         return [
             'dns_managed' => 'boolean', 'proxied' => 'boolean', 'server_sends' => 'boolean', 'm365_intune' => 'boolean',
-            'dns_checked_at' => 'datetime',
+            'spam_junk' => 'boolean', 'spam_quarantine_score' => 'integer', 'dns_checked_at' => 'datetime',
         ];
     }
 
@@ -60,6 +61,11 @@ class MailDomain extends Model
     public function aliases(): HasMany
     {
         return $this->hasMany(MailAlias::class)->orderBy('local_part');
+    }
+
+    public function senderRules(): HasMany
+    {
+        return $this->hasMany(MailSenderRule::class)->orderBy('type')->orderBy('value');
     }
 
     public function providerEnum(): MailProvider

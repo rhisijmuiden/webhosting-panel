@@ -157,11 +157,13 @@ final class SyncPlanner
             'MX' => 'mx',
             'SRV' => 'srv',
             'CAA' => 'caa',
+            'TLSA' => 'tlsa',
             'TXT' => match (true) {
                 str_starts_with(strtolower($r->content), 'v=spf1') => 'spf',
                 str_starts_with(strtolower($r->content), 'v=dmarc1') => 'dmarc',
                 str_starts_with(strtolower($r->content), 'v=dkim1') => 'dkim',
                 str_starts_with(strtolower($r->content), 'ms=') => 'ms-verify',
+                str_starts_with(strtolower($r->content), 'v=bimi1') => 'bimi',
                 default => 'txt:' . substr(sha1($r->content), 0, 12),
             },
         };

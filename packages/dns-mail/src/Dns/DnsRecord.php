@@ -10,13 +10,14 @@ use InvalidArgumentException;
  * One DNS record, as the panel wants it or as Cloudflare has it.
  *
  * Names are fully qualified, lower case and without a trailing dot.
- * TTL 1 means "automatic" in Cloudflare.
+ * TTL 1 means "automatic" in Cloudflare. TLSA content is "usage selector
+ * matching-type hex", e.g. "3 1 1 9f86d0...".
  */
 final readonly class DnsRecord
 {
     public const string MANAGED_MARKER = 'managed:rhis-panel';
 
-    public const array SUPPORTED_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'CAA'];
+    public const array SUPPORTED_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'CAA', 'TLSA'];
 
     public string $type;
     public string $name;
@@ -48,12 +49,25 @@ final readonly class DnsRecord
         }
         $this->type = $type;
         $this->name = self::normaliseName($name);
-        $this->content = $type === 'TXT' ? self::unquoteTxt($content) : self::normaliseHost($type, $content);
+        $this->content = match ($type) {
+            'TXT' => self::unquoteTxt($content),
+            'TLSA' => self::normaliseTlsa($content),
+            default => self::normaliseHost($type, $content),
+        };
     }
 
     public static function normaliseName(string $name): string
     {
         return rtrim(strtolower(trim($name)), '.');
+    }
+
+    private static function normaliseTlsa(string $content): string
+    {
+        if (!preg_match('/^\s*([0-3])\s+([01])\s+([0-2])\s+([0-9a-f\s]+)$/i', $content, $m)) {
+            throw new InvalidArgumentException('TLSA content must be "usage selector matching-type hex"');
+        }
+
+        return "{$m[1]} {$m[2]} {$m[3]} " . strtolower((string) preg_replace('/\s+/', '', $m[4]));
     }
 
     private static function normaliseHost(string $type, string $content): string
@@ -145,6 +159,9 @@ final readonly class DnsRecord
         $type = strtoupper((string) ($r['type'] ?? ''));
         $data = is_array($r['data'] ?? null) ? $r['data'] : null;
         $srv = null;
+        if ($type === 'TLSA' && $data !== null) {
+            $r['content'] = sprintf('%d %d %d %s', $data['usage'] ?? 0, $data['selector'] ?? 0, $data['matching_type'] ?? 0, $data['certificate'] ?? '');
+        }
         if ($type === 'SRV' && $data !== null) {
             $srv = [
                 'priority' => (int) ($data['priority'] ?? $r['priority'] ?? 0),
@@ -178,6 +195,9 @@ final readonly class DnsRecord
                 'port' => $this->srv['port'],
                 'target' => $this->srv['target'],
             ];
+        } elseif ($this->type === 'TLSA') {
+            [$usage, $selector, $matching, $cert] = explode(' ', $this->content);
+            $payload['data'] = ['usage' => (int) $usage, 'selector' => (int) $selector, 'matching_type' => (int) $matching, 'certificate' => $cert];
         } else {
             $payload['content'] = $this->type === 'TXT' ? $this->txtWireContent() : $this->content;
         }

@@ -7,6 +7,7 @@ namespace Rhis\DnsMail\Services;
 use App\Models\ActivityLog;
 use Rhis\DnsMail\Cloudflare\CloudflareClient;
 use Rhis\DnsMail\Dns\DnsRecord;
+use Rhis\DnsMail\Dns\RecordScope;
 use Rhis\DnsMail\Dns\SyncPlan;
 use Rhis\DnsMail\Dns\SyncPlanner;
 use Rhis\DnsMail\Http\HttpClient;
@@ -59,7 +60,7 @@ final class DnsSync
             if ($zoneId === null) {
                 return ['plan' => null, 'existing' => [], 'error' => __('This domain is not in the connected Cloudflare account.')];
             }
-            $existing = $this->client()->listRecords($zoneId);
+            $existing = $this->scoped($d, $this->client()->listRecords($zoneId));
             $plan = $this->planner->plan($d->domain, $this->records->all($d), $existing, $adopt, $d->provider);
             if (!$adopt) {
                 $d->update([
@@ -77,11 +78,22 @@ final class DnsSync
         }
     }
 
+    /**
+     * @param list<DnsRecord> $records
+     * @return list<DnsRecord>
+     */
+    private function scoped(MailDomain $d, array $records): array
+    {
+        $nested = MailDomain::query()->where('domain', 'like', '%.' . $d->domain)->pluck('domain')->all();
+
+        return RecordScope::forDomain($d->domain, $records, $nested);
+    }
+
     public function apply(MailDomain $d, bool $adopt = false): SyncPlan
     {
         $zoneId = $this->zoneId($d) ?? throw new RuntimeException(__('This domain is not in the connected Cloudflare account.'));
         $client = $this->client();
-        $plan = $this->planner->plan($d->domain, $this->records->all($d), $client->listRecords($zoneId), $adopt, $d->provider);
+        $plan = $this->planner->plan($d->domain, $this->records->all($d), $this->scoped($d, $client->listRecords($zoneId)), $adopt, $d->provider);
         $client->batch(
             $zoneId,
             array_map(fn ($c) => $c->record, $plan->ofAction('create')),
@@ -112,7 +124,8 @@ final class DnsSync
     public function deleteOwnRecord(MailDomain $d, string $recordId): void
     {
         $zoneId = $this->zoneId($d) ?? throw new RuntimeException(__('This domain is not in the connected Cloudflare account.'));
-        foreach ($this->client()->listRecords($zoneId) as $r) {
+        // Only records of this domain: a zone can also hold other customers' subdomains.
+        foreach ($this->scoped($d, $this->client()->listRecords($zoneId)) as $r) {
             if ($r->id === $recordId) {
                 if ($r->isManaged()) {
                     throw new RuntimeException(__('This record is managed by the panel. Change the mail or website settings instead.'));

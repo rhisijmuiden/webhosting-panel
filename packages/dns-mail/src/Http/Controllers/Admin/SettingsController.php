@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Rhis\DnsMail\Cloudflare\CloudflareClient;
 use Rhis\DnsMail\Http\HttpClient;
+use Rhis\DnsMail\Services\DaneSync;
 use Rhis\DnsMail\Services\DnsMailConfig;
 use Rhis\DnsMail\Services\MailPusher;
 use Throwable;
@@ -30,7 +31,12 @@ class SettingsController extends Controller
             $values[$key] = $this->config->get($key);
         }
 
-        return view('dns-mail::admin.settings', ['values' => $values, 'hasToken' => $this->config->hasCloudflare()]);
+        return view('dns-mail::admin.settings', [
+            'values' => $values,
+            'hasToken' => $this->config->hasCloudflare(),
+            'daneOn' => $this->config->daneEnabled(),
+            'daneRecord' => '_25._tcp.' . $this->config->mailHost(),
+        ]);
     }
 
     public function update(Request $request, MailPusher $pusher): RedirectResponse
@@ -47,7 +53,9 @@ class SettingsController extends Controller
             'tlsrpt_rua' => ['nullable', 'email', 'max:190'],
             'm365_order_url' => ['nullable', 'url:https', 'max:300'],
             'm365_price' => ['nullable', 'string', 'max:60'],
+            'default_quarantine_score' => ['nullable', 'integer', 'min:6', 'max:50'],
         ]);
+        $data['dane'] = $this->config->daneEnabled() ? '1' : null; // changed with the DANE buttons only
         foreach (DnsMailConfig::KEYS as $key) {
             $this->settings->set('dnsmail.' . $key, $data[$key] ?? null);
         }
@@ -65,6 +73,36 @@ class SettingsController extends Controller
         }
 
         return back()->with('status', __('DNS and mail settings saved.'))->with('warnings', array_filter([$warning]));
+    }
+
+    /** DANE: check, publish (and keep publishing daily) or withdraw the TLSA record. */
+    public function dane(Request $request, DaneSync $dane): RedirectResponse
+    {
+        $action = $request->validate(['action' => ['required', 'in:check,publish,withdraw']])['action'];
+        try {
+            if ($action === 'check') {
+                $status = $dane->status();
+
+                return back()->with('dane', [
+                    'record' => $dane->recordName(),
+                    'value' => $status['desired'][0]->content,
+                    'dnssec' => $status['dnssec'],
+                    'not_after' => $status['tlsa']['not_after'] ?? null,
+                    'problems' => $status['problems'],
+                ]);
+            }
+            $plan = $dane->apply($action === 'publish');
+        } catch (Throwable $e) {
+            return back()->withErrors(['dane' => $e->getMessage()]);
+        }
+        if ($plan->conflicts !== []) {
+            return back()->withErrors(['dane' => __('A TLSA record at :name was not made by the panel. Remove it in Cloudflare first.', ['name' => $dane->recordName()])]);
+        }
+        $this->settings->set('dnsmail.dane', $action === 'publish' ? '1' : null);
+
+        return back()->with('status', $action === 'publish'
+            ? __('DANE is on. The panel checks the record every night.')
+            : __('DANE record withdrawn.'));
     }
 
     public function test(HttpClient $http): RedirectResponse

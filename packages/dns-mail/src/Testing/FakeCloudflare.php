@@ -19,6 +19,9 @@ final class FakeCloudflare implements HttpClient
     /** @var list<array{method: string, path: string, body: ?array}> */
     public array $requests = [];
 
+    /** @var array<string, string> zone id => DNSSEC status ("active", "disabled", ...) */
+    public array $dnssec = [];
+
     private int $seq = 0;
 
     public function addZone(string $name, array $records = []): string
@@ -64,6 +67,9 @@ final class FakeCloudflare implements HttpClient
 
             return $this->ok(array_map(fn ($z) => ['id' => $z['id'], 'name' => $z['name'], 'status' => 'active'], $zones));
         }
+        if ($method === 'GET' && preg_match('#^/zones/([^/]+)/dnssec$#', $path, $m) && isset($this->zones[$m[1]])) {
+            return $this->ok(['status' => $this->dnssec[$m[1]] ?? 'disabled']);
+        }
         if (!preg_match('#^/zones/([^/]+)/dns_records(?:/([^/]+))?$#', $path, $m) || !isset($this->zones[$m[1]])) {
             return $this->error(404, 7003, 'Could not route');
         }
@@ -101,6 +107,9 @@ final class FakeCloudflare implements HttpClient
         if (($r['type'] ?? '') === 'SRV' && isset($r['data'])) {
             $r['content'] = sprintf('%d %d %s', $r['data']['weight'] ?? 0, $r['data']['port'] ?? 0, $r['data']['target'] ?? '');
             $r['priority'] = $r['data']['priority'] ?? 0;
+        }
+        if (($r['type'] ?? '') === 'TLSA' && isset($r['data'])) {
+            $r['content'] = sprintf('%d %d %d %s', $r['data']['usage'], $r['data']['selector'], $r['data']['matching_type'], $r['data']['certificate']);
         }
         $this->zones[$zoneId]['records'][$r['id']] = $r;
 

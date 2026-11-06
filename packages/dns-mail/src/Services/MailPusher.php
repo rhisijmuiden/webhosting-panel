@@ -7,6 +7,7 @@ namespace Rhis\DnsMail\Services;
 use App\Services\Agent\AgentClient;
 use Rhis\DnsMail\Models\MailAlias;
 use Rhis\DnsMail\Models\MailDomain;
+use Rhis\DnsMail\Models\MailSenderRule;
 use Rhis\DnsMail\Models\Mailbox;
 
 /**
@@ -23,8 +24,9 @@ final class MailPusher
     {
         $routing = $this->agent->call('mail.set_routing', $this->routingParams(), 60);
         $boxes = $this->agent->call('mail.mailboxes_sync', $this->mailboxParams(), 60);
+        $spam = $this->agent->call('mail.spam_policy_sync', $this->spamParams(), 60);
 
-        return ['routing' => $routing, 'mailboxes' => $boxes];
+        return ['routing' => $routing, 'mailboxes' => $boxes, 'spam' => $spam];
     }
 
     public function routingParams(): array
@@ -57,6 +59,23 @@ final class MailPusher
                 ->map(fn (MailAlias $a) => [
                     'address' => $a->local_part . '@' . $local[$a->mail_domain_id],
                     'targets' => array_values($a->targets),
+                ])->values()->all(),
+        ];
+    }
+
+    public function spamParams(): array
+    {
+        $rules = MailSenderRule::query()->get()->groupBy('mail_domain_id');
+
+        return [
+            'default_quarantine_score' => $this->config->defaultQuarantineScore(),
+            'domains' => MailDomain::query()->where('provider', 'rhis')->orderBy('domain')->get()
+                ->map(fn (MailDomain $d) => [
+                    'domain' => $d->domain,
+                    'quarantine_score' => $d->spam_quarantine_score,
+                    'junk' => $d->spam_junk,
+                    'allow' => ($rules[$d->id] ?? collect())->where('type', 'allow')->pluck('value')->values()->all(),
+                    'block' => ($rules[$d->id] ?? collect())->where('type', 'block')->pluck('value')->values()->all(),
                 ])->values()->all(),
         ];
     }

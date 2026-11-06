@@ -6,6 +6,7 @@ namespace Rhis\DnsMail\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Services\Agent\AgentClient;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -19,6 +20,7 @@ use Rhis\DnsMail\Mail\MailProvider;
 use Rhis\DnsMail\Mail\SpfRecord;
 use Rhis\DnsMail\Models\MailAlias;
 use Rhis\DnsMail\Models\MailDomain;
+use Rhis\DnsMail\Models\MailSenderRule;
 use Rhis\DnsMail\Models\Mailbox;
 use Rhis\DnsMail\Services\DnsMailConfig;
 use Rhis\DnsMail\Services\DnsSync;
@@ -32,7 +34,7 @@ use Throwable;
  */
 abstract class DomainActions extends Controller
 {
-    public const TABS = ['mail', 'mailboxes', 'dns'];
+    public const TABS = ['mail', 'mailboxes', 'spam', 'dns'];
 
     public const OWN_RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT'];
 
@@ -55,7 +57,7 @@ abstract class DomainActions extends Controller
 
     public function show(Request $request, int|string $mailDomain): View
     {
-        $domain = $this->findDomain($mailDomain)->load(['customer.package', 'website', 'mailboxes', 'aliases']);
+        $domain = $this->findDomain($mailDomain)->load(['customer.package', 'website', 'mailboxes', 'aliases', 'senderRules']);
         $tab = in_array($request->query('tab'), self::TABS, true) ? $request->query('tab') : 'mail';
         $settings = $this->records->settings($domain);
         $profile = $this->records->profile();
@@ -76,6 +78,16 @@ abstract class DomainActions extends Controller
             'inspect' => null,
             'adopt' => false,
         ];
+        $data['quarantine'] = null;
+        $data['quarantineError'] = null;
+        $data['defaultQuarantineScore'] = $this->config->defaultQuarantineScore();
+        if ($tab === 'spam' && $domain->hasLocalMail() && $domain->mailboxes->isNotEmpty()) {
+            try {
+                $data['quarantine'] = app(AgentClient::class)->call('mail.quarantine_list', ['domain' => $domain->domain], 120);
+            } catch (Throwable $e) {
+                $data['quarantineError'] = $e->getMessage();
+            }
+        }
         if ($tab === 'dns' && $domain->dns_managed && $data['hasCloudflare']) {
             $data['adopt'] = $request->boolean('adopt');
             $data['inspect'] = $this->dns->inspect($domain, $data['adopt']);
@@ -99,6 +111,8 @@ abstract class DomainActions extends Controller
             'm365_mx_host' => ['nullable', 'string', 'max:190', 'regex:/^[a-z0-9.-]+\.[a-z]{2,}$/i'],
             'm365_dkim_selector1' => ['nullable', 'string', 'max:190', 'regex:/^[a-z0-9._-]+\.[a-z]{2,}$/i'],
             'm365_dkim_selector2' => ['nullable', 'string', 'max:190', 'regex:/^[a-z0-9._-]+\.[a-z]{2,}$/i'],
+            'bimi_logo_url' => ['nullable', 'url:https', 'max:250', 'regex:/^[^\s;"]+$/'],
+            'bimi_vmc_url' => ['nullable', 'url:https', 'max:250', 'regex:/^[^\s;"]+$/'],
         ]);
         if (filled($data['spf_extra'] ?? null)) {
             try {
@@ -325,6 +339,139 @@ abstract class DomainActions extends Controller
             'Content-Type' => 'application/x-apple-aspen-config',
             'Content-Disposition' => 'attachment; filename="' . $domain->domain . '-' . $box->local_part . '.mobileconfig"',
         ]);
+    }
+
+    public function updateSpam(Request $request, int|string $mailDomain): RedirectResponse
+    {
+        $domain = $this->findDomain($mailDomain);
+        $data = $request->validate([
+            'quarantine' => ['required', Rule::in(['on', 'off'])],
+            'spam_quarantine_score' => ['required_if:quarantine,on', 'nullable', 'integer', 'min:6', 'max:50'],
+        ]);
+        $domain->update([
+            'spam_quarantine_score' => $data['quarantine'] === 'on' ? (int) $data['spam_quarantine_score'] : null,
+            'spam_junk' => $request->boolean('spam_junk'),
+        ]);
+        ActivityLog::record('mail.spam_updated', $domain->domain, ['score' => $domain->spam_quarantine_score], $domain->customer_id);
+
+        return $this->spamRedirect($domain, __('Spam settings saved.'));
+    }
+
+    public function storeSenderRule(Request $request, int|string $mailDomain): RedirectResponse
+    {
+        $domain = $this->findDomain($mailDomain);
+        $data = $request->validate([
+            'type' => ['required', Rule::in(MailSenderRule::TYPES)],
+            'value' => ['required', 'string', 'max:190'],
+        ]);
+        $value = self::senderValue($data['value'])
+            ?? throw ValidationException::withMessages(['value' => __('Enter an address (jan@example.com) or a domain (example.com).')]);
+        if ($domain->senderRules()->count() >= 1000) {
+            throw ValidationException::withMessages(['value' => __('A domain can have at most 1000 senders on its lists.')]);
+        }
+        MailSenderRule::updateOrCreate(['mail_domain_id' => $domain->id, 'value' => $value], ['type' => $data['type']]);
+        ActivityLog::record('mail.sender_rule_saved', $domain->domain, ['type' => $data['type'], 'value' => $value], $domain->customer_id);
+
+        return $this->spamRedirect($domain, $data['type'] === 'allow'
+            ? __(':sender is always delivered to the inbox.', ['sender' => $value])
+            : __('Mail from :sender now goes to Junk.', ['sender' => $value]));
+    }
+
+    public function destroySenderRule(int|string $mailDomain, int $rule): RedirectResponse
+    {
+        $domain = $this->findDomain($mailDomain);
+        $domain->senderRules()->findOrFail($rule)->delete();
+
+        return $this->spamRedirect($domain, __('Sender removed from the list.'));
+    }
+
+    public function releaseMessage(Request $request, int|string $mailDomain): RedirectResponse
+    {
+        $domain = $this->findDomain($mailDomain)->load('mailboxes');
+        $data = $request->validate([
+            'user' => ['required', 'email', Rule::in($this->mailboxAddresses($domain))],
+            'uid' => ['required', 'integer', 'min:1'],
+            'sender' => ['nullable', 'string', 'max:300'],
+        ]);
+        try {
+            app(AgentClient::class)->call('mail.quarantine_release', ['domain' => $domain->domain, 'user' => $data['user'], 'uid' => (int) $data['uid'], 'learn' => true], 60);
+        } catch (Throwable $e) {
+            return back()->withErrors(['quarantine' => __('The message was not released: :error', ['error' => $e->getMessage()])]);
+        }
+        ActivityLog::record('mail.quarantine_released', $data['user'], ['uid' => (int) $data['uid']], $domain->customer_id);
+        $status = __('Message delivered to the inbox of :user.', ['user' => $data['user']]);
+        $sender = $request->boolean('allow_sender') ? self::senderValue(self::addressFrom((string) ($data['sender'] ?? ''))) : null;
+        if ($sender !== null) {
+            MailSenderRule::updateOrCreate(['mail_domain_id' => $domain->id, 'value' => $sender], ['type' => 'allow']);
+            $status .= ' ' . __(':sender is always delivered to the inbox.', ['sender' => $sender]);
+
+            return $this->spamRedirect($domain, $status);
+        }
+
+        return redirect()->to($this->route('domains.show', [$domain->id, 'tab' => 'spam']))->with('status', $status);
+    }
+
+    public function deleteMessages(Request $request, int|string $mailDomain): RedirectResponse
+    {
+        $domain = $this->findDomain($mailDomain)->load('mailboxes');
+        $data = $request->validate([
+            'messages' => ['required', 'array', 'min:1', 'max:500'],
+            'messages.*' => ['string', 'regex:/^[^\s|]+@[^\s|]+\|\d{1,10}$/'],
+        ]);
+        $allowed = $this->mailboxAddresses($domain);
+        $byUser = [];
+        foreach ($data['messages'] as $m) {
+            [$user, $uid] = explode('|', strtolower($m), 2);
+            if (in_array($user, $allowed, true)) {
+                $byUser[$user][] = (int) $uid;
+            }
+        }
+        $deleted = 0;
+        try {
+            foreach ($byUser as $user => $uids) {
+                $deleted += (int) (app(AgentClient::class)->call('mail.quarantine_delete', ['domain' => $domain->domain, 'user' => $user, 'uids' => $uids, 'learn' => true], 120)['deleted'] ?? 0);
+            }
+        } catch (Throwable $e) {
+            return back()->withErrors(['quarantine' => __('Not all messages were deleted: :error', ['error' => $e->getMessage()])]);
+        }
+        ActivityLog::record('mail.quarantine_deleted', $domain->domain, ['count' => $deleted], $domain->customer_id);
+
+        return redirect()->to($this->route('domains.show', [$domain->id, 'tab' => 'spam']))
+            ->with('status', trans_choice(':count message deleted.|:count messages deleted.', $deleted, ['count' => $deleted]));
+    }
+
+    /** "Name <jan@example.com>" -> "jan@example.com" */
+    public static function addressFrom(string $header): string
+    {
+        return preg_match('/<([^<>\s]+@[^<>\s]+)>/', $header, $m) ? $m[1] : trim($header);
+    }
+
+    /** Normalised allow/block entry: an address, or a domain (also from "@example.com"); null when invalid. */
+    public static function senderValue(string $value): ?string
+    {
+        $value = strtolower(trim($value));
+        if (str_starts_with($value, '@')) {
+            $value = substr($value, 1);
+        }
+        if (str_contains($value, '@')) {
+            return filter_var($value, FILTER_VALIDATE_EMAIL) ? $value : null;
+        }
+
+        return preg_match('/^(?=.{1,253}$)(?!-)([a-z0-9-]{1,63}(?<!-)\.)+[a-z]{2,63}$/', $value) ? $value : null;
+    }
+
+    /** @return list<string> */
+    protected function mailboxAddresses(MailDomain $domain): array
+    {
+        return $domain->mailboxes->map(fn (Mailbox $b) => $b->local_part . '@' . $domain->domain)->all();
+    }
+
+    protected function spamRedirect(MailDomain $domain, string $status): RedirectResponse
+    {
+        $warnings = $this->provisioner->afterChange($domain, syncDns: false);
+
+        return redirect()->to($this->route('domains.show', [$domain->id, 'tab' => 'spam']))
+            ->with('status', $status)->with('warnings', $warnings);
     }
 
     protected function mailboxesRedirect(MailDomain $domain, string $status): RedirectResponse
