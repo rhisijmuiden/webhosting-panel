@@ -31,7 +31,7 @@ preflight() {
   for p in apache2 exim4-base exim4-daemon-light sendmail-bin bind9 ufw firewalld; do
     if pkg_installed "$p"; then
       case $p in
-        exim4*) info "removing $p (replaced by Postfix)"; run env DEBIAN_FRONTEND=noninteractive apt-get purge -y -q 'exim4*' ;;
+        exim4*) info "removing $p (replaced by Postfix)"; run env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 purge -y -q 'exim4*' ;;
         *) if [[ $FORCE == yes ]]; then warn "$(t conflict_pkg "$p")"; else die "$(t conflict_pkg "$p")"; fi ;;
       esac
     fi
