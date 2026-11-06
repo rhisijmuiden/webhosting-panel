@@ -97,7 +97,7 @@
 
         <div class="card span-4">
             <div class="card-head"><h2>{{ __('Security') }}</h2>
-                @if ($security)<a class="small" href="{{ route('client.vulns.index') }}">{{ __('Open') }}</a>@endif</div>
+                @if ($security && app(\App\Services\Team\TeamAccess::class)->allowsRoute('client.vulns.index'))<a class="small" href="{{ route('client.vulns.index') }}">{{ __('Open') }}</a>@endif</div>
             <ul class="checks">
                 <li class="is-{{ $noSsl ? 'warn' : 'ok' }}"><x-icon name="lock" /><span>{{ __('HTTPS on all websites') }}</span>
                     <small>{{ $noSsl ? trans_choice(':count website without a certificate|:count websites without a certificate', $noSsl) : __('Let\'s Encrypt, renewed automatically') }}</small></li>
@@ -118,7 +118,7 @@
                     ['client.backups.index', 'backup', __('Backups')],
                     ['client.apps.index', 'apps', __('Install an app')],
                 ] as [$route, $icon, $label])
-                    @if (\Illuminate\Support\Facades\Route::has($route))
+                    @if (\Illuminate\Support\Facades\Route::has($route) && app(\App\Services\Team\TeamAccess::class)->allowsRoute($route))
                         <a href="{{ route($route) }}"><span class="kpi-icon"><x-icon :name="$icon" /></span>{{ $label }}<x-icon name="chevron" /></a>
                     @endif
                 @endforeach
