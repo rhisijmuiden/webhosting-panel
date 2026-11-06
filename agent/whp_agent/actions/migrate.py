@@ -6,6 +6,7 @@
   migrate.inventory     job: everything on the source, see docs/migration.md
   migrate.credentials   mailbox passwords of one domain (straight to the panel, never in a job file)
   migrate.transfer      job: copy one domain (files, databases, mailboxes, certificate)
+  migrate.wordpress_fix set wp-config.php and paths of a copied WordPress site again (also after the DNS switch)
 
 The panel creates the customer, website and mailboxes first; transfer only
 copies data into what already exists here.
@@ -18,7 +19,7 @@ import re
 
 from .. import validate as v
 from ..jobs import start_job
-from ..migration import plesk, transfer
+from ..migration import plesk, transfer, wordpress_fix
 from ..migration.ssh import Connection, ensure_key
 from ..registry import ActionError, action
 from ..run import run
@@ -112,6 +113,15 @@ def parse_transfer(params: dict) -> dict:
                 raise ActionError("invalid_params", f"Invalid mailbox name {b!r}")
         plan["mail"] = {"mode": v.choice(mail, "mode", ["mirror", "add"], required=False, default="mirror"), "mailboxes": boxes}
     plan["ssl"] = v.boolean(params, "ssl", required=False, default=False)
+    # Passwords the panel generated earlier for database users, so wp-config.php gets them again after a sync.
+    pws = params.get("db_passwords") or {}
+    if not isinstance(pws, dict) or len(pws) > 200:
+        raise ActionError("invalid_params", "db_passwords must be an object")
+    for user, pw in pws.items():
+        if not transfer.DB_USER.match(str(user)) or not isinstance(pw, str) or not 0 < len(pw) <= 200:
+            raise ActionError("invalid_params", "Invalid entry in db_passwords")
+    plan["db_passwords"] = dict(pws)
+    plan["wordpress"] = v.boolean(params, "wordpress", required=False, default=True)
     return plan
 
 
@@ -124,7 +134,7 @@ def migrate_transfer(params):
     site = _site(domain) if plan["files"] or plan["ssl"] else None
 
     def work(p, log):
-        result = {"domain": domain, "files": None, "databases": [], "mail": [], "ssl": None, "errors": []}
+        result = {"domain": domain, "files": None, "databases": [], "mail": [], "ssl": None, "wordpress": [], "errors": []}
         row = source.domain_row(conn, domain)
 
         if plan["files"]:
@@ -155,6 +165,21 @@ def migrate_transfer(params):
                 log(f"database {db['name']}: failed: {exc.message}")
             result["databases"].append(entry)
 
+        if plan["files"] and plan["wordpress"] and row["web"] and result["files"] is not None:
+            passwords = dict(plan["db_passwords"])
+            for db in result["databases"]:
+                for u in db.get("users", []):
+                    if u.get("new_password"):
+                        passwords[u["user"]] = u["new_password"]
+            try:
+                result["wordpress"] = wordpress_fix.fix_site(domain, row["web"]["root"], passwords, {conn.host.lower()}, log)
+            except ActionError as exc:
+                result["wordpress"] = [{"path": "", "ok": False, "error": exc.message}]
+                log(f"wordpress: failed: {exc.message}")
+            for wp in result["wordpress"]:
+                if not wp.get("ok"):
+                    result["errors"].append(f"wordpress {wp.get('path') or '/'}: {wp.get('error')}")
+
         if plan["mail"]:
             for local in plan["mail"]["mailboxes"]:
                 src = f"{source.MAILNAMES}/{domain}/{local}/Maildir"
@@ -184,3 +209,18 @@ def migrate_transfer(params):
         return result
 
     return start_job("migrate.transfer", work, params)
+
+
+@action("migrate.wordpress_fix")
+def migrate_wordpress_fix(params):
+    """The WordPress step of migrate.transfer on its own, for sites copied before it existed."""
+    domain = v.domain(params, "domain")
+    old_root = v.string(params, "old_root", pattern=r"/var/www/vhosts/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+){1,4}", max_len=300)
+    if any(p in (".", "..") for p in old_root.split("/")):
+        raise ActionError("invalid_params", "old_root must be a plain path")
+    plan = parse_transfer({"domain": domain, "db_passwords": params.get("db_passwords") or {}})
+    host = str(params.get("source_host") or "").lower()
+    hosts = {host} if re.fullmatch(r"[a-z0-9.:\[\]-]{1,253}", host) else set()
+    lines = []
+    installs = wordpress_fix.fix_site(domain, old_root, plan["db_passwords"], hosts, lines.append)
+    return {"domain": domain, "wordpress": installs, "log": lines}

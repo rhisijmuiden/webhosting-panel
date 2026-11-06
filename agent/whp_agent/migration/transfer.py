@@ -41,7 +41,9 @@ MAIL_EXCLUDES = ["dovecot.index*", "dovecot.list.index*", "dovecot.mailbox.log",
 
 def rsync(conn: Connection, source: str, dest: str, owner: str, delete: bool, excludes=(), chmod="Du=rwx,Dgo=rx,Fu=rw,Fgo=r",
           ignore_existing: bool = False, timeout: int = 6 * 3600) -> dict:
-    argv = [*RSYNC_BASE, "-og", f"--chown={owner}:{owner}", f"--chmod={chmod}", "-e", conn.rsync_shell()]
+    # --perms: apply the --chmod modes exactly. Without it rsync masks new files with the
+    # agent's umask (0027), and nginx (www-data) gets 403 on files it cannot read.
+    argv = [*RSYNC_BASE, "-og", "--perms", f"--chown={owner}:{owner}", f"--chmod={chmod}", "-e", conn.rsync_shell()]
     if delete:
         argv.append("--delete-after")
     if ignore_existing:
@@ -77,6 +79,7 @@ def copy_site_files(conn: Connection, source_base: str, site: dict, target_base:
     dest = os.path.join(root, target_base)
     os.makedirs(dest, exist_ok=True)
     os.chown(dest, *_ids(user))
+    os.chmod(dest, 0o755)
     result = rsync(conn, source_base, dest, user, delete=delete,
                    chmod="Du=rwx,Dgo=rx,Fu=rwX,Fgo=rX", excludes=[".well-known/acme-challenge/*"])
     result["dest"] = dest

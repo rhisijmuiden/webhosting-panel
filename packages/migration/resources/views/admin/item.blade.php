@@ -28,6 +28,9 @@
             @if ($item->canSync() && $item->status !== 'failed')
                 <form method="POST" action="{{ route('admin.migration.items.sync', $item) }}">@csrf<input type="hidden" name="kind" value="sync"><button class="btn" type="submit"><x-icon name="refresh" />{{ __('Sync again') }}</button></form>
             @endif
+            @if (in_array($item->status, ['copied', 'live', 'done'], true) && ($d['web']['app'] ?? '') === 'wordpress')
+                <form method="POST" action="{{ route('admin.migration.items.wordpress', $item) }}">@csrf<button class="btn" type="submit" title="{{ __('Sets the database settings in wp-config.php and replaces the old Plesk paths in files and the database.') }}"><x-icon name="refresh" />{{ __('Fix WordPress settings') }}</button></form>
+            @endif
             @if (in_array($item->status, ['live', 'done'], true) && ($item->options['mail'] ?? false) && ! empty($d['mailboxes']))
                 <form method="POST" action="{{ route('admin.migration.items.sync', $item) }}">@csrf<input type="hidden" name="kind" value="late_mail"><button class="btn" type="submit"><x-icon name="mail" />{{ __('Fetch late mail') }}</button></form>
             @endif
@@ -83,6 +86,17 @@
                             @if ($res)<x-ui.pill :status="$res['ok'] ? 'ok' : 'bad'">{{ $res['ok'] ? __('Copied') : __('Failed') }}</x-ui.pill>@endif</div>
                     @empty – @endforelse
                 </dd>
+                @if (! empty($r['wordpress']))
+                    <dt>WordPress</dt><dd>
+                        @foreach ($r['wordpress'] as $wp)
+                            <div><span class="mono">/{{ $wp['path'] ?? '' }}</span>
+                                <x-ui.pill :status="($wp['ok'] ?? false) ? 'ok' : 'bad'">{{ ($wp['ok'] ?? false) ? __('Configured for this server') : __('Failed') }}</x-ui.pill>
+                                @if ($wp['ok'] ?? false)<div class="small muted">{{ __('wp-config.php: :changes · :count paths replaced in the database', ['changes' => implode(', ', $wp['config'] ?? []) ?: __('unchanged'), 'count' => (int) ($wp['db_replacements'] ?? 0)]) }}</div>
+                                @else<div class="small">{{ $wp['error'] ?? '' }}</div>@endif
+                            </div>
+                        @endforeach
+                    </dd>
+                @endif
                 <dt>SSL</dt><dd>
                     @if (($r['ssl']['installed'] ?? false)){{ __('Certificate of the old server is in use until Let\'s Encrypt takes over.') }}
                     @elseif ($item->website){{ __(ucfirst($item->website->ssl_status)) }}@else – @endif
@@ -93,7 +107,7 @@
         <div class="mig-stack">
             @if ($secrets)
                 <x-ui.card :title="__('New database passwords')">
-                    <p class="small muted">{{ __('These users got a new password. Put it in the website configuration (for WordPress: wp-config.php). They are removed when you mark the migration as finished.') }}</p>
+                    <p class="small muted">{{ __('These users got a new password. WordPress sites get it in wp-config.php automatically; for other sites put it in their configuration. They are removed when you mark the migration as finished.') }}</p>
                     <dl class="kv">@foreach ($secrets as $k => $v)<dt class="mono">{{ substr($k, 3) }}</dt><dd class="mono" style="word-break:break-all">{{ $v }}</dd>@endforeach</dl>
                 </x-ui.card>
             @endif

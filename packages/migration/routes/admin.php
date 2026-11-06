@@ -20,3 +20,4 @@ Route::post('/items/{item}/sync', [C::class, 'syncItem'])->name('items.sync');
 Route::post('/items/{item}/retry', [C::class, 'retryItem'])->name('items.retry');
 Route::post('/items/{item}/cutover', [C::class, 'cutover'])->name('items.cutover');
 Route::post('/items/{item}/finish', [C::class, 'finishItem'])->name('items.finish');
+Route::post('/items/{item}/wordpress', [C::class, 'fixWordpress'])->name('items.wordpress');

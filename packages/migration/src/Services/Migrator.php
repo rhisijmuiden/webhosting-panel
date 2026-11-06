@@ -217,6 +217,16 @@ final class Migrator
                 $params['databases'] = $this->databases($item);
             }
             $params['ssl'] = $kind === 'initial' && (bool) $opt['ssl'];
+            // Passwords this panel generated before: wp-config.php gets them again after the files are mirrored.
+            $known = [];
+            foreach ($item->secrets ?? [] as $k => $v) {
+                if (str_starts_with((string) $k, 'db:')) {
+                    $known[substr((string) $k, 3)] = (string) $v;
+                }
+            }
+            if ($known) {
+                $params['db_passwords'] = $known;
+            }
         }
         if ($opt['mail'] && ! empty($d['mailboxes'])) {
             $params['mail'] = ['mode' => $kind === 'late_mail' ? 'add' : 'mirror', 'mailboxes' => array_column($d['mailboxes'], 'local')];
@@ -280,6 +290,12 @@ final class Migrator
                         $secrets['db:'.$u['user']] = $u['new_password'];
                         $item->addNote('Database user :user got a new password (the old one could not be copied). Put it in the website configuration; it is shown on this page.', ['user' => $u['user']]);
                     }
+                }
+            }
+            foreach ($result['wordpress'] ?? [] as $wp) {
+                if ($wp['ok'] ?? false) {
+                    $item->log('WordPress :path: configuration and paths updated for this server (:count paths in the database).',
+                        ['path' => '/'.($wp['path'] ?? ''), 'count' => (int) ($wp['db_replacements'] ?? 0)], 'ok');
                 }
             }
             if (($result['ssl']['installed'] ?? false) === false && in_array($result['ssl']['reason'] ?? '', ['expired', 'key_mismatch', 'name_mismatch'], true)) {

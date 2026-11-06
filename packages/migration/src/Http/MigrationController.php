@@ -272,6 +272,44 @@ final class MigrationController extends Controller
         return back()->with('status', __('Migration of :domain marked as finished.', ['domain' => $item->domain]));
     }
 
+    /** Set wp-config.php and the old paths again, also for sites migrated before this step existed. */
+    public function fixWordpress(MigrationItem $item): RedirectResponse
+    {
+        $root = (string) ($item->source_data['web']['root'] ?? '');
+        if (! $item->website_id || $root === '' || ! in_array($item->status, ['copied', 'live', 'done'], true)) {
+            return back()->withErrors(['agent' => __('This is not possible in the current state.')]);
+        }
+        $passwords = [];
+        foreach ($item->secrets ?? [] as $k => $v) {
+            if (str_starts_with((string) $k, 'db:')) {
+                $passwords[substr((string) $k, 3)] = (string) $v;
+            }
+        }
+        try {
+            $res = $this->agent->call('migrate.wordpress_fix', array_filter([
+                'domain' => $item->domain, 'old_root' => $root, 'db_passwords' => $passwords, 'source_host' => $item->source?->host,
+            ]), 1800);
+        } catch (AgentException $e) {
+            $item->log(Migrator::errorText($e), [], 'error')->save();
+
+            return back()->withErrors(['agent' => $e->getMessage()]);
+        }
+        $item->log('Fixing the WordPress settings for this server.');
+        $item->logAgent($res['log'] ?? []);
+        $result = $item->result ?? [];
+        $result['wordpress'] = $res['wordpress'] ?? [];
+        $item->result = $result;
+        $item->save();
+        $failed = collect($res['wordpress'] ?? [])->where('ok', false)->count();
+        if (($res['wordpress'] ?? []) === []) {
+            return back()->with('status', __('No WordPress was found in this website.'));
+        }
+
+        return $failed
+            ? back()->withErrors(['agent' => __('WordPress could not be fixed completely. See the log below.')])
+            : back()->with('status', __('WordPress settings and paths are set for this server.'));
+    }
+
     private function serverIp(): ?string
     {
         try {
