@@ -1,0 +1,6 @@
+{
+    "customer.suspended": "Customer suspended",
+    "customer.reactivated": "Customer reactivated",
+    "customer.user_password_reset": "New password for a login",
+    "customer.user_two_factor_reset": "Two-factor authentication turned off for a login"
+}
