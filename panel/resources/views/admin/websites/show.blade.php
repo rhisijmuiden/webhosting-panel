@@ -50,6 +50,17 @@
         </x-ui.card>
     </section>
 
+    @if ($website->databases->isNotEmpty())
+        <x-ui.card :title="__('Databases')" flush>
+            <x-ui.table>
+                <x-slot:head><th>{{ __('Database') }}</th><th>{{ __('Users') }}</th><th>{{ __('Origin') }}</th></x-slot:head>
+                @foreach ($website->databases as $db)
+                    <tr><td class="mono">{{ $db->name }}</td><td class="mono small">{{ implode(', ', $db->users ?? []) ?: '–' }}</td><td>{{ $db->origin === 'migration' ? __('Migration') : __('Panel') }}</td></tr>
+                @endforeach
+            </x-ui.table>
+        </x-ui.card>
+    @endif
+
     <x-ui.card :title="__('Remove website')">
         <p class="muted small">{{ __('Removes the Nginx site, PHP pool and certificate. This cannot be undone.') }}</p>
         <form method="POST" action="{{ route('admin.websites.destroy', $website) }}" class="form" style="max-width:480px">
