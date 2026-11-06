@@ -316,6 +316,8 @@ for _ in range(4):
         s.starttls(context=ctx); s.login("nobody@example.test", "wrong-password")
     except Exception as e:
         print("smtp:", type(e).__name__)
+        if isinstance(e, TimeoutError):
+            break  # already blocked: the next attempts would only time out too
 PY
   python3 - <<'PY' || true
 import socket, ssl
@@ -330,6 +332,8 @@ for _ in range(4):
         tls.sendall(b"a2 LOGOUT\r\n"); tls.close()
     except Exception as e:
         print("imap:", type(e).__name__)
+        if isinstance(e, TimeoutError):
+            break  # already blocked: the next attempts would only time out too
 PY
   echo "     CrowdSec acquisition:"; cat /etc/crowdsec/acquis.yaml /etc/crowdsec/acquis.d/*.yaml 2>/dev/null | grep -vE '^\s*(#|$)' | sed 's/^/       /'
   check "failed SMTP logins (submission) get the address blocked" wait_ban 203.0.113.60 whp/mail-bf
