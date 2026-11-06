@@ -50,7 +50,8 @@ class AppsTest extends TestCase
         $res->assertRedirect(route('admin.apps.show', $installation));
         $call = collect($this->agent()->calls)->firstWhere('action', 'apps.install');
         $this->assertSame(['domain' => 'klant.test', 'app' => 'wordpress', 'path' => 'blog', 'title' => 'Bakkerij Jansen',
-            'admin_user' => 'jansen', 'admin_email' => 'jan@klant.test', 'admin_password' => 'Zeer-geheim-2026!', 'locale' => 'nl'], $call['params']);
+            'admin_user' => 'jansen', 'admin_email' => 'jan@klant.test', 'admin_password' => 'Zeer-geheim-2026!', 'locale' => 'nl',
+            'max_age_days' => 365], $call['params']);
         $this->assertSame('installing', $installation->status);
         $this->assertNotContains('Zeer-geheim-2026!', $installation->getAttributes());
 
@@ -155,6 +156,95 @@ class AppsTest extends TestCase
         $this->actingAs($user);
         $this->get('/apps')->assertOk()->assertSee('Geïnstalleerde apps')->assertSee('Installeren');
         $this->get('/apps/install/wordpress')->assertOk()->assertSee('Wachtwoord beheerder');
+    }
+
+    /** The catalog of the fake agent with one app changed. */
+    private function catalogWith(string $id, array $changes): void
+    {
+        $apps = $this->agent()->call('apps.catalog')['apps'];
+        foreach ($apps as &$app) {
+            if ($app['id'] === $id) {
+                $app = $changes + $app;
+            }
+        }
+        $this->agent()->respond('apps.catalog', ['apps' => $apps]);
+    }
+
+    public function test_catalog_has_categories_and_release_info(): void
+    {
+        $this->actingAsAdmin();
+        $this->get('/admin/apps')->assertOk()
+            ->assertSee(['Piwigo', 'WooCommerce', 'MediaWiki', 'DokuWiki', 'phpBB', 'FreshRSS'])
+            ->assertSee('v6.9')->assertSee('No database')
+            ->assertSee(route('admin.apps.index', ['category' => 'photos']), false);
+        $this->get('/admin/apps?category=wiki')->assertOk()->assertSee('MediaWiki')->assertSee('DokuWiki')
+            ->assertDontSee(route('admin.apps.create', 'wordpress'), false);
+        $this->get('/admin/apps?category=nonsense')->assertOk()->assertSee(route('admin.apps.create', 'wordpress'), false);
+        $call = collect($this->agent()->calls)->firstWhere('action', 'apps.catalog');
+        $this->assertSame(365, $call['params']['max_age_days']);
+    }
+
+    public function test_unmaintained_apps_are_not_offered(): void
+    {
+        $this->catalogWith('phpbb', ['maintained' => false, 'released_at' => time() - 86400 * 500]);
+        $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@klant.test']);
+        $site = $this->site($customer);
+        $this->actingAs(User::factory()->create(['customer_id' => $customer->id]));
+        $this->get('/apps')->assertOk()->assertDontSee('phpBB')->assertSee('Piwigo');
+        $this->get('/apps/install/phpbb')->assertNotFound();
+        $this->post('/apps/install/phpbb', $this->form($site, ['locale' => 'en']))->assertNotFound();
+
+        // The admin sees why it is held back.
+        $this->actingAsAdmin();
+        $this->get('/admin/apps')->assertOk()->assertSee('phpBB')->assertSee('Not offered: no release in the last 365 days.')
+            ->assertDontSee(route('admin.apps.create', 'phpbb'), false);
+        $this->assertSame(0, collect($this->agent()->calls)->where('action', 'apps.install')->count());
+    }
+
+    public function test_app_without_database_ignores_the_database_limit(): void
+    {
+        $package = HostingPackage::create(['name' => 'Start', 'max_databases' => 0]);
+        $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@klant.test']);
+        $site = $this->withPackage($this->site($customer), $package);
+        $this->actingAs(User::factory()->create(['customer_id' => $customer->id]));
+        $this->get('/apps')->assertOk()->assertSee(route('client.apps.create', 'dokuwiki'), false)
+            ->assertDontSee(route('client.apps.create', 'wordpress'), false);
+        $this->post('/apps/install/wordpress', $this->form($site))->assertSessionHasErrors('agent');
+        $this->post('/apps/install/dokuwiki', $this->form($site, ['path' => 'docs']))->assertRedirect();
+        $this->assertSame('dokuwiki', AppInstallation::sole()->app);
+    }
+
+    public function test_app_specific_admin_names(): void
+    {
+        $this->actingAsAdmin();
+        $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@klant.test']);
+        $site = $this->site($customer);
+        $this->post('/admin/apps/install/phpbb', $this->form($site, ['locale' => 'en', 'admin_user' => 'a-very-long-forum-admin-name']))
+            ->assertSessionHasErrors(['admin_user' => '3 to 20 characters.']);
+        $this->post('/admin/apps/install/dokuwiki', $this->form($site, ['admin_user' => 'Jansen']))->assertSessionHasErrors('admin_user');
+        $this->post('/admin/apps/install/mediawiki', $this->form($site, ['admin_user' => 'jan@klant']))->assertSessionHasErrors('admin_user');
+        $this->assertSame(0, collect($this->agent()->calls)->where('action', 'apps.install')->count());
+    }
+
+    public function test_installed_apps_show_updates_and_follow_the_version_on_disk(): void
+    {
+        $this->actingAsAdmin();
+        $customer = Customer::create(['name' => 'Jan', 'email' => 'jan@klant.test']);
+        $site = $this->site($customer);
+        $piwigo = AppInstallation::create(['website_id' => $site->id, 'customer_id' => $customer->id, 'app' => 'piwigo', 'path' => 'photos',
+            'status' => 'installed', 'agent_id' => 'aaaa1111', 'version' => '15.4.0', 'admin_url' => 'http://klant.test/photos/admin.php']);
+        $wp = AppInstallation::create(['website_id' => $site->id, 'customer_id' => $customer->id, 'app' => 'wordpress', 'path' => '',
+            'status' => 'installed', 'agent_id' => 'bbbb2222', 'version' => '6.8']);
+        $this->agent()->respond('apps.list', ['apps' => [
+            ['id' => 'aaaa1111', 'version' => '15.5.0', 'latest_version' => '16.0.0', 'update_available' => true],
+            ['id' => 'bbbb2222', 'version' => '6.9', 'latest_version' => '6.9', 'update_available' => false],
+        ]]);
+        $this->get('/admin/apps')->assertOk()->assertSee('Update: 16.0.0');
+        $this->assertSame('15.5.0', $piwigo->fresh()->version);
+        $this->assertSame('6.9', $wp->fresh()->version);
+        $this->get(route('admin.apps.show', $piwigo))->assertOk()->assertSee('Piwigo 16.0.0 is available (installed: 15.5.0).')
+            ->assertSee('http://klant.test/photos/admin.php');
+        $this->get(route('admin.apps.show', $wp))->assertOk()->assertSee('Up to date');
     }
 
     public function test_customer_install_can_be_turned_off(): void
