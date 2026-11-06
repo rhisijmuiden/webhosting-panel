@@ -11,7 +11,7 @@
 set -Eeuo pipefail
 shopt -s nullglob
 
-WHP_BACKUP_VERSION="0.1.0"
+WHP_BACKUP_VERSION="1.0.0"
 
 WHP_ETC="${WHP_ETC:-/etc/webhosting-panel}"
 CONF_DIR="${WHP_BACKUP_CONF_DIR:-$WHP_ETC/backup}"
