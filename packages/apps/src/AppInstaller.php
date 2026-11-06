@@ -6,6 +6,7 @@ namespace Rhis\Apps;
 
 use App\Models\ActivityLog;
 use App\Models\Customer;
+use App\Models\SiteDatabase;
 use App\Models\Website;
 use App\Services\Agent\AgentClient;
 use App\Services\Agent\AgentException;
@@ -47,7 +48,9 @@ final class AppInstaller
         if ($max === null) {
             return null;
         }
-        $used = AppInstallation::where('customer_id', $customer->id)->where('status', '!=', 'failed')->count();
+        // Every database of the customer's websites (apps, migrated, ...) plus installs still running.
+        $used = SiteDatabase::whereIn('website_id', $customer->websites()->select('id'))->count()
+            + AppInstallation::where('customer_id', $customer->id)->where('status', 'installing')->count();
 
         return max(0, $max - $used);
     }
@@ -110,7 +113,14 @@ final class AppInstaller
         $error = $job['error']['message'] ?? null;
 
         if ($installation->status === 'removing') {
-            $ok ? $installation->delete() : $installation->update(['status' => 'installed', 'error' => $error]);
+            if ($ok) {
+                if ($installation->database) {
+                    SiteDatabase::where('name', $installation->database)->delete();
+                }
+                $installation->delete();
+            } else {
+                $installation->update(['status' => 'installed', 'error' => $error]);
+            }
 
             return $job;
         }
@@ -120,6 +130,11 @@ final class AppInstaller
                 'url' => $result['url'] ?? null, 'admin_url' => $result['admin_url'] ?? null,
                 'database' => $result['database'] ?? null, 'installed_at' => now(), 'error' => null,
             ]);
+            if (! empty($result['database'])) {
+                SiteDatabase::updateOrCreate(['name' => $result['database']], [
+                    'website_id' => $installation->website_id, 'users' => [$result['database']], 'origin' => 'app',
+                ]);
+            }
             if (! empty($result['page_cache_disabled'])) {
                 $installation->website->update(['page_cache' => false]);
             }

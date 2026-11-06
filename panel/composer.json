@@ -15,7 +15,8 @@
         "rhis/apps": "@dev",
         "rhis/backups": "@dev",
         "rhis/crm-api": "@dev",
-        "rhis/dns-mail": "@dev"
+        "rhis/dns-mail": "@dev",
+        "rhis/migration": "@dev"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

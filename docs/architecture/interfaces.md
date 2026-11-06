@@ -124,6 +124,15 @@ Actions added by the app installer (`databases.py`, `apps.py`, see `packages/app
 | `apps.install` | Job: `{domain, app, path, title, admin_user, admin_email, admin_password, locale}`. Empty folder only, runs as the site user, rolls back on failure. Result: `id, version, url, admin_url, database, page_cache_disabled` |
 | `apps.remove` | Job: `{domain, id}` removes files, database and the Nginx snippet `/etc/nginx/whp/sites/<domain>/app-<id>.conf` |
 
+Actions added by the Plesk migration (`migrate.py`, see `docs/migration.md`):
+`migrate.key`, `migrate.connect`, `migrate.forget_host`, `migrate.credentials`
+(mailbox passwords, returned only over the socket) and the jobs
+`migrate.inventory` and `migrate.transfer`. `whp-site ssl <domain>
+--import-cert <pem> --import-key <pem>` serves a certificate from another
+server (SSL state `imported`) until Let's Encrypt succeeds. Websites own their
+databases through the core table `site_databases` (`App\Models\SiteDatabase`).
+The screens live in `packages/migration` (`Rhis\Migration\`, admin `/admin/migration`).
+
 ## Release channels
 
 | Channel | Git branch |

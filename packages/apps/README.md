@@ -27,7 +27,7 @@ Rules
 
 * Customers only see and use their own active websites.
 * Each app uses one database; the customer's package `max_databases` is the
-  limit (counted over app installs).
+  limit (counted over all databases of the customer's websites, `site_databases`).
 * `WHP_APPS_CUSTOMER_INSTALL=false` in `panel.env` hides the page for customers.
 
 Adding an app: a recipe class in `agent/whp_agent/actions/apps.py` (added

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Customer;
 use App\Models\HostingPackage;
+use App\Models\SiteDatabase;
 use App\Models\User;
 use App\Models\Website;
 use App\Services\Agent\AgentException;
@@ -64,6 +65,7 @@ class AppsTest extends TestCase
         $installation->refresh();
         $this->assertSame('installed', $installation->status);
         $this->assertSame('ab12cd34', $installation->agent_id);
+        $this->assertSame('app', SiteDatabase::where('name', 'klant_test_wordpres_1a2b')->sole()->origin);
 
         $this->delete(route('admin.apps.destroy', $installation))->assertRedirect();
         $this->assertSame(['domain' => 'klant.test', 'id' => 'ab12cd34'], collect($this->agent()->calls)->firstWhere('action', 'apps.remove')['params']);
@@ -71,6 +73,7 @@ class AppsTest extends TestCase
         $this->agent()->respond('job.status', ['status' => 'succeeded', 'log' => [], 'error' => null, 'result' => ['removed' => true]]);
         $this->get(route('admin.apps.show', $installation))->assertRedirect(route('admin.apps.index'));
         $this->assertSame(0, AppInstallation::count());
+        $this->assertSame(0, SiteDatabase::count());
     }
 
     public function test_failed_install_shows_the_error_and_can_be_cleared(): void
