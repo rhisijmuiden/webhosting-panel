@@ -17,9 +17,9 @@ def git(*args, timeout=60, check=True):
                timeout=timeout, check=check).stdout.strip()
 
 
-def read_env(key, default=None):
+def read_env(key, default=None, path=None):
     try:
-        with open(paths.PANEL_ENV) as fh:
+        with open(path or paths.PANEL_ENV) as fh:
             for line in fh:
                 if line.startswith(key + "="):
                     return line.split("=", 1)[1].strip().strip('"')
@@ -28,11 +28,12 @@ def read_env(key, default=None):
     return default
 
 
-def write_env(key, value):
+def write_env(key, value, path=None):
+    path = path or paths.PANEL_ENV
     lines = []
     found = False
     try:
-        with open(paths.PANEL_ENV) as fh:
+        with open(path) as fh:
             lines = fh.read().splitlines()
     except FileNotFoundError:
         pass
@@ -42,14 +43,14 @@ def write_env(key, value):
             found = True
     if not found:
         lines.append(f"{key}={value}")
-    tmp = paths.PANEL_ENV + ".tmp"
-    st = os.stat(paths.PANEL_ENV) if os.path.exists(paths.PANEL_ENV) else None
+    tmp = path + ".tmp"
+    st = os.stat(path) if os.path.exists(path) else None
     with open(tmp, "w") as fh:
         fh.write("\n".join(lines) + "\n")
     if st:
         os.chown(tmp, st.st_uid, st.st_gid)
         os.chmod(tmp, st.st_mode & 0o777)
-    os.replace(tmp, paths.PANEL_ENV)
+    os.replace(tmp, path)
 
 
 def current_channel():
@@ -122,6 +123,10 @@ def update(params):
 def set_channel(params):
     channel = v.choice(params, "channel", list(CHANNELS))
     write_env("WHP_CHANNEL", channel)
+    # Keep the installer's saved answer in step, so installer --upgrade (run by
+    # every update) keeps this channel too.
+    if os.path.exists(paths.INSTALLER_ENV):
+        write_env("WHP_CHANNEL", channel, paths.INSTALLER_ENV)
 
     def work(p, log):
         log(f"Channel set to {channel}")
