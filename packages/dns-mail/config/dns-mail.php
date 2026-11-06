@@ -5,6 +5,10 @@ return [
     // stores it encrypted in the settings table; this env value is the fallback.
     'cloudflare_token' => env('CLOUDFLARE_API_TOKEN'),
 
+    // Account new zones are added to by the DNS wizard. Empty: the only
+    // account the token can see. The token then also needs Zone: Edit.
+    'cloudflare_account_id' => env('CLOUDFLARE_ACCOUNT_ID'),
+
     'server' => [
         'mail_host' => env('WHP_MAIL_HOST'),
         'ipv4' => env('WHP_PUBLIC_IPV4'),

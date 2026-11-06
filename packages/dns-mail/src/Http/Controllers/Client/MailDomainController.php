@@ -23,7 +23,7 @@ class MailDomainController extends DomainActions
 
     public function index(): View
     {
-        $domains = MailDomain::where('customer_id', auth()->user()->customer_id)->withCount('mailboxes')->orderBy('domain')->get();
+        $domains = MailDomain::where('customer_id', auth()->user()->customer_id)->with('onboarding')->withCount('mailboxes')->orderBy('domain')->get();
 
         return view('dns-mail::client.index', ['domains' => $domains]);
     }

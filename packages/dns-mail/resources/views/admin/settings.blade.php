@@ -9,6 +9,8 @@
             </x-slot:actions>
             <x-ui.field name="cloudflare_token" type="password" :label="__('API token')" autocomplete="off"
                 :help="($hasToken ? __('A token is saved. Leave empty to keep it.').' ' : '').__('Create a token with “Zone: Read” and “DNS: Edit” for the zones you want to manage.')" />
+            <x-ui.field name="cloudflare_account_id" :label="__('Account ID')" :value="$values['cloudflare_account_id']" placeholder="0123456789abcdef0123456789abcdef"
+                :help="__('Account new customer domains are added to by the DNS wizard. Empty: the only account the token can see. For the wizard the token also needs “Zone: Edit” and “Account Settings: Read”.')" />
             @if ($hasToken)<label class="check"><input type="checkbox" name="clear_token" value="1"><span>{{ __('Remove the saved token') }}</span></label>@endif
             <p class="muted small">{{ __('Records the panel creates are marked in Cloudflare. Records you or your customers add yourselves are never changed.') }}</p>
         </x-ui.card>

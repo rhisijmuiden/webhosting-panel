@@ -29,7 +29,7 @@ class MailDomainController extends DomainActions
     public function index(Request $request): View
     {
         $q = trim((string) $request->query('q', ''));
-        $domains = MailDomain::with('customer')->withCount('mailboxes')
+        $domains = MailDomain::with('customer')->with('onboarding')->withCount('mailboxes')
             ->when($q !== '', fn ($query) => $query->where('domain', 'like', '%' . $q . '%'))
             ->orderBy('domain')->paginate(50)->withQueryString();
 
