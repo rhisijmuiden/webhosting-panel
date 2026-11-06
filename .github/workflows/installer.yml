@@ -94,8 +94,12 @@ jobs:
             grep -qx 0001-code-permissions /var/lib/webhosting-panel/provision/migrations-applied
             grep -qx 9999-ci-check /var/lib/webhosting-panel/provision/migrations-applied
             rm /run/whp-ci-migration
+            # The channel picked in the panel (Info > Switch channel) survives an upgrade.
+            sed -i "s/^WHP_CHANNEL=.*/WHP_CHANNEL=test/" /etc/webhosting-panel/panel.env
             /bin/bash /opt/webhosting-panel/installer/install.sh --upgrade </dev/null >/dev/null
             test ! -e /run/whp-ci-migration   # ran once only
+            grep -qx WHP_CHANNEL=test /etc/webhosting-panel/panel.env
+            grep -qx WHP_CHANNEL=test /etc/webhosting-panel/installer.env
             grep -q ^WHP_UPGRADED_AT= /etc/webhosting-panel/installer.env
             grep -q ^WHP_MAIL=yes /etc/webhosting-panel/installer.env
             whp-status --plain
