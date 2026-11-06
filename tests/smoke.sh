@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # End-to-end checks after a full install. Runs inside the test container.
-# shellcheck disable=SC2016,SC1091,SC2329
+# shellcheck disable=SC2016,SC1091,SC2329,SC2317
 set -uo pipefail
 fail=0
 pass() { printf '\e[32mPASS\e[0m %s\n' "$*"; }
