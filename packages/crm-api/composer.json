@@ -1,0 +1,24 @@
+{
+    "name": "rhis/crm-api",
+    "description": "CRM API for the Webhosting Panel (/api/v1/crm): plans, customers, subscriptions, usage, signed webhooks, catalog and orders.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rhis\\CrmApi\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rhis\\CrmApi\\CrmApiServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

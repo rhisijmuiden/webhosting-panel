@@ -66,7 +66,7 @@ curl -sS https://panel.example.nl:8443/api/v1/crm/subscriptions \
 
 ## Security
 
-- Tokens are created in the panel (Settings > API tokens) with the `crm`
+- Tokens are created in the panel (System > CRM API) with the `crm`
   ability, shown once, stored hashed, optionally limited to source IPs.
 - HTTPS only. Rate limit: 120 requests per minute per token (`429` with
   `Retry-After`).
@@ -88,3 +88,22 @@ Events: `subscription.provisioned`, `subscription.failed`,
 `subscription.changed`, `subscription.suspended`, `subscription.unsuspended`,
 `subscription.terminated`, `usage.limit_reached`, `backup.failed`,
 `customer.updated`, `order.requested`, `order.cancelled`, `ping`. Retries: 1 min, 5 min, 30 min, 2 h, 6 h, 24 h.
+
+## Implementation
+
+The API is the `packages/crm-api` package (`Rhis\CrmApi\`), loaded by the
+panel. Admins manage tokens and see webhook deliveries under
+**System > CRM API**; customers see the catalog under **Order** in the client
+panel. `php artisan crm-api:watch` (scheduled hourly) sends
+`usage.limit_reached` and `backup.failed`.
+
+Current limits of the implementation:
+
+- Usage reports disk space and domains; mailbox, database and traffic
+  counters follow when the mail and database modules report them.
+- Suspension blocks the customer login and marks the site suspended. The
+  503 suspension page on the server needs the agent actions `site.suspend`
+  and `site.unsuspend`; until those exist the panel logs that it could not
+  apply them.
+- One customer has one plan in the panel, so all subscriptions of a customer
+  share the plan of the most recent one.

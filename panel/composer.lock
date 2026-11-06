@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9acd3536ad8952d43856dd1f5325108c",
+    "content-hash": "c7111cb168b25b89fee55ca9ff24f9d8",
     "packages": [
         {
             "name": "brick/math",
@@ -3333,6 +3333,39 @@
                 "proprietary"
             ],
             "description": "Backup screens for the Webhosting Panel (admin and client), on top of whp-backup through the agent.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/crm-api",
+            "version": "dev-claude/project-thread-im3b15",
+            "dist": {
+                "type": "path",
+                "url": "../packages/crm-api",
+                "reference": "01ac550a7d0e4c30911072d01f7e2722f152825b"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\CrmApi\\CrmApiServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\CrmApi\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "CRM API for the Webhosting Panel (/api/v1/crm): plans, customers, subscriptions, usage, signed webhooks, catalog and orders.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8512,7 +8545,8 @@
     "aliases": [],
     "minimum-stability": "stable",
     "stability-flags": {
-        "rhis/backups": 20
+        "rhis/backups": 20,
+        "rhis/crm-api": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

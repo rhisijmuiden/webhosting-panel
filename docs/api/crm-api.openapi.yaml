@@ -10,7 +10,7 @@ info:
     terminate hosting; the panel calls the CRM back through webhooks.
 
     **Authentication.** Every request carries `Authorization: Bearer <token>`.
-    Tokens are created by an admin in the panel (Settings > API tokens) with the
+    Tokens are created by an admin in the panel (System > CRM API) with the
     ability `crm`, and can be limited to source IP addresses.
 
     **Idempotency.** `POST` requests accept an `Idempotency-Key` header (any
@@ -22,7 +22,8 @@ info:
     `202 Accepted` with a `job`. Follow it with `GET /jobs/{id}` or wait for the
     webhook.
 
-    **Identifiers.** Panel ids are ULIDs. Every customer and subscription also
+    **Identifiers.** Panel ids are opaque strings (numbers for plans and
+    customers, ULIDs for the rest). Every customer and subscription also
     stores the CRM's own id as `external_id`, and every endpoint that takes an
     `{id}` also accepts `ext:<external_id>`.
 
@@ -251,18 +252,17 @@ paths:
     post:
       tags: [Customers]
       operationId: createLoginLink
-      summary: One time link that logs the customer (or an admin acting as them) into the panel.
+      summary: One time link that logs the customer into the panel.
       description: |
         Used for a "Go to hosting panel" button in the CRM customer portal. The
-        link is valid once, for 5 minutes. With `as_admin` the session is shown
-        as an admin impersonating the customer and is logged as such.
+        link is valid once, for 5 minutes. A customer with two-factor
+        authentication still has to enter their code.
       requestBody:
         content:
           application/json:
             schema:
               type: object
               properties:
-                as_admin: { type: boolean, default: false }
                 redirect: { type: string, description: Panel path to open after login., examples: ["/client/sites"] }
       responses:
         "201":
@@ -687,7 +687,7 @@ webhooks:
 
         A `2xx` answer within 10 seconds counts as delivered. Otherwise the panel
         retries after 1 min, 5 min, 30 min, 2 h, 6 h and 24 h, then marks the
-        delivery failed (visible in the panel under Settings > API).
+        delivery failed (visible in the panel under System > CRM API).
       requestBody:
         required: true
         content:
