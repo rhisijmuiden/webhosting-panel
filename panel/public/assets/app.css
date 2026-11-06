@@ -436,3 +436,44 @@ dialog.modal::backdrop { background: rgba(14, 22, 38, .55); }
 .checks li small { margin-left: auto; color: var(--ink-muted); font-size: 12px; text-align: right; }
 .checks li.is-ok svg { color: var(--status-online); } .checks li.is-warn svg { color: var(--status-warning); } .checks li.is-bad svg { color: var(--status-offline); }
 .nowrap { white-space: nowrap; }
+.sev-tiles-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 760px) { .sev-tiles-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+a.sev-tile { text-decoration: none; transition: transform .15s ease; }
+a.sev-tile:hover { text-decoration: none; transform: translateY(-1px); }
+.sev-tile.sev-malware { background: color-mix(in srgb, #7A2E8E 14%, transparent); color: color-mix(in srgb, #7A2E8E 75%, var(--ink)); }
+.sev-stack .sev-malware { background: #7A2E8E; }
+.kpi-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.kpi-row > div { display: flex; flex-direction: column; gap: 2px; padding-left: 16px; border-left: 1px solid var(--line); }
+.kpi-row > div:first-child { border-left: 0; padding-left: 0; }
+.kpi-row span { font-size: 12.5px; color: var(--ink-muted); font-weight: 600; }
+.kpi-row strong { font-size: 26px; font-weight: 800; font-stretch: 125%; line-height: 1.15; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) { .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpi-row > div:nth-child(3) { border-left: 0; padding-left: 0; } }
+a.card { color: inherit; text-decoration: none; }
+a.card:hover { text-decoration: none; border-color: var(--line-strong, var(--ink-muted)); }
+.kpi { gap: 6px; padding: 18px; }
+.kpi-label { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; color: var(--ink-muted); }
+.kpi-icon { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--info-bg); color: var(--info-ink); }
+.kpi-icon svg { width: 16px; height: 16px; }
+.kpi-value { font-size: 32px; font-weight: 800; font-stretch: 125%; line-height: 1.1; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.kpi-foot { display: flex; align-items: flex-end; gap: 6px; font-size: 12.5px; color: var(--ink-muted); min-height: 30px; }
+.kpi-foot .up { color: var(--status-online); }
+.spark { width: 96px; height: 30px; margin-left: auto; flex: none; }
+.spark-line { fill: none; stroke: var(--series-1); stroke-width: 1.8; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.spark-area { fill: var(--series-1); opacity: .12; }
+.todo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.todo li { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line-soft); }
+.todo li:first-child { border-top: 0; padding-top: 0; }
+.todo-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.todo-text strong { font-size: 14px; font-weight: 600; }
+.todo-text small { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sev-icon { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; flex: none; background: var(--info-bg); color: var(--info-ink); }
+.sev-icon svg { width: 16px; height: 16px; }
+.sev-icon.bad { background: var(--bad-bg); color: var(--bad-ink); } .sev-icon.warn { background: var(--warn-bg); color: var(--warn-ink); } .sev-icon.ok { background: var(--ok-bg); color: var(--ok-ink); }
+.all-clear { display: flex; align-items: center; gap: 12px; }
+.svc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.svc { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface-sunken); font-size: 13px; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svc i { width: 7px; height: 7px; border-radius: 50%; background: var(--status-online); flex: none; }
+.svc.is-off { background: var(--bad-bg); color: var(--bad-ink); } .svc.is-off i { background: var(--status-offline); }
+.kv-tight { gap: 7px 14px; font-size: 13px; } .kv-tight dd { text-align: right; overflow-wrap: anywhere; }
+.kpi-row small { font-size: 12px; }
+.chart + .kpi-row { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
