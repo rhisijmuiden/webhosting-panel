@@ -16,6 +16,7 @@ module_nginx() {
   (( NGINX_CACHE_MAX < 1 )) && NGINX_CACHE_MAX=1
   (( NGINX_CACHE_MAX > 20 )) && NGINX_CACHE_MAX=20
   render "$TPL/nginx/nginx.conf" /etc/nginx/nginx.conf
+  nginx_traffic_format
   install -d -m 0755 /etc/nginx/whp /etc/nginx/whp/sites
   install -d -m 0700 -o www-data -g www-data /var/cache/nginx/whp
 

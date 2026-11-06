@@ -241,6 +241,7 @@ site_apply() {
     SITE_HTTPS_SERVER="# HTTPS is added as soon as Let's Encrypt has issued a certificate (SSL: $SITE_SSL)"
   fi
   SITE_ALIAS_SERVERS=$(alias_servers "$body")
+  nginx_traffic_format
   install -d -m 0755 "/etc/nginx/whp/sites/$SITE_DOMAIN"
   render "$TPL/nginx/site.conf" "/etc/nginx/sites-available/whp-$SITE_DOMAIN.conf"
   ln -sf "../sites-available/whp-$SITE_DOMAIN.conf" "/etc/nginx/sites-enabled/whp-$SITE_DOMAIN.conf"
@@ -549,6 +550,18 @@ print_site() {
       resources:($res + {cpu_limit:$cpu_limit, memory_limit:$mem_limit})}'
 }
 
+# Undo a site whose first setup failed: state, vhost, PHP unit. Files and the
+# user stay (an add with the same domain reuses them).
+add_rollback() {
+  local rc=$?
+  [[ $rc -ne 0 && -n ${ADD_DOMAIN:-} ]] || return 0
+  rm -f "$(site_file "$ADD_DOMAIN")" "/etc/nginx/sites-enabled/whp-$ADD_DOMAIN.conf" "/etc/nginx/sites-available/whp-$ADD_DOMAIN.conf"
+  systemctl disable --now "whp-site-$SITE_ID" >/dev/null 2>&1 || true
+  rm -rf "/etc/systemd/system/whp-site-$SITE_ID.service" "/etc/systemd/system/whp-site-$SITE_ID.service.d"
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  printf '%s rolled back: the site was not created, you can try again.\n' "$ADD_DOMAIN" >>"$WHP_INSTALL_LOG"
+}
+
 cmd_add() {
   local domain=${1:-}; shift || true
   [[ -n $domain ]] || usage
@@ -612,6 +625,10 @@ cmd_add() {
     chown "$SITE_USER:$SITE_USER" "$SITE_ROOT/$SITE_DOCROOT_REL/index.html"
   fi
 
+  # A failed first setup must not leave a half site behind ("already exists" on retry).
+  ADD_DOMAIN=$domain
+  trap add_rollback EXIT
+
   # First serve HTTP (needed for the ACME challenge), then add HTTPS.
   local want_ssl=$SITE_SSL
   [[ $want_ssl == yes ]] && SITE_SSL=pending
@@ -624,6 +641,7 @@ cmd_add() {
   fi
   (( SITE_QUOTA_MB > 0 )) && quota_apply
   [[ -n $SITE_OWNER ]] && user_slice_write
+  trap - EXIT
   if [[ $JSON == yes ]]; then print_site "$domain"; else ok "$(t site_added "$domain" "$SITE_PHP")"; fi
 }
 
