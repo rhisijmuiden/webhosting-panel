@@ -1,0 +1,526 @@
+#!/usr/bin/env bash
+# Manage websites: own Linux user, own PHP-FPM pool (any installed PHP
+# version), Nginx vhost with page cache, automatic Let's Encrypt.
+# The panel agent calls this tool; it can also be used by hand.
+#
+#   whp-site add <domain> [--php 8.4] [--alias www.<domain>] [--profile php|wordpress|laravel]
+#                         [--docroot public] [--no-cache] [--no-ssl] [--json]
+#   whp-site php <domain> <version>
+#   whp-site cache <domain> on|off|purge
+#   whp-site ssl <domain> | --pending
+#   whp-site quota <domain> <MB>     (0 = unlimited; hard limit when the filesystem
+#                                     has project quotas, see docs/installer.md)
+#   whp-site limits <domain> [--cpu 200%] [--memory 1G]   (empty value removes the cap)
+#   whp-site suspend <domain> | unsuspend <domain>   (503 page, PHP stopped, SFTP/SSH login locked)
+#   whp-site remove <domain> [--keep-files]
+#   whp-site list [--json]
+#   whp-site show <domain>
+set -Eeuo pipefail
+SELF=$(readlink -f "${BASH_SOURCE[0]}")
+INSTALLER_DIR=$(cd "$(dirname "$SELF")/.." && pwd)
+TPL=$INSTALLER_DIR/templates
+# shellcheck source=../lib/common.sh
+source "$INSTALLER_DIR/lib/common.sh"
+load_lang "$INSTALLER_DIR/lang"
+WHP_INSTALL_LOG=$WHP_LOG_DIR/sites.log
+
+SITES_DB=$WHP_STATE/sites
+install -d -m 0750 "$SITES_DB"
+[[ $EUID -eq 0 ]] || die "$(t need_root)"
+
+WHP_HOSTNAME=$(env_get "$WHP_ETC/installer.env" WHP_HOSTNAME 2>/dev/null || hostname -f)
+WHP_LETSENCRYPT_DEFAULT=$(env_get "$WHP_ETC/installer.env" WHP_LETSENCRYPT 2>/dev/null || echo yes)
+[[ $WHP_LETSENCRYPT_DEFAULT == no ]] || WHP_LETSENCRYPT_DEFAULT=yes
+JSON=no
+# --json anywhere: progress goes to stderr, stdout carries only the JSON result.
+for a in "$@"; do [[ $a == --json ]] && JSON=yes; done
+if [[ $JSON == yes ]]; then exec 3>&1 1>&2; else exec 3>&1; fi
+
+usage() { printf '%b' "$(t usage_site)"; exit 2; }
+
+installed_php() {
+  local d v
+  for d in /etc/php/*/fpm; do
+    v=${d#/etc/php/}; v=${v%/fpm}
+    if [[ -x /usr/sbin/php-fpm$v ]]; then echo "$v"; fi
+  done | sort -V
+}
+default_php() { local v; v=$(installed_php | grep -x 8.4 || installed_php | tail -n1); echo "$v"; }
+
+site_file() { printf '%s/%s.env' "$SITES_DB" "$1"; }
+site_exists() { [[ -f $(site_file "$1") ]]; }
+
+site_load() {
+  local f
+  f=$(site_file "$1")
+  [[ -f $f ]] || die "$(t site_missing "$1")"
+  local k
+  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED; do
+    printf -v "$k" '%s' "$(env_get "$f" "$k" || true)"
+  done
+  SITE_ROOT=$WHP_VHOSTS/$SITE_DOMAIN
+}
+
+site_save() {
+  local f k
+  f=$(site_file "$SITE_DOMAIN")
+  [[ -f $f ]] || install -m 0640 /dev/null "$f"
+  for k in SITE_DOMAIN SITE_ID SITE_USER SITE_PHP SITE_ALIASES SITE_CACHE SITE_PROFILE SITE_DOCROOT_REL SITE_SSL SITE_QUOTA_MB SITE_CPU SITE_MEM SITE_CREATED SITE_SUSPENDED; do
+    env_set "$f" "$k" "${!k}"
+  done
+}
+
+make_ids() {
+  local d=$1 id
+  id=${d//./_}; id=${id//-/_}
+  SITE_ID=$id
+  if (( ${#id} > 28 )); then
+    SITE_USER="s_${id:0:21}_$(printf '%s' "$d" | sha1sum | cut -c1-6)"
+  else
+    SITE_USER="s_$id"
+  fi
+}
+
+disable_functions_for() {
+  case $1 in
+    laravel) echo "passthru,shell_exec,system,pcntl_exec,show_source" ;;
+    *) echo "exec,passthru,shell_exec,system,proc_open,popen,pcntl_exec,show_source" ;;
+  esac
+}
+
+# Write the pool and vhost from the saved state and reload services.
+site_apply() {
+  local old_php=${1:-}
+  SITE_ROOT=$WHP_VHOSTS/$SITE_DOMAIN
+  SITE_DOCROOT=$SITE_ROOT/${SITE_DOCROOT_REL}
+  SITE_NAMES="$SITE_DOMAIN${SITE_ALIASES:+ ${SITE_ALIASES//,/ }}"
+  SITE_PM_MAX=${SITE_PM_MAX:-10}
+  SITE_OPCACHE_MB=${SITE_OPCACHE_MB:-128}
+  SITE_DISABLE_FUNCTIONS=$(disable_functions_for "$SITE_PROFILE")
+  SITE_SENDER="noreply@$SITE_DOMAIN"
+  if [[ $SITE_CACHE == on ]]; then SITE_PHP_INCLUDE=php-cache.conf; else SITE_PHP_INCLUDE=php-nocache.conf; fi
+
+  # Each site has its own PHP-FPM master in its own systemd unit (cgroup):
+  # CPU, memory and IO are measured per site and can be capped (whp-site limits),
+  # and OPcache is not shared between customers.
+  local v unit=whp-site-$SITE_ID
+  for v in $(installed_php); do rm -f "/etc/php/$v/fpm/pool.d/site-$SITE_ID.conf"; done
+  install -d -m 0755 "$WHP_ETC/php-fpm"
+  install -d -m 0750 "$WHP_LOG_DIR/php-fpm"
+  {
+    render_string "$TPL/php/fpm-site-global.conf"
+    render_string "$TPL/php/pool-site.conf"
+  } >"$WHP_ETC/php-fpm/$SITE_ID.conf.new"
+  "php-fpm$SITE_PHP" -t --fpm-config "$WHP_ETC/php-fpm/$SITE_ID.conf.new" >>"$WHP_INSTALL_LOG" 2>&1 \
+    || { rm -f "$WHP_ETC/php-fpm/$SITE_ID.conf.new"; die "php-fpm$SITE_PHP config test failed (see $WHP_INSTALL_LOG)"; }
+  mv -f "$WHP_ETC/php-fpm/$SITE_ID.conf.new" "$WHP_ETC/php-fpm/$SITE_ID.conf"
+  render "$TPL/systemd/whp-site.service" "/etc/systemd/system/$unit.service"
+  site_limits_write
+  systemctl daemon-reload
+  local body
+  if [[ ${SITE_SUSPENDED:-no} == yes ]]; then
+    systemctl disable --now "$unit" >/dev/null 2>&1 || true
+    install -d -m 0755 /etc/nginx/whp/pages
+    [[ -f /etc/nginx/whp/pages/suspended.html ]] \
+      || install -m 0644 "$TPL/nginx/pages/suspended.html" /etc/nginx/whp/pages/suspended.html
+    body=$(render_string "$TPL/nginx/site-suspended.conf")
+  else
+    systemctl enable "$unit" >/dev/null 2>&1
+    if [[ -n $old_php || ${SITE_RESTART:-no} == yes ]]; then systemctl restart "$unit"
+    else systemctl reload-or-restart "$unit"; fi
+
+    # Wait for the socket before nginx sends traffic to it.
+    local i
+    for i in {1..20}; do [[ -S /run/php/site-$SITE_ID.sock ]] && break; sleep 0.25; done
+    body=$(render_string "$TPL/nginx/site-body.conf")
+  fi
+  if [[ $SITE_SSL == active ]]; then
+    SITE_CERT=/etc/letsencrypt/live/$SITE_DOMAIN/fullchain.pem
+    SITE_KEY=/etc/letsencrypt/live/$SITE_DOMAIN/privkey.pem
+    if nginx_has_http3; then SITE_QUIC="listen 443 quic;
+    listen [::]:443 quic;"; else SITE_QUIC="# HTTP/3 not available"; fi
+    SITE_BODY=$body
+    # shellcheck disable=SC2016 # nginx variables
+    SITE_HTTP_BODY='location / { return 301 https://$host$request_uri; }'
+    SITE_HTTPS_SERVER=$(render_string "$TPL/nginx/site-https.conf")
+  else
+    SITE_HTTP_BODY=$body
+    SITE_HTTPS_SERVER="# HTTPS is added as soon as Let's Encrypt has issued a certificate (SSL: $SITE_SSL)"
+  fi
+  install -d -m 0755 "/etc/nginx/whp/sites/$SITE_DOMAIN"
+  render "$TPL/nginx/site.conf" "/etc/nginx/sites-available/whp-$SITE_DOMAIN.conf"
+  ln -sf "../sites-available/whp-$SITE_DOMAIN.conf" "/etc/nginx/sites-enabled/whp-$SITE_DOMAIN.conf"
+  if ! nginx -t >>"$WHP_INSTALL_LOG" 2>&1; then
+    rm -f "/etc/nginx/sites-enabled/whp-$SITE_DOMAIN.conf"
+    die "nginx config test failed for $SITE_DOMAIN (see $WHP_INSTALL_LOG)"
+  fi
+  nginx_reload_wait
+}
+
+# Reload nginx and wait until the old workers (old config) are gone,
+# so the next request is answered with the new configuration.
+nginx_reload_wait() {
+  local master old cur i
+  master=$(cat /run/nginx.pid 2>/dev/null || true)
+  old=''
+  if [[ -n $master ]]; then old=$(pgrep -P "$master" | sort || true); fi
+  systemctl reload nginx
+  [[ -n $old ]] || return 0
+  for i in {1..100}; do
+    cur=$(pgrep -P "$master" | sort || true)
+    [[ -z $(comm -12 <(printf '%s\n' "$old") <(printf '%s\n' "$cur")) ]] && break
+    sleep 0.1
+  done
+  return 0
+}
+
+# Remove this site's pages from the Nginx page cache (all its host names).
+cache_purge() {
+  local names re
+  names="$SITE_DOMAIN${SITE_ALIASES:+,$SITE_ALIASES}"
+  re="^KEY: https?(GET|HEAD)($(sed 's/\./\\./g; s/,/|/g' <<<"$names"))/"
+  [[ -d /var/cache/nginx/whp ]] || return 0
+  # No match is fine: never let grep's exit status trip pipefail or the ERR trap.
+  { grep -rlZaE "$re" /var/cache/nginx/whp 2>/dev/null || true; } | { xargs -0 -r rm -f || true; }
+  return 0
+}
+
+# Render a template to stdout (same rules as render()).
+render_string() {
+  local tmp
+  tmp=$(mktemp)
+  render "$1" "$tmp"
+  cat "$tmp"
+  rm -f "$tmp"
+}
+
+site_cert() {
+  local names=()
+  [[ -n $SITE_ALIASES ]] && IFS=',' read -r -a names <<<"$SITE_ALIASES"
+  if "$INSTALLER_DIR/bin/whp-cert" "$SITE_DOMAIN" "${names[@]}" \
+     || { ((${#names[@]})) && "$INSTALLER_DIR/bin/whp-cert" "$SITE_DOMAIN"; }; then
+    SITE_SSL=active
+    info "$(t cert_ok "$SITE_DOMAIN")"
+  else
+    SITE_SSL=pending
+    warn "$(t site_cert_pending "$SITE_DOMAIN" "$SITE_DOMAIN")"
+  fi
+}
+
+print_site() {
+  site_load "$1"
+  jq -n >&3 --arg domain "$SITE_DOMAIN" --arg user "$SITE_USER" --arg php "$SITE_PHP" \
+    --arg aliases "$SITE_ALIASES" --arg cache "$SITE_CACHE" --arg profile "$SITE_PROFILE" \
+    --arg root "$SITE_ROOT" --arg docroot "$SITE_ROOT/$SITE_DOCROOT_REL" --arg ssl "$SITE_SSL" \
+    --arg created "$SITE_CREATED" --arg socket "/run/php/site-$SITE_ID.sock" \
+    --arg unit "whp-site-$SITE_ID.service" \
+    --argjson quota "${SITE_QUOTA_MB:-0}" --arg qmode "$(quota_mode)" \
+    --argjson res "$(site_resources)" \
+    --arg cpu_limit "$SITE_CPU" --arg mem_limit "$SITE_MEM" \
+    --arg suspended "${SITE_SUSPENDED:-no}" \
+    --argjson used "$(du -sm --one-file-system "$SITE_ROOT" 2>/dev/null | cut -f1 || echo 0)" \
+    '{domain:$domain, user:$user, php:$php, aliases:($aliases|split(",")|map(select(length>0))),
+      cache:($cache=="on"), suspended:($suspended=="yes"), profile:$profile, root:$root, docroot:$docroot, ssl:$ssl,
+      socket:$socket, created:$created, unit:$unit,
+      cgroup:("/sys/fs/cgroup/whp.slice/whp-sites.slice/" + $unit),
+      disk:{used_mb:$used, quota_mb:$quota, enforced:($qmode!="none" and $quota>0), mode:$qmode},
+      resources:($res + {cpu_limit:$cpu_limit, memory_limit:$mem_limit})}'
+}
+
+cmd_add() {
+  local domain=${1:-}; shift || true
+  [[ -n $domain ]] || usage
+  domain=${domain,,}
+  valid_domain "$domain" || die "$(t bad_hostname "$domain")"
+  site_exists "$domain" && die "$(t site_exists "$domain")"
+
+  SITE_DOMAIN=$domain SITE_PHP=$(default_php) SITE_ALIASES='' SITE_CACHE=on SITE_PROFILE=php
+  SITE_DOCROOT_REL='' SITE_SSL=$WHP_LETSENCRYPT_DEFAULT SITE_QUOTA_MB=0 SITE_CPU='' SITE_MEM='' SITE_SUSPENDED=no
+  local alias_set=no
+  while (($#)); do
+    case $1 in
+      --php) SITE_PHP=$2; shift ;;
+      --alias) SITE_ALIASES+="${SITE_ALIASES:+,}${2,,}"; alias_set=yes; shift ;;
+      --no-alias) alias_set=yes ;;
+      --profile) SITE_PROFILE=$2; shift ;;
+      --docroot) SITE_DOCROOT_REL=$2; shift ;;
+      --no-cache) SITE_CACHE=off ;;
+      --no-ssl) SITE_SSL=off ;;
+      --quota) SITE_QUOTA_MB=$2; shift ;;
+      --json) JSON=yes ;;
+      *) usage ;;
+    esac
+    shift
+  done
+  [[ -x /usr/sbin/php-fpm$SITE_PHP ]] || die "$(t bad_php "$SITE_PHP" "$(installed_php | xargs)")"
+  case $SITE_PROFILE in php|wordpress|laravel) ;; *) die "profile: php|wordpress|laravel" ;; esac
+  [[ $alias_set == no && $domain != www.* ]] && SITE_ALIASES="www.$domain"
+  if [[ -z $SITE_DOCROOT_REL ]]; then
+    # Laravel: the repository goes in app/, Nginx serves app/public.
+    if [[ $SITE_PROFILE == laravel ]]; then SITE_DOCROOT_REL=app/public; else SITE_DOCROOT_REL=public; fi
+  fi
+  [[ $SITE_DOCROOT_REL =~ ^[A-Za-z0-9._/-]+$ && $SITE_DOCROOT_REL != *..* ]] || die "invalid docroot"
+  [[ $SITE_PROFILE == laravel && $SITE_CACHE == on ]] && SITE_CACHE=off
+  local a
+  for a in ${SITE_ALIASES//,/ }; do valid_domain "$a" || die "$(t bad_hostname "$a")"; done
+
+  make_ids "$domain"
+  SITE_CREATED=$(date -u +%FT%TZ)
+  SITE_ROOT=$WHP_VHOSTS/$domain
+
+  getent passwd "$SITE_USER" >/dev/null || useradd --system --user-group --home-dir "$SITE_ROOT" \
+    --no-create-home --shell /usr/sbin/nologin "$SITE_USER"
+  install -d -m 0750 -o "$SITE_USER" -g www-data "$SITE_ROOT"
+  install -d -m 0750 -o "$SITE_USER" -g www-data "$SITE_ROOT/logs"
+  install -d -m 0700 -o "$SITE_USER" -g "$SITE_USER" "$SITE_ROOT/tmp" "$SITE_ROOT/sessions"
+  install -d -m 0755 -o "$SITE_USER" -g "$SITE_USER" "$SITE_ROOT/$SITE_DOCROOT_REL"
+  # Directories between the site root and the docroot (Laravel: app/).
+  local p=$SITE_ROOT/$SITE_DOCROOT_REL
+  while p=$(dirname "$p"); [[ $p != "$SITE_ROOT" && $p == "$SITE_ROOT"/* ]]; do
+    chown "$SITE_USER:$SITE_USER" "$p"; chmod 0755 "$p"
+  done
+  if [[ ! -e $SITE_ROOT/$SITE_DOCROOT_REL/index.php && ! -e $SITE_ROOT/$SITE_DOCROOT_REL/index.html ]]; then
+    printf '<!doctype html><meta charset="utf-8"><title>%s</title><p>%s</p>\n' "$domain" "$domain" \
+      >"$SITE_ROOT/$SITE_DOCROOT_REL/index.html"
+    chown "$SITE_USER:$SITE_USER" "$SITE_ROOT/$SITE_DOCROOT_REL/index.html"
+  fi
+
+  # First serve HTTP (needed for the ACME challenge), then add HTTPS.
+  local want_ssl=$SITE_SSL
+  [[ $want_ssl == yes ]] && SITE_SSL=pending
+  site_save
+  site_apply
+  if [[ $want_ssl == yes ]]; then
+    site_cert
+    site_save
+    [[ $SITE_SSL == active ]] && site_apply
+  fi
+  (( SITE_QUOTA_MB > 0 )) && quota_apply
+  if [[ $JSON == yes ]]; then print_site "$domain"; else ok "$(t site_added "$domain" "$SITE_PHP")"; fi
+}
+
+# CPU and memory caps for the site's unit (empty = no cap).
+site_limits_write() {
+  local d=/etc/systemd/system/whp-site-$SITE_ID.service.d
+  install -d -m 0755 "$d"
+  {
+    echo "# Managed by whp-site"
+    echo "[Service]"
+    [[ -n $SITE_CPU ]] && echo "CPUQuota=$SITE_CPU"
+    [[ -n $SITE_MEM ]] && printf 'MemoryHigh=%s\nMemoryMax=%s\n' "$SITE_MEM" "$SITE_MEM"
+    echo "TasksMax=512"
+  } >"$d/limits.conf"
+}
+
+# Live usage from the site's cgroup.
+site_resources() {
+  local out
+  out=$(systemctl show "whp-site-$SITE_ID" -p ActiveState -p CPUUsageNSec -p MemoryCurrent -p IOReadBytes -p IOWriteBytes -p TasksCurrent 2>/dev/null)
+  jq -Rn --arg raw "$out" '[$raw|split("\n")[]|select(length>0)|split("=")|{(.[0]):(.[1:]|join("="))}]|add // {}
+    | {state:(.ActiveState//"unknown"),
+       cpu_seconds:((.CPUUsageNSec|tonumber? // 0)/1e9),
+       memory_bytes:(.MemoryCurrent|tonumber? // 0),
+       io_read_bytes:(.IOReadBytes|tonumber? // 0),
+       io_write_bytes:(.IOWriteBytes|tonumber? // 0),
+       tasks:(.TasksCurrent|tonumber? // 0)}'
+}
+
+cmd_limits() {
+  local domain=${1:-}; shift || true
+  [[ -n $domain ]] || usage
+  site_load "$domain"
+  while (($#)); do
+    case $1 in
+      --cpu) [[ $2 =~ ^([0-9]+%)?$ ]] || die "--cpu: e.g. 200% (2 cores) or empty"; SITE_CPU=$2; shift ;;
+      --memory) [[ $2 =~ ^([0-9]+[KMG])?$ ]] || die "--memory: e.g. 1G or empty"; SITE_MEM=$2; shift ;;
+      --json) ;;
+      *) usage ;;
+    esac
+    shift
+  done
+  site_save
+  site_limits_write
+  systemctl daemon-reload
+  systemctl try-restart "whp-site-$SITE_ID"
+  ok "$domain cpu ${SITE_CPU:-unlimited} memory ${SITE_MEM:-unlimited}"
+  if [[ $JSON == yes ]]; then print_site "$domain"; fi
+}
+
+# Project quota: project id = uid of the site user, applied to the site tree.
+quota_apply() {
+  local mode id mnt
+  mode=$(quota_mode "$SITE_ROOT")
+  id=$(id -u "$SITE_USER")
+  mnt=$(findmnt -n -o TARGET --target "$SITE_ROOT")
+  case $mode in
+    ext4)
+      chattr -R +P -p "$id" "$SITE_ROOT"
+      setquota -P "$id" 0 $(( SITE_QUOTA_MB * 1024 )) 0 0 "$mnt" ;;
+    xfs)
+      xfs_quota -x -c "project -s -p $SITE_ROOT $id" "$mnt" >/dev/null
+      xfs_quota -x -c "limit -p bhard=${SITE_QUOTA_MB}m $id" "$mnt" ;;
+    none)
+      warn "no project quota support on $mnt: limit ${SITE_QUOTA_MB} MB is stored but not enforced by the kernel" ;;
+  esac
+}
+
+cmd_quota() {
+  local domain=${1:-} mb=${2:-}
+  [[ -n $domain && $mb =~ ^[0-9]+$ ]] || usage
+  site_load "$domain"
+  SITE_QUOTA_MB=$mb
+  site_save
+  quota_apply
+  ok "$domain quota ${mb} MB ($(quota_mode "$SITE_ROOT"))"
+}
+
+cmd_php() {
+  local domain=${1:-} v=${2:-}
+  [[ -n $domain && $v =~ ^[0-9]+\.[0-9]+$ ]] || usage
+  site_load "$domain"
+  [[ -x /usr/sbin/php-fpm$v ]] || die "$(t bad_php "$v" "$(installed_php | xargs)")"
+  local old=$SITE_PHP
+  SITE_PHP=$v
+  site_save
+  site_apply "$old"
+  cache_purge
+  ok "$(t site_php "$domain" "$v")"
+  if [[ $JSON == yes ]]; then print_site "$domain"; fi
+}
+
+cmd_cache() {
+  local domain=${1:-} state=${2:-}
+  [[ -n $domain && $state =~ ^(on|off|purge)$ ]] || usage
+  site_load "$domain"
+  cache_purge
+  if [[ $state == purge ]]; then
+    ok "$domain cache purged"
+    if [[ $JSON == yes ]]; then print_site "$domain" 3>&1 | jq '. + {purged:true}' >&3; fi
+    return 0
+  fi
+  SITE_CACHE=$state
+  site_save
+  site_apply
+  ok "$domain cache $state"
+  if [[ $JSON == yes ]]; then print_site "$domain"; fi
+}
+
+cmd_ssl() {
+  local target=${1:-}
+  [[ -n $target ]] || usage
+  local list=()
+  if [[ $target == --pending ]]; then
+    local f
+    for f in "$SITES_DB"/*.env; do
+      [[ -e $f ]] || continue
+      [[ $(env_get "$f" SITE_SSL) == pending ]] && list+=("$(env_get "$f" SITE_DOMAIN)")
+    done
+    # The server hostname itself, when it still runs on a self-signed certificate.
+    if [[ -n $WHP_HOSTNAME && ! -e /etc/letsencrypt/live/$WHP_HOSTNAME ]] \
+       && [[ $(env_get "$WHP_ETC/installer.env" WHP_LETSENCRYPT 2>/dev/null || echo yes) != no ]]; then
+      if "$INSTALLER_DIR/bin/whp-cert" "$WHP_HOSTNAME"; then hostname_cert_installed; fi
+    fi
+  else
+    list=("$target")
+  fi
+  local d
+  for d in "${list[@]}"; do
+    site_load "$d"
+    site_cert
+    site_save
+    site_apply
+    if [[ $JSON == yes && $target != --pending ]]; then print_site "$d"; fi
+  done
+}
+
+# The hostname got a real certificate: switch panel, Postfix and Dovecot to it.
+hostname_cert_installed() {
+  local c=/etc/letsencrypt/live/$WHP_HOSTNAME
+  sed -i "s#/etc/ssl/certs/ssl-cert-snakeoil.pem#$c/fullchain.pem#; s#/etc/ssl/private/ssl-cert-snakeoil.key#$c/privkey.pem#" \
+    /etc/nginx/sites-available/05-whp-panel.conf /etc/dovecot/dovecot.conf 2>/dev/null || true
+  if command -v postconf >/dev/null; then
+    postconf -e "smtpd_tls_cert_file = $c/fullchain.pem" "smtpd_tls_key_file = $c/privkey.pem"
+  fi
+  nginx -t >/dev/null 2>&1 && systemctl reload nginx
+  local s
+  for s in postfix dovecot; do systemctl is-active --quiet "$s" && systemctl reload "$s"; done
+  info "$(t cert_ok "$WHP_HOSTNAME")"
+}
+
+# Suspend: visitors get a 503 page, PHP-FPM is stopped, the site user cannot
+# log in (SFTP/SSH) and its processes are ended. Files, mail and certificates stay.
+cmd_suspend() {
+  local domain=${1:-} want=${2:-yes}
+  [[ -n $domain ]] || usage
+  site_load "$domain"
+  if [[ ${SITE_SUSPENDED:-no} != "$want" ]]; then
+    SITE_SUSPENDED=$want
+    site_save
+    if [[ $want == yes ]]; then
+      usermod --expiredate 1 "$SITE_USER" >/dev/null 2>&1 || true
+      site_apply
+      pkill -u "$SITE_USER" 2>/dev/null || true
+      cache_purge
+    else
+      usermod --expiredate '' "$SITE_USER" >/dev/null 2>&1 || true
+      SITE_RESTART=yes site_apply
+    fi
+  fi
+  if [[ $want == yes ]]; then ok "$(t site_suspended "$domain")"; else ok "$(t site_unsuspended "$domain")"; fi
+  if [[ $JSON == yes ]]; then print_site "$domain"; fi
+}
+
+cmd_remove() {
+  local domain=${1:-} keep=no
+  [[ -n $domain ]] || usage
+  [[ " $* " == *" --keep-files "* ]] && keep=yes
+  site_load "$domain"
+  rm -f "/etc/nginx/sites-enabled/whp-$domain.conf" "/etc/nginx/sites-available/whp-$domain.conf"
+  rm -rf "/etc/nginx/whp/sites/$domain"
+  nginx -t >>"$WHP_INSTALL_LOG" 2>&1 && systemctl reload nginx
+  systemctl disable --now "whp-site-$SITE_ID" >/dev/null 2>&1 || true
+  rm -rf "/etc/systemd/system/whp-site-$SITE_ID.service" "/etc/systemd/system/whp-site-$SITE_ID.service.d" \
+    "$WHP_ETC/php-fpm/$SITE_ID.conf"
+  [[ $keep == yes ]] || rm -f "$WHP_LOG_DIR/php-fpm/$SITE_ID.log"
+  systemctl daemon-reload
+  pkill -u "$SITE_USER" 2>/dev/null || true
+  if [[ $keep == no ]]; then
+    rm -rf --one-file-system "${SITE_ROOT:?}"
+    certbot delete --non-interactive --cert-name "$domain" >>"$WHP_INSTALL_LOG" 2>&1 || true
+  fi
+  userdel "$SITE_USER" 2>/dev/null || true
+  rm -f "$(site_file "$domain")"
+  ok "$(t site_removed "$domain")"
+  if [[ $JSON == yes ]]; then jq -n --arg d "$domain" '{domain:$d, removed:true}' >&3; fi
+}
+
+cmd_list() {
+  local f out='[]'
+  for f in "$SITES_DB"/*.env; do
+    [[ -e $f ]] || continue
+    if [[ ${1:-} == --json ]]; then
+      out=$(jq -c --argjson s "$(print_site "$(env_get "$f" SITE_DOMAIN)" 3>&1)" '. + [$s]' <<<"$out")
+    else
+      printf '%-40s php %-4s cache %-3s ssl %s\n' >&3 "$(env_get "$f" SITE_DOMAIN)" "$(env_get "$f" SITE_PHP)" \
+        "$(env_get "$f" SITE_CACHE)" "$(env_get "$f" SITE_SSL)"
+    fi
+  done
+  if [[ ${1:-} == --json ]]; then printf '%s\n' "$out" >&3; fi
+  return 0
+}
+
+cmd=${1:-}; shift || true
+case $cmd in
+  add) cmd_add "$@" ;;
+  php) cmd_php "$@" ;;
+  cache) cmd_cache "$@" ;;
+  ssl) cmd_ssl "$@" ;;
+  quota) cmd_quota "$@" ;;
+  limits) cmd_limits "$@" ;;
+  suspend) cmd_suspend "${1:-}" yes ;;
+  unsuspend) cmd_suspend "${1:-}" no ;;
+  remove) cmd_remove "$@" ;;
+  list) cmd_list "$@" ;;
+  show) print_site "${1:-}" ;;
+  *) usage ;;
+esac
