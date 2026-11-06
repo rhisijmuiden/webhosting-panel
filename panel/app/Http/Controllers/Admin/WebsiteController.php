@@ -20,12 +20,34 @@ class WebsiteController extends Controller
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('q'));
-        $websites = Website::with('customer')
-            ->when($search, fn ($q) => $q->where('domain', 'like', "%{$search}%"))
-            ->when($request->query('php'), fn ($q, $v) => $q->where('php_version', $v))
-            ->orderBy('domain')->paginate(25)->withQueryString();
+        $sort = in_array($request->query('sort'), ['domain', 'disk', 'traffic', 'created'], true) ? $request->query('sort') : 'domain';
+        $direction = $request->query('dir') === 'desc' ? 'desc' : 'asc';
+        $perPage = in_array((int) $request->query('per_page'), [10, 25, 100], true) ? (int) $request->query('per_page') : 25;
 
-        return view('admin.websites.index', compact('websites', 'search'));
+        $websites = Website::with('customer')
+            ->withSum(['traffic as traffic_bytes' => fn ($q) => $q->where('month', now()->utc()->format('Y-m'))], 'bytes')
+            ->when($search, fn ($q) => $q->where(fn ($q) => $q
+                ->where('domain', 'like', "%{$search}%")
+                ->orWhereHas('customer', fn ($c) => $c->where('name', 'like', "%{$search}%")->orWhere('company', 'like', "%{$search}%"))))
+            ->when($request->query('php'), fn ($q, $v) => $q->where('php_version', $v))
+            ->when($request->query('status'), fn ($q, $v) => $q->where('status', $v))
+            ->orderBy(match ($sort) {
+                'disk' => 'disk_used_mb',
+                'traffic' => 'traffic_bytes',
+                'created' => 'created_at',
+                default => 'domain',
+            }, $direction)
+            ->orderBy('domain')
+            ->paginate($perPage)->withQueryString();
+
+        return view('admin.websites.index', [
+            'websites' => $websites,
+            'search' => $search,
+            'sort' => $sort,
+            'direction' => $direction,
+            'perPage' => $perPage,
+            'extras' => \App\Support\DomainListExtras::for($websites->getCollection()),
+        ]);
     }
 
     public function create(Request $request): View
