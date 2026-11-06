@@ -213,7 +213,7 @@ PY
 
   echo "== mail extras (autoresponder, IMAP import)"
   check "dovecot has the import master user and the autoreply script slot" bash -c "doveconf -n | grep -q whp_autoreply && doveconf -n | grep -q master-users && [[ -s /etc/dovecot/master-users ]]"
-  check "imapsync installed" command -v imapsync
+  check "imapsync installed and its Perl modules load" bash -c "/usr/local/bin/imapsync --version && perl -c /usr/local/bin/imapsync"
   check "autoreply: script written and compiled" bash -c 'agent mail.autoreply_sync "{\"autoreplies\":[{\"email\":\"info@example.test\",\"subject\":\"Smoke away\",\"body\":\"I am away until Monday.\",\"days\":1}]}" | jq -e ".written == [\"info@example.test\"]" && [[ -f /var/vmail/example.test/info/whp-autoreply.svbin ]]'
   printf 'Subject: question\nFrom: bob@example.test\nTo: info@example.test\n\nare you there?\n' | sendmail -f bob@example.test -t -i
   autoreply_arrived() { grep -lqs '^Subject: Smoke away' /var/vmail/example.test/bob/Maildir/new/* /var/vmail/example.test/bob/Maildir/cur/*; }

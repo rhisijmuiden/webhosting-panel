@@ -161,12 +161,45 @@ mail_dovecot() {
 # IMAP import from other providers (agent mail.imap_import_*): imapsync, and a
 # Dovecot master user it logs in with on loopback, so customers' own passwords
 # are never needed. The password lives in secrets.env (IMAP_IMPORT_MASTER_PASS).
-mail_import_login() {
-  if apt-cache show imapsync >/dev/null 2>&1; then
-    apt_install imapsync
-  else
-    warn "imapsync is not available from apt: mail import from other providers stays off"
+# imapsync is not in Debian 13: the upstream script (pinned version, checked
+# sha256) with its Perl modules from Debian. A failure here never stops the
+# installer; the panel then shows mail import as not available.
+IMAPSYNC_VERSION=2.314
+IMAPSYNC_SHA256=89faed96f7c389723ddd7e78a00421b90d5b85bf79407fcf1b11209f3d4d7416
+IMAPSYNC_PERL=(libmail-imapclient-perl libio-socket-ssl-perl libio-tee-perl libterm-readkey-perl
+  libunicode-string-perl libreadonly-perl libsys-meminfo-perl libregexp-common-perl libfile-tail-perl
+  libencode-imaputf7-perl libfile-copy-recursive-perl libdigest-hmac-perl libauthen-ntlm-perl
+  libdata-uniqid-perl libjson-perl libjson-webtoken-perl libcrypt-openssl-rsa-perl libhtml-parser-perl
+  libwww-perl libcgi-pm-perl)
+
+mail_imapsync() {
+  local bin=/usr/local/bin/imapsync pkg have=() missing=() tmp
+  for pkg in "${IMAPSYNC_PERL[@]}"; do
+    if apt-cache show "$pkg" >/dev/null 2>&1; then have+=("$pkg"); else missing+=("$pkg"); fi
+  done
+  ((${#missing[@]})) && warn "imapsync: Perl packages not in apt: ${missing[*]}"
+  apt_install "${have[@]}"
+  if [[ ! -x $bin ]] || ! grep -q "imapsync,v $IMAPSYNC_VERSION " "$bin"; then
+    tmp=$(mktemp)
+    if curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$tmp" \
+        "https://raw.githubusercontent.com/imapsync/imapsync/imapsync-$IMAPSYNC_VERSION/imapsync" \
+      && [[ $(sha256sum "$tmp" | cut -d' ' -f1) == "$IMAPSYNC_SHA256" ]]; then
+      install -m 0755 "$tmp" "$bin"
+    else
+      warn "imapsync $IMAPSYNC_VERSION download failed or checksum mismatch: mail import stays off"
+    fi
+    rm -f "$tmp"
   fi
+  if [[ -x $bin ]] && perl -c "$bin" >/dev/null 2>&1; then
+    ok "imapsync $IMAPSYNC_VERSION"
+  elif [[ -x $bin ]]; then
+    warn "imapsync is installed but Perl modules are missing ($(perl -c "$bin" 2>&1 | head -n1)): mail import stays off"
+    chmod 0644 "$bin"
+  fi
+}
+
+mail_import_login() {
+  mail_imapsync
   local pw hash
   pw=$(secret IMAP_IMPORT_MASTER_PASS 40)
   if [[ ! -s /etc/dovecot/master-users ]]; then
