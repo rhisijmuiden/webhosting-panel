@@ -6,8 +6,9 @@ Login protection for the Webhosting Panel, on top of CrowdSec and nftables.
   per service (SSH/SFTP, mail, control panel, WordPress) a temporary block
   after *N* failed logins within *W* minutes for *B* minutes, and a permanent
   block after *M* failed logins within *P* hours. Length of a permanent block
-  (0 = until unblocked). A server-wide allowlist that also beats the CrowdSec
-  community blocklist.
+  (0 = until unblocked). Trusted IP addresses (server-wide): never blocked
+  (CrowdSec, its community blocklist and the panel's nftables block sets), and
+  admins logging in from them skip the two-factor code; each skip is logged.
 - **Customer** (`/security`, menu Security): per website, switch attack
   detection and WordPress login protection on or off, keep an allowlist of up
   to 20 addresses (home, office) that also covers the site's mailboxes, see

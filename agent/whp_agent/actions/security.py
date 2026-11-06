@@ -396,6 +396,62 @@ def render_all(cfg):
     }
 
 
+# ------------------------------------------------------------- trusted (nft)
+
+NFT_CONF = os.environ.get("WHP_NFT_CONF", "/etc/nftables.conf")
+TRUSTED_NFT = Path(paths.NFT_DIR) / "whp-trusted.nft"
+
+
+def render_trusted_nft(cfg):
+    """Trusted addresses skip the panel's block sets and the SSH brake.
+
+    Everything lives in this include, so servers installed before this
+    feature get it without a new nftables.conf. The include runs on every
+    full reload, right after the table is recreated, so the inserted rules
+    never pile up. Trusted addresses only reach the ports that are open
+    anyway; CrowdSec's own table is kept clear by its allowlists.
+    """
+    v4 = [a["address"] for a in cfg["allowlist"] if ipaddress.ip_network(a["address"]).version == 4]
+    v6 = [a["address"] for a in cfg["allowlist"] if ipaddress.ip_network(a["address"]).version == 6]
+    lines = [HEADER.rstrip("\n"), "",
+             "add set inet whp trusted_v4 { type ipv4_addr; flags interval; auto-merge; }",
+             "add set inet whp trusted_v6 { type ipv6_addr; flags interval; auto-merge; }"]
+    if v4:
+        lines.append("add element inet whp trusted_v4 { " + ", ".join(v4) + " }")
+    if v6:
+        lines.append("add element inet whp trusted_v6 { " + ", ".join(v6) + " }")
+    if v4 or v6:
+        lines += [
+            "insert rule inet whp input ip saddr @trusted_v4 tcp dport @tcp_open accept",
+            "insert rule inet whp input ip saddr @trusted_v4 udp dport @udp_open accept",
+            "insert rule inet whp input ip6 saddr @trusted_v6 tcp dport @tcp_open accept",
+            "insert rule inet whp input ip6 saddr @trusted_v6 udp dport @udp_open accept",
+        ]
+    return "\n".join(lines) + "\n"
+
+
+def _apply_trusted_nft(cfg):
+    """Returns True when the nftables rules changed. No-op without the panel firewall."""
+    conf = _read(Path(NFT_CONF))
+    if conf is None or "table inet whp" not in conf or not TRUSTED_NFT.parent.is_dir():
+        return False
+    content = render_trusted_nft(cfg)
+    old = _read(TRUSTED_NFT)
+    if old == content:
+        return False
+    _write(TRUSTED_NFT, content)
+    check = run(["nft", "-c", "-f", NFT_CONF], timeout=30, check=False)
+    if check.returncode != 0:
+        if old is None:
+            TRUSTED_NFT.unlink(missing_ok=True)
+        else:
+            _write(TRUSTED_NFT, old)
+        raise ActionError("command_failed", "nftables rejected the trusted addresses; nothing was changed",
+                          {"stderr": (check.stderr or check.stdout)[-2000:]})
+    run(["systemctl", "reload", "nftables"], timeout=30)
+    return True
+
+
 # ------------------------------------------------------------------- applying
 
 def _read(path):
@@ -501,6 +557,8 @@ def apply(params):
                 _unban(ipaddress.ip_network(entry["address"]))
     if changed:
         run(["systemctl", "reload-or-restart", "crowdsec"], timeout=120)
+    if _apply_trusted_nft(cfg):
+        changed.append(str(TRUSTED_NFT))
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     tmp = STATE_FILE.with_name(STATE_FILE.name + ".tmp")
     tmp.write_text(json.dumps({"applied_at": int(time.time()), **cfg}, indent=2), encoding="utf-8")

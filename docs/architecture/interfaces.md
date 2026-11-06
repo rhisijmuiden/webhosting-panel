@@ -115,6 +115,15 @@ in syslog format. Also `security.site_activity`, `security.site_release` and
 write CrowdSec configuration themselves. `whp:security:apply` pushes the
 settings again (run by `panel/deploy/install.sh` and after every update).
 
+The server-wide allowlist is the list of **trusted IP addresses**. They are
+never blocked: CrowdSec whitelists them (parser + LAPI allowlist) and the agent
+writes `/etc/nftables.d/whp-trusted.nft` (sets `trusted_v4`/`trusted_v6` plus
+accept rules for the open ports ahead of the panel's block sets and the SSH
+brake). Admins logging in from a trusted address skip the two-factor code
+(`App\Auth\TrustedIpTwoFactor`, logged as `auth.two_factor_skipped`); the
+session asks for the code again once it comes from another address. Core only
+knows the `App\Auth\TrustedNetworks` interface, which `rhis/security` binds.
+
 ### Usage statistics
 
 Every site runs as `whp-site-<id>.service` in

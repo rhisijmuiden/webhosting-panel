@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rhis\Security;
 
+use App\Auth\TrustedNetworks;
 use App\Support\Menu;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Support\Facades\Event;
@@ -16,6 +17,7 @@ final class SecurityServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/security.php', 'security');
         $this->app->singleton(LoginProtection::class);
+        $this->app->singleton(TrustedNetworks::class, fn ($app) => $app->make(LoginProtection::class));
     }
 
     public function boot(): void
@@ -37,6 +39,6 @@ final class SecurityServiceProvider extends ServiceProvider
 
         Menu::admin()->add('protection', 'Login protection', 'admin.protection.edit', icon: 'lock', section: 'Server', order: 115,
             activePatterns: ['admin.protection.*']);
-        Menu::client()->add('protection', 'Security', 'client.protection.index', icon: 'shield', order: 30);
+        Menu::client()->add('protection', 'Login protection', 'client.protection.index', icon: 'shield', order: 30);
     }
 }

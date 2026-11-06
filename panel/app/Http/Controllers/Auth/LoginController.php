@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Auth\TrustedIpTwoFactor;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use Illuminate\Http\RedirectResponse;
@@ -17,7 +18,7 @@ class LoginController extends Controller
         return view('auth.login');
     }
 
-    public function login(Request $request): RedirectResponse
+    public function login(Request $request, TrustedIpTwoFactor $trusted): RedirectResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'email'],
@@ -35,7 +36,9 @@ class LoginController extends Controller
         $request->session()->forget('locale');
         ActivityLog::record('auth.login');
 
-        if ($user->hasTwoFactor()) {
+        if ($user->hasTwoFactor() && $trusted->skips($user, $request)) {
+            $trusted->pass($request);
+        } elseif ($user->hasTwoFactor()) {
             return redirect()->route('two-factor.challenge');
         }
 

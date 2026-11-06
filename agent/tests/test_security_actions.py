@@ -142,6 +142,9 @@ class ApplyTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         root = Path(self.tmp.name)
         self.saved = (security.CROWDSEC_DIR, security.STATE_FILE, security.PANEL_AUTH_LOG, security.CSCLI, security.run)
+        self.saved_nft = (security.NFT_CONF, security.TRUSTED_NFT)
+        security.NFT_CONF = str(root / "nftables.conf")
+        security.TRUSTED_NFT = root / "nftables.d" / "whp-trusted.nft"
         security.CROWDSEC_DIR = root / "crowdsec"
         security.STATE_FILE = root / "state" / "security.json"
         security.PANEL_AUTH_LOG = str(root / "log" / "auth.log")
@@ -156,11 +159,14 @@ class ApplyTest(unittest.TestCase):
 
     def tearDown(self):
         security.CROWDSEC_DIR, security.STATE_FILE, security.PANEL_AUTH_LOG, security.CSCLI, security.run = self.saved
+        security.NFT_CONF, security.TRUSTED_NFT = self.saved_nft
         self.tmp.cleanup()
 
     def fake_run(self, argv, timeout=60, check=True, **kw):
         self.calls.append(argv)
         code = 1 if self.fail_test and argv[-1] == "-t" else 0
+        if getattr(self, "fail_nft", False) and argv[:2] == ["nft", "-c"]:
+            code = 1
         return subprocess.CompletedProcess(argv, code, "", "bad scenario" if code else "")
 
     def test_apply_writes_tests_and_reloads(self):
@@ -179,6 +185,40 @@ class ApplyTest(unittest.TestCase):
         out = security.apply({"allowlist": ["203.0.113.9"]})
         self.assertEqual(out["changed"], [])
         self.assertEqual(self.calls, [])
+
+    def with_firewall(self):
+        Path(security.NFT_CONF).write_text("table inet whp {}\ninclude \"/etc/nftables.d/*.nft\"\n")
+        security.TRUSTED_NFT.parent.mkdir()
+
+    def test_trusted_addresses_bypass_the_nft_block_sets(self):
+        self.with_firewall()
+        out = security.apply({"allowlist": ["203.0.113.9", "2001:db8::/48"]})
+        self.assertIn(str(security.TRUSTED_NFT), out["changed"])
+        nft = security.TRUSTED_NFT.read_text()
+        self.assertIn("add element inet whp trusted_v4 { 203.0.113.9/32 }", nft)
+        self.assertIn("add element inet whp trusted_v6 { 2001:db8::/48 }", nft)
+        self.assertIn("insert rule inet whp input ip saddr @trusted_v4 tcp dport @tcp_open accept", nft)
+        flat = [" ".join(c) for c in self.calls]
+        self.assertIn(f"nft -c -f {security.NFT_CONF}", flat)
+        self.assertIn("systemctl reload nftables", flat)
+
+        security.apply({})
+        nft = security.TRUSTED_NFT.read_text()
+        self.assertIn("add set inet whp trusted_v4", nft, "the sets stay so other rules can refer to them")
+        self.assertNotIn("insert rule", nft)
+
+    def test_rejected_nft_rules_are_rolled_back(self):
+        self.with_firewall()
+        security.apply({"allowlist": ["203.0.113.9"]})
+        before = security.TRUSTED_NFT.read_text()
+        self.fail_nft = True
+        with self.assertRaises(ActionError):
+            security.apply({"allowlist": ["203.0.113.10"]})
+        self.assertEqual(security.TRUSTED_NFT.read_text(), before)
+
+    def test_no_panel_firewall_no_nft_file(self):
+        security.apply({"allowlist": ["203.0.113.9"]})
+        self.assertFalse(security.TRUSTED_NFT.exists())
 
     def test_rejected_config_is_rolled_back(self):
         security.apply({})

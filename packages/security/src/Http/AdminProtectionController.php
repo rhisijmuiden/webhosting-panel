@@ -101,7 +101,7 @@ final class AdminProtectionController extends Controller
         $this->protection->saveAllowlist($list->push(['address' => $address, 'comment' => (string) ($data['comment'] ?? '')])->all());
         ActivityLog::record('security.allowlist_added', $address);
 
-        return $this->applied(__(':address is allowlisted and unblocked.', ['address' => $address]));
+        return $this->applied(__(':address is trusted and unblocked.', ['address' => $address]));
     }
 
     public function disallow(Request $request): RedirectResponse
@@ -111,7 +111,7 @@ final class AdminProtectionController extends Controller
         $this->protection->saveAllowlist($list->reject(fn ($e) => $e['address'] === $address)->values()->all());
         ActivityLog::record('security.allowlist_removed', $address);
 
-        return $this->applied(__(':address is removed from the allowlist.', ['address' => $address]));
+        return $this->applied(__(':address is no longer trusted.', ['address' => $address]));
     }
 
     private function applied(string $message): RedirectResponse

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Auth\TrustedIpTwoFactor;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,6 +14,8 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class EnsureTwoFactor
 {
+    public function __construct(private readonly TrustedIpTwoFactor $trusted) {}
+
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
@@ -25,6 +28,14 @@ class EnsureTwoFactor
             $request->session()->invalidate();
 
             return redirect()->route('login')->withErrors(['email' => __('This account is disabled.')]);
+        }
+
+        if ($user->hasTwoFactor() && $this->trusted->lapsed($request)) {
+            $request->session()->forget(['two_factor_passed', 'two_factor_via']);
+        }
+        if ($user->hasTwoFactor() && ! $request->session()->get('two_factor_passed') && $this->trusted->skips($user, $request)) {
+            // Also covers "remember me" logins, which skip the login form.
+            $this->trusted->pass($request);
         }
 
         if ($user->hasTwoFactor() && ! $request->session()->get('two_factor_passed')

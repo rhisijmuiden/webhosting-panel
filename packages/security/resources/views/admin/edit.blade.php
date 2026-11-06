@@ -58,8 +58,8 @@
     </form>
 
     <section class="grid grid-2" style="align-items:start">
-        <x-ui.card :title="__('Allowlist for the whole server')">
-            <p class="muted small">{{ __('These addresses are never blocked: not by login protection, not by attack detection and not by the shared CrowdSec blocklist. Use it for your own office and monitoring.') }}</p>
+        <x-ui.card :title="__('Trusted IP addresses')" id="trusted">
+            <p class="muted small">{{ __('Trusted addresses are never blocked: not by login protection, attack detection, the firewall or the shared CrowdSec blocklist. Admins logging in from a trusted address do not need their two-factor code; every skip is written to the activity log.') }}</p>
             <form method="POST" action="{{ route('admin.protection.allowlist.store') }}" class="form">
                 @csrf
                 <div class="form-grid">
@@ -70,15 +70,15 @@
                     <span class="muted small">{{ __('Your current IP address:') }} <code>{{ request()->ip() }}</code></span></div>
             </form>
         </x-ui.card>
-        <x-ui.card :title="__('Allowlisted')" flush>
+        <x-ui.card :title="__('Trusted')" flush>
             @if (empty($allowlist))
-                <x-ui.empty icon="shield">{{ __('Nothing is allowlisted.') }}</x-ui.empty>
+                <x-ui.empty icon="shield">{{ __('No trusted addresses yet.') }}</x-ui.empty>
             @else
                 <x-ui.table>
                     <x-slot:head><th>{{ __('Address') }}</th><th>{{ __('Description') }}</th><th><span class="sr-only">{{ __('Actions') }}</span></th></x-slot:head>
                     @foreach ($allowlist as $e)
                         <tr>
-                            <td class="mono">{{ $e['address'] }}</td>
+                            <td class="mono">{{ $e['address'] }}@if (\Symfony\Component\HttpFoundation\IpUtils::checkIp((string) request()->ip(), $e['address'])) <x-ui.pill status="ok" :dot="false">{{ __('you') }}</x-ui.pill>@endif</td>
                             <td>{{ $e['comment'] ?: '–' }}</td>
                             <td class="num"><form method="POST" action="{{ route('admin.protection.allowlist.destroy') }}">@csrf @method('DELETE')<input type="hidden" name="address" value="{{ $e['address'] }}"><button class="btn btn-sm" type="submit">{{ __('Remove') }}</button></form></td>
                         </tr>
