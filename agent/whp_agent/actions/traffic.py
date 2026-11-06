@@ -1,8 +1,9 @@
 """Data traffic per website, for the traffic limit of hosting packages.
 
 Nginx writes one short line per request to /var/log/nginx/whp-traffic.log:
-"<server_name> <bytes_sent> <request_length>" (static files included). This
-module reads the new part of that log on every call, adds it up per site and
+"<server_name> <bytes_sent> <request_length>" (static files included), since
+2026-11 followed by time, status, address, content type and user agent for the
+visitor statistics (see whp_agent/visits.py). This module reads the new part of that log on every call, adds it up per site and
 per calendar month (UTC) and keeps the totals in
 /var/lib/webhosting-panel/traffic.json. Log rotation (logrotate renames the
 file to .1) is followed by inode, so no request is counted twice or lost.
@@ -15,6 +16,7 @@ import threading
 import time
 
 from .. import paths
+from .. import visits as visits_mod
 from .. import validate as v
 from ..registry import action
 
@@ -50,8 +52,13 @@ def _save(data):
     os.replace(tmp, _state_file())
 
 
-def _add_lines(text, totals):
+def _add_lines(text, totals, visits=None):
     for line in text.splitlines():
+        if visits is not None:
+            counted = visits.add_line(line)
+            if counted:
+                totals[counted[0]] = totals.get(counted[0], 0) + counted[1]
+                continue
         parts = line.split()
         if len(parts) != 3 or not parts[1].isdigit() or not parts[2].isdigit():
             continue
@@ -61,7 +68,7 @@ def _add_lines(text, totals):
         totals[name] = totals.get(name, 0) + int(parts[1]) + int(parts[2])
 
 
-def _read_from(path, offset, totals):
+def _read_from(path, offset, totals, visits=None):
     """Count complete lines of path from offset. Returns the new offset."""
     with open(path, "rb") as fh:
         fh.seek(offset)
@@ -72,7 +79,7 @@ def _read_from(path, offset, totals):
             end = data.rfind(b"\n")
             if end < 0:
                 break  # half a line: Nginx is still writing it
-            _add_lines(data[:end + 1].decode("utf-8", "replace"), totals)
+            _add_lines(data[:end + 1].decode("utf-8", "replace"), totals, visits)
             offset += end + 1
             if end + 1 < len(data):
                 fh.seek(offset)
@@ -85,6 +92,7 @@ def collect(log_file=None, now=None):
     with _lock:
         state = _load()
         totals = {}
+        visits = visits_mod.Visits(state.setdefault("visits", {}))
         try:
             st = os.stat(log_file)
         except FileNotFoundError:
@@ -96,19 +104,20 @@ def collect(log_file=None, now=None):
                 old = log_file + ".1"
                 try:
                     if state.get("inode") is not None and os.stat(old).st_ino == state["inode"]:
-                        _read_from(old, offset, totals)
+                        _read_from(old, offset, totals, visits)
                 except FileNotFoundError:
                     pass
                 offset = 0
             elif st.st_size < offset:
                 offset = 0  # truncated
-            state["offset"] = _read_from(log_file, offset, totals)
+            state["offset"] = _read_from(log_file, offset, totals, visits)
             state["inode"] = st.st_ino
         bucket = state["months"].setdefault(month, {})
         for name, value in totals.items():
             bucket[name] = bucket.get(name, 0) + value
         for old_month in sorted(state["months"])[:-KEEP_MONTHS]:
             del state["months"][old_month]
+        visits.finish(now)
         _save(state)
         return state
 
@@ -120,3 +129,12 @@ def traffic_report(params):
     state = collect()
     month = month or time.strftime("%Y-%m", time.gmtime())
     return {"month": month, "sites": state["months"].get(month, {})}
+
+
+@action("traffic.history")
+def traffic_history(params):
+    """Read new log lines and return visitors, page views, requests and bytes per site
+    per hour (last 72 hours) and per day (last 8 days), from `since` (epoch seconds)."""
+    since = v.integer(params, "since", required=False, minimum=0) or 0
+    state = collect()
+    return visits_mod.history(state.get("visits", {}), since)
