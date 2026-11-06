@@ -23,7 +23,8 @@
                     @if ($box->usedPercent() !== null)<x-ui.meter :label="__('Storage')" :percent="$box->usedPercent()" />@endif
                     <span class="muted small">{{ $box->used_kb !== null ? number_format($box->used_kb / 1024, 0, ',', '.') . ' MB' : '–' }} / {{ $box->quota_mb ? number_format($box->quota_mb, 0, ',', '.') . ' MB' : __('unlimited') }}</span>
                 </td>
-                <td>@if ($box->enabled)<x-ui.pill status="ok">{{ __('Active') }}</x-ui.pill>@else<x-ui.pill status="off">{{ __('Login off') }}</x-ui.pill>@endif</td>
+                <td>@if ($box->enabled)<x-ui.pill status="ok">{{ __('Active') }}</x-ui.pill>@else<x-ui.pill status="off">{{ __('Login off') }}</x-ui.pill>@endif
+                    @include('dns-mail::extras.autoreply-pill', ['reply' => $autoreplies[$box->id] ?? null])</td>
                 <td class="num">
                     <div class="actions" style="justify-content:flex-end">
                         <a class="btn btn-ghost btn-sm" href="{{ $r('mailboxes.profile', [$box->id]) }}" title="{{ __('Profile for iPhone, iPad and Mac') }}">{{ __('Apple profile') }}</a>
@@ -51,6 +52,7 @@
                             <div><button type="submit" class="btn btn-dark btn-sm">{{ __('Save') }}</button></div>
                         </form>
                     </details>
+                    @include('dns-mail::extras.autoreply', ['reply' => $autoreplies[$box->id] ?? null])
                 </td>
             </tr>
         @endforeach
@@ -78,9 +80,9 @@
     </x-ui.card>
 
     <x-ui.card :title="__('Forwarding')">
-        @if ($domain->aliases->isNotEmpty())
+        @if ($domain->aliases->reject->isCatchAll()->isNotEmpty())
             <x-ui.table>
-                @foreach ($domain->aliases as $alias)
+                @foreach ($domain->aliases->reject->isCatchAll() as $alias)
                     <tr>
                         <td><span class="strong">{{ ($alias->isCatchAll() ? '*' : $alias->local_part) . '@' . $domain->domain }}</span><br><span class="muted small">→ {{ implode(', ', $alias->targets) }}</span></td>
                         <td class="num"><form method="POST" action="{{ $r('aliases.destroy', [$alias->id]) }}">@csrf @method('DELETE')<button class="btn btn-ghost btn-sm" type="submit" aria-label="{{ __('Remove') }}"><x-icon name="trash" /></button></form></td>
@@ -92,14 +94,16 @@
             @csrf
             <div class="field">
                 <label for="f-alias">{{ __('Address') }}</label>
-                <div class="actions" style="flex-wrap:nowrap;gap:6px"><input id="f-alias" name="local_part" class="input" placeholder="info" style="flex:1"><span class="muted">{{ '@' . $domain->domain }}</span></div>
-                <span class="help">{{ __('Leave empty to catch all mail for unknown addresses.') }}</span>
+                <div class="actions" style="flex-wrap:nowrap;gap:6px"><input id="f-alias" name="local_part" class="input" placeholder="info" required style="flex:1"><span class="muted">{{ '@' . $domain->domain }}</span></div>
+                <span class="help">{{ __('For all unknown addresses, use the catch-all below.') }}</span>
             </div>
             <x-ui.field name="targets" :label="__('Forward to')" :placeholder="'jan@' . $domain->domain . ', jan@gmail.com'" required :help="__('One or more addresses, separated by commas.')" />
             <div><button type="submit" class="btn btn-dark"><x-icon name="send" />{{ __('Save forwarding') }}</button></div>
         </form>
     </x-ui.card>
 </section>
+
+@include('dns-mail::extras.catch-all')
 
 @include('dns-mail::domain.setup')
 @endif

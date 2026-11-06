@@ -34,6 +34,7 @@ final class DnsMailServiceProvider extends ServiceProvider
         $this->app->singleton(Resolver::class, static fn (): Resolver => new SystemResolver());
         $this->app->bind(MailServerSettings::class, static fn ($app) => $app->make(DnsMailConfig::class)->server());
         $this->app->register(MailLogServiceProvider::class);
+        $this->app->register(MailExtrasServiceProvider::class);
     }
 
     public function boot(): void
