@@ -17,6 +17,7 @@
         "rhis/crm-api": "@dev",
         "rhis/dns-mail": "@dev",
         "rhis/files": "@dev",
+        "rhis/git": "@dev",
         "rhis/migration": "@dev",
         "rhis/vulnerabilities": "@dev",
         "rhis/wordpress": "@dev"

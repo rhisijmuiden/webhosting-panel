@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "c9a8d8cd1181b2ff60233f86e7136226",
+    "content-hash": "a12d53fcd0072f59745d4a447552e142",
     "packages": [
         {
             "name": "brick/math",
@@ -3480,6 +3480,39 @@
                 "proprietary"
             ],
             "description": "Client file manager for the Webhosting Panel: browse, upload, download, zip/unzip, a code editor and an optional sandboxed web terminal.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/git",
+            "version": "dev-claude/project-thread-0lz2y1",
+            "dist": {
+                "type": "path",
+                "url": "../packages/git",
+                "reference": "38281de17096fa05bbc601ae231c691fcc09f327"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Git\\GitServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Git\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Git deployments for the Webhosting Panel: link a GitHub, GitLab, Bitbucket or Gitea repository to a website, deploy on push through a webhook, build steps and zero-downtime releases.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8763,6 +8796,7 @@
         "rhis/crm-api": 20,
         "rhis/dns-mail": 20,
         "rhis/files": 20,
+        "rhis/git": 20,
         "rhis/migration": 20,
         "rhis/vulnerabilities": 20,
         "rhis/wordpress": 20
