@@ -431,26 +431,28 @@ PY
     SQLI='/?id=1%27%20OR%20%271%27%3D%271%27%20UNION%20SELECT%20password%20FROM%20users--'
     waf_code() { curl -s -o /dev/null -w '%{http_code}' -H "Host: site.test" -A "Mozilla/5.0 (smoke)" "http://127.0.0.1$1"; }
     waf_events() { agent_call waf.events "{\"cursor\":$WAF_CUR}" | jq -c '.data'; }
-    export -f waf_code
+    # nginx reloads asynchronously: give the new workers a moment before testing.
+    waf_apply() { agent_call waf.apply "$1" && sleep 3; }
+    export -f waf_code waf_apply
     check "ModSecurity and the OWASP CRS are loaded once for all sites" bash -c '[[ $(nginx -T 2>/dev/null | grep -c "modsecurity_rules_file /etc/nginx/whp/waf/main.conf") == 1 ]] && ls /etc/nginx/whp/waf/main.conf'
     check "a site without firewall is not filtered" bash -c "[[ \$(waf_code '$SQLI') == 200 ]]"
     WAF_CUR=$(agent_call waf.events '{}' | jq -c '.data.cursor')
-    check "agent switches site.test to block mode" agent_call waf.apply '{"paranoia":1,"threshold":5,"sites":[{"domain":"site.test","mode":"block"},{"domain":"off.test","mode":"off"}]}'
+    check "agent switches site.test to block mode" waf_apply '{"paranoia":1,"threshold":5,"sites":[{"domain":"site.test","mode":"block"},{"domain":"off.test","mode":"off"}]}'
     check "an SQL injection is blocked (403)" bash -c "code=\$(waf_code '$SQLI'); echo \"HTTP \$code\"; [[ \$code == 403 ]]"
     check "a normal page still works in block mode" bash -c 'curl -s -H "Host: site.test" -A "Mozilla/5.0 (smoke)" http://127.0.0.1/ | grep -q php=8.5'
     sleep 1
     waf_events >/tmp/waf-ev.json
-    check "the blocked request is in the audit log with its rules" bash -c "jq -e '[.events[] | select(.domain == \"site.test\" and .blocked and (.rules | length) > 0)] | length > 0' /tmp/waf-ev.json || { cat /tmp/waf-ev.json; tail -c 3000 /var/log/modsecurity/audit.log; }"
+    check "the blocked request is in the audit log with its rules" bash -c "jq -e '[.events[] | select(.domain == \"site.test\" and .blocked and (.rules | length) > 0)] | length > 0' /tmp/waf-ev.json || { cat /tmp/waf-ev.json; tail -c 3000 /var/log/modsecurity/audit.log; false; }"
     check "no cookies or passwords in the events" bash -c '! grep -qi cookie /tmp/waf-ev.json'
     WAF_CUR=$(jq -c '.cursor' /tmp/waf-ev.json)
     WAF_EXC=$(jq -c '[.events[] | select(.domain == "site.test") | .rules[].id] | unique | map({rule: ., path: "/"})' /tmp/waf-ev.json)
-    check "an exception for the matched rules lets the request through" bash -c "agent_call waf.apply '{\"sites\":[{\"domain\":\"site.test\",\"mode\":\"block\",\"exceptions\":$WAF_EXC}]}' >/dev/null && code=\$(waf_code '$SQLI'); echo \"HTTP \$code ($WAF_EXC)\"; [[ \$code == 200 ]]"
-    check "server-wide exceptions are accepted too" agent_call waf.apply '{"exceptions":[{"rule":920350},{"rule":941100,"param":"comment"}],"sites":[{"domain":"site.test","mode":"detect"}]}'
+    check "an exception for the matched rules lets the request through" bash -c "waf_apply '{\"sites\":[{\"domain\":\"site.test\",\"mode\":\"block\",\"exceptions\":$WAF_EXC}]}' >/dev/null && code=\$(waf_code '$SQLI'); echo \"HTTP \$code ($WAF_EXC)\"; [[ \$code == 200 ]]"
+    check "server-wide exceptions are accepted too" waf_apply '{"exceptions":[{"rule":920350},{"rule":941100,"param":"comment"}],"sites":[{"domain":"site.test","mode":"detect"}]}'
     check "detect mode logs but does not block" bash -c "code=\$(waf_code '$SQLI'); echo \"HTTP \$code\"; [[ \$code == 200 ]]"
     sleep 1
     check "detected requests are logged as not blocked" bash -c "agent_call waf.events '{\"cursor\":$WAF_CUR}' | jq -e '[.data.events[] | select(.domain == \"site.test\" and (.blocked | not) and .mode == \"detect\")] | length > 0'"
     check "an invalid exception is refused before nginx sees it" bash -c "! agent_call waf.apply '{\"sites\":[{\"domain\":\"site.test\",\"mode\":\"block\",\"exceptions\":[{\"rule\":1,\"path\":\"/x\\\" deny\"}]}]}' && nginx -t"
-    check "mode off removes the site's firewall files" bash -c "agent_call waf.apply '{\"sites\":[{\"domain\":\"site.test\",\"mode\":\"off\"}]}' >/dev/null && ! test -e /etc/nginx/whp/sites/site.test/20-waf.conf && [[ \$(waf_code '$SQLI') == 200 ]]"
+    check "mode off removes the site's firewall files" bash -c "waf_apply '{\"sites\":[{\"domain\":\"site.test\",\"mode\":\"off\"}]}' >/dev/null && ! test -e /etc/nginx/whp/sites/site.test/20-waf.conf && [[ \$(waf_code '$SQLI') == 200 ]]"
     check "panel applies its firewall settings" runuser -u whp -- php /opt/webhosting-panel/panel/artisan whp:waf:apply
     check "panel collects firewall events" runuser -u whp -- php /opt/webhosting-panel/panel/artisan whp:waf:collect
     check "nginx config still valid after the firewall tests" nginx -t
