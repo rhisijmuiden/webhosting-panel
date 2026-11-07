@@ -1,0 +1,23 @@
+/* Redirects & access (packages/web-rules). */
+.wr-main { padding: 0; overflow: hidden; }
+.wr-body { padding: 22px 24px 26px; display: grid; gap: 18px; }
+.wr-intro h2 { margin: 0 0 4px; font-size: 18px; }
+.wr-intro p { margin: 0 0 4px; max-width: 72ch; }
+.wr-form { padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-sunken); }
+.wr-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 4px; border-radius: 10px; background: var(--surface-sunken); color: var(--ink-muted); font-size: 12px; font-weight: 700; }
+.wr-count-on { background: var(--koraal); color: #fff; }
+.wr-break { overflow-wrap: anywhere; max-width: 420px; }
+.wr-folder { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 16px; display: grid; gap: 10px; }
+.wr-folder header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.wr-folder header .icon, .wr-users .icon { width: 16px; height: 16px; vertical-align: -3px; }
+.wr-users { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.wr-users li { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border-radius: 999px; background: var(--surface-sunken); font-size: 13.5px; }
+.wr-users form { display: inline; }
+.wr-inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.wr-inline .input { flex: 1 1 160px; min-width: 0; }
+.wr-errors { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 20px; }
+.wr-hsts { display: grid; gap: 12px; padding-left: 28px; }
+.wr-sub { box-shadow: none; }
+.wr-sub .seg { margin-bottom: 12px; }
+.wr-countries { min-height: 220px; }
+@media (max-width: 640px) { .wr-body { padding: 16px; } .wr-hsts { padding-left: 0; } }
