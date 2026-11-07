@@ -1,5 +1,5 @@
 /* WordPress security hardening (resources/views/wp-hardening). */
-.wph-hero { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+section.card.wph-hero { display: flex; flex-direction: row; align-items: center; gap: 24px; flex-wrap: wrap; }
 .wph-hero .ring-label { display: grid; justify-items: center; line-height: 1.1; }
 .wph-hero .ring-label strong { font-size: 26px; }
 .wph-hero .ring-label span { font-size: 12px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .06em; }
@@ -25,7 +25,7 @@
 .wph-switch:focus-visible { outline: 3px solid var(--lucht); outline-offset: 2px; }
 .wph-switch:hover { filter: brightness(.96); }
 
-.wph-card { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+section.card.wph-card { display: flex; flex-direction: row; align-items: center; gap: 16px; flex-wrap: wrap; }
 .wph-card .wph-text { flex: 1 1 300px; min-width: 0; }
 .wph-card h2 { margin: 0 0 2px; font-size: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .wph-card p { margin: 0; }

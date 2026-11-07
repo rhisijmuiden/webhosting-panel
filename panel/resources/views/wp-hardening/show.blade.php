@@ -20,7 +20,6 @@
         <a class="btn" href="{{ route($area.'.wordpress.show', $install) }}">{{ __('Back to WordPress') }}</a>
     </div>
 
-    @if (session('status'))<div class="alert alert-ok" role="status"><x-icon name="check" />{{ session('status') }}</div>@endif
     @error('agent')<div class="alert alert-bad" role="alert"><x-icon name="info" />{{ $message }}</div>@enderror
     @if ($agentError)<div class="alert alert-bad" role="alert"><x-icon name="info" />{{ __('The server could not be asked for the current state: :message', ['message' => $agentError]) }}</div>@endif
     @foreach ($status['problems'] ?? [] as $p)<div class="alert alert-warn" role="status"><x-icon name="info" />{{ $p }}</div>@endforeach

@@ -3,19 +3,21 @@
 namespace App\Services\WpHardening;
 
 use App\Services\Agent\FakeAgentClient;
+use Illuminate\Support\Facades\Cache;
 
-/** wphard.* answers for the fake agent (local development and tests): remembers what was switched on. */
+/**
+ * wphard.* answers for the fake agent (local development and tests). What was
+ * switched on is kept in the cache, so the local panel behaves like a server.
+ */
 final class FakeResponses
 {
-    /** @var array<string, array{on: array<string, bool>, salts_at: ?int, undo: bool}> */
-    private static array $sites = [];
+    private const KEY = 'wp-hardening.fake-agent';
 
     public static function register(FakeAgentClient $agent): void
     {
-        self::$sites = [];
         $agent->respond('wphard.status', fn (array $p) => self::answer($p));
         $agent->respond('wphard.apply', function (array $p) {
-            $s = &self::site($p);
+            $s = self::site($p);
             $changed = [];
             foreach ((array) ($p['measures'] ?? []) as $key => $on) {
                 if (in_array($key, Hardening::MEASURES, true) && ($s['on'][$key] ?? false) !== (bool) $on) {
@@ -23,11 +25,12 @@ final class FakeResponses
                     $changed[] = $key;
                 }
             }
+            self::store($p, $s);
 
             return [...self::answer($p), 'changed' => $changed];
         });
         $agent->respond('wphard.salts', function (array $p) {
-            $s = &self::site($p);
+            $s = self::site($p);
             if ($p['undo'] ?? false) {
                 $s['salts_at'] = null;
                 $s['undo'] = false;
@@ -35,17 +38,22 @@ final class FakeResponses
                 $s['salts_at'] = time();
                 $s['undo'] = true;
             }
+            self::store($p, $s);
 
             return [...self::answer($p), 'changed' => ['salts']];
         });
     }
 
-    private static function &site(array $p): array
+    private static function site(array $p): array
     {
-        $key = ($p['domain'] ?? '').'/'.($p['path'] ?? '');
-        self::$sites[$key] ??= ['on' => [], 'salts_at' => null, 'undo' => false];
+        return Cache::get(self::KEY, [])[($p['domain'] ?? '').'/'.($p['path'] ?? '')] ?? ['on' => [], 'salts_at' => null, 'undo' => false];
+    }
 
-        return self::$sites[$key];
+    private static function store(array $p, array $site): void
+    {
+        $all = Cache::get(self::KEY, []);
+        $all[($p['domain'] ?? '').'/'.($p['path'] ?? '')] = $site;
+        Cache::forever(self::KEY, $all);
     }
 
     private static function answer(array $p): array
