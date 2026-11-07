@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Rhis\ObjectCache\ObjectCacheManager;
 use Rhis\Vulnerabilities\Scanner;
+use App\Services\WpHardening\Hardening;
 use Rhis\WordPress\Bulk\Console\TickCommand;
+use Rhis\WordPress\DbCleanup\Cleaner;
 use Rhis\WordPress\Extensions\ExtensionManager;
 use Rhis\WordPress\Switches\Switches;
 use Rhis\WpIntegrity\Integrity;
@@ -45,6 +47,12 @@ final class BulkServiceProvider extends ServiceProvider
         }
         if (class_exists(Integrity::class)) {
             BulkActions::register(Integrations\IntegrityCheck::class);
+        }
+        if (class_exists(Hardening::class)) {
+            BulkActions::register(Integrations\Hardening::class);
+        }
+        if (class_exists(Cleaner::class)) {
+            BulkActions::register(Integrations\DatabaseCleanup::class);
         }
     }
 
