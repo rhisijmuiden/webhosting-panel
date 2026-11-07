@@ -228,6 +228,12 @@ client `/uptime`, public `/status`): `monitor.check` (read only) returns per web
 certificate it serves (SNI on 127.0.0.1:443: days left, issuer, host match), real disks with inode use,
 service states, memory, load and the Postfix queue. See `docs/monitoring.md`.
 
+Disk usage explorer (`disk_usage.py` + `diskscan.py`, screens in `packages/disk-usage`, `Rhis\DiskUsage\`,
+admin `/admin/disk-usage`, client `/disk-usage`): `disk.scan` (job, one website), `disk.scan_all` (job, nightly,
+skips scans younger than `max_age_hours`), `disk.usage` (one folder of the last scan: sub folders, largest files)
+and `disk.summary` (scanned totals per website and the size of every MariaDB database). Scans are cached in
+`/var/lib/webhosting-panel/disk-usage/<domain>.json`. See `packages/disk-usage/README.md`.
+
 Extra FTP/SFTP accounts (`ftp.py`, ProFTPD from `installer/modules/75-ftp.sh`, screens in the core panel:
 `App\Services\FtpAccounts`, admin `/admin/ftp-accounts`, client `/ftp-accounts`): `ftp.sync` (the complete list of
 virtual users, password hashes only) and `ftp.status`. FTPS on 21 (TLS required), SFTP on 2222. See `docs/ftp-accounts.md`.
