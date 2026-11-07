@@ -45,6 +45,14 @@ module_ftp() {
 
   cert_paths "$WHP_HOSTNAME"
   [[ -r $CERT_FILE ]] || run make-ssl-cert generate-default-snakeoil
+  # Modules this config needs that are loadable in this build (Debian builds
+  # differ in which ones are compiled in). mod_ifsession has to come last.
+  local m
+  FTP_LOAD_MODULES=''
+  for m in mod_ls mod_xfer mod_auth mod_auth_file mod_ctrls_admin mod_tls mod_sftp mod_ifsession; do
+    [[ -e /usr/lib/proftpd/$m.so ]] && FTP_LOAD_MODULES+="LoadModule $m.c"$'\n'
+  done
+  FTP_LOAD_MODULES=${FTP_LOAD_MODULES%$'\n'}
   FTP_PORT=$WHP_FTP_PORT
   SFTP_PORT=$WHP_SFTP_PORT
   WHP_SUM_BEFORE=$(files_sum /etc/proftpd/proftpd.conf /etc/proftpd/whp/common.conf)
