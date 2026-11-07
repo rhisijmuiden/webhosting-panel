@@ -1,0 +1,10 @@
+[Unit]
+Description=Check every 5 minutes that the panel is not stuck in maintenance mode
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

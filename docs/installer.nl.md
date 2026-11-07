@@ -98,6 +98,13 @@ Een update vanuit het panel (Info → Bijwerken, of een ander kanaal kiezen) dra
   herladen in plaats van herstart, zodat sites en mail blijven draaien;
 - genummerde eenmalige servermigraties in `installer/migrations/` draaien één keer per server.
 
+De updater draait zelf in een eigen systemd-unit (`whp-panel-update`, log in
+`/var/log/webhosting-panel/panel-update.log`), zodat een herstart van de agent of een
+trage installer hem nooit halverwege kan afbreken. Wat er ook gebeurt, aan het eind gaat
+het panel uit onderhoudsmodus (bij een fout na het terugzetten van de code), en
+`whp-maintenance-guard.timer` heft een onderhoudsmodus op die ouder is dan 30 minuten
+terwijl er geen update draait, zodat het panel nooit op HTTP 503 blijft hangen.
+
 Na een update hoef je nooit meer handmatig iets te draaien. Mislukt een stap, dan stopt
 de update en gaat de code terug naar de vorige versie.
 
