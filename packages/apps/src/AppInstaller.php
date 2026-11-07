@@ -12,6 +12,7 @@ use App\Services\Agent\AgentClient;
 use App\Services\Agent\AgentException;
 use Illuminate\Support\Facades\Cache;
 use Rhis\Apps\Models\AppInstallation;
+use Rhis\Apps\PluginSets\PluginSet;
 
 /** Starts installs and removals on the agent and keeps the panel's records in step with its jobs. */
 final class AppInstaller
@@ -155,21 +156,24 @@ final class AppInstaller
     }
 
     /**
-     * @param  array{path: string, title: string, admin_user: string, admin_email: string, admin_password: string, locale: string}  $data
+     * @param  array{path: string, title: string, admin_user: string, admin_email: string, admin_password: string, locale: string, plugin_set?: PluginSet}  $data
      */
     public function install(Website $website, string $app, array $data): AppInstallation
     {
+        $set = $data['plugin_set'] ?? null;
         $job = $this->agent->call('apps.install', [
             'domain' => $website->domain, 'app' => $app, 'path' => $data['path'],
             'title' => $data['title'], 'admin_user' => $data['admin_user'], 'admin_email' => $data['admin_email'],
             'admin_password' => $data['admin_password'], 'locale' => $data['locale'],
             'max_age_days' => $this->maxAge(),
+            ...($set ? ['plugin_set' => $set->toAgent()] : []),
         ], 90);
 
         $installation = AppInstallation::create([
             'website_id' => $website->id, 'customer_id' => $website->customer_id, 'app' => $app,
             'path' => $data['path'], 'status' => 'installing', 'job_id' => $job['job'],
             'admin_user' => $data['admin_user'], 'locale' => $data['locale'],
+            'plugin_set_id' => $set?->id, 'plugin_set_name' => $set?->name,
         ]);
         ActivityLog::record('app.install', $installation->location(), ['app' => $app], $website->customer_id);
 
@@ -229,6 +233,7 @@ final class AppInstaller
                 'status' => 'installed', 'agent_id' => $result['id'] ?? null, 'version' => $result['version'] ?? null,
                 'url' => $result['url'] ?? null, 'admin_url' => $result['admin_url'] ?? null,
                 'database' => $result['database'] ?? null, 'installed_at' => now(), 'error' => null,
+                'plugin_set_report' => is_array($result['plugin_set'] ?? null) ? $result['plugin_set'] : null,
             ]);
             if (! empty($result['database'])) {
                 SiteDatabase::updateOrCreate(['name' => $result['database']], [
