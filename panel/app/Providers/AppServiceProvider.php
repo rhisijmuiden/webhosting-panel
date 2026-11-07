@@ -139,6 +139,7 @@ class AppServiceProvider extends ServiceProvider
                 // Reached through Tools & settings; the menu marks that item active.
                 'security' => $tools + ['label' => 'Attack blocking'],
                 'protection' => $tools + ['label' => 'Login protection'],
+                'waf' => $tools + ['label' => 'Web application firewall'],
                 'firewall' => $tools,
                 'php' => $tools + ['label' => 'PHP settings'],
                 'mail-settings' => $tools,
@@ -164,6 +165,7 @@ class AppServiceProvider extends ServiceProvider
                 'cron' => ['section' => 'Websites', 'order' => 128],
                 'security-alerts' => ['section' => 'Websites', 'order' => 130, 'label' => 'Security'],
                 'protection' => ['section' => 'Websites', 'order' => 135, 'label' => 'Login protection'],
+                'waf' => ['section' => 'Websites', 'order' => 136, 'label' => 'Web firewall'],
                 'status' => ['section' => 'Websites', 'order' => 140],
                 'mail' => ['section' => 'Email & domains', 'order' => 200],
                 'domain-aliases' => ['section' => 'Email & domains', 'order' => 210],
