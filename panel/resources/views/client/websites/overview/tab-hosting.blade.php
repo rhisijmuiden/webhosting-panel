@@ -53,4 +53,5 @@
 </section>
 @include('partials.website-php', ['website' => $site, 'action' => $o->url('websites.php', $site)])
 @includeIf('domain-aliases::partials.website-card', ['website' => $site])
+@include('ftp-accounts.partials.website-card', ['website' => $site])
 @includeIf('subdomains::partials.website-card', ['website' => $site])
