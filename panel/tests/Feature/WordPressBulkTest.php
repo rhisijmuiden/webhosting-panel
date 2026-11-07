@@ -310,4 +310,32 @@ class WordPressBulkTest extends TestCase
             'options' => ['update-plugins' => ['type' => 'plugin', 'slugs' => 'akismet']]]));
         $this->assertSame('Niet geïnstalleerd op deze site.', $run->items()->first()->message);
     }
+
+    public function test_on_a_real_queue_each_round_is_a_short_job(): void
+    {
+        $s = $this->sites();
+        $this->actingAsAdmin();
+        config(['queue.default' => 'redis']);
+        \Illuminate\Support\Facades\Queue::fake();
+
+        $run = $this->runFrom($this->post('/admin/wordpress/bulk', ['action' => 'update', 'ids' => [$s['alfa.nl']->id, $s['bravo.nl']->id], 'concurrency' => 1,
+            'options' => ['update' => ['core' => '1', 'plugins' => '1', 'themes' => '1', 'snapshot' => '1', 'only_outdated' => '1']]]));
+        \Illuminate\Support\Facades\Queue::assertPushed(\Rhis\WordPress\Bulk\Jobs\AdvanceBulkRun::class, 1);
+        $this->assertSame(['alfa.nl' => 'pending', 'bravo.nl' => 'pending'], $this->items($run));
+
+        // Each round does a little and queues the next one instead of keeping the worker busy.
+        $round = function () use ($run) {
+            $job = new \Rhis\WordPress\Bulk\Jobs\AdvanceBulkRun($run->id);
+            (new \Illuminate\Bus\UniqueLock(app('cache')->driver()))->release($job); // what the worker does when it picks the job up
+            $job->handle(app(\Rhis\WordPress\Bulk\Runner::class));
+        };
+        $round();
+        $this->assertSame(['alfa.nl' => 'running', 'bravo.nl' => 'pending'], $this->items($run));
+        \Illuminate\Support\Facades\Queue::assertPushed(\Rhis\WordPress\Bulk\Jobs\AdvanceBulkRun::class, 2);
+        $round();
+        $round();
+        $round();
+        $this->assertSame(['alfa.nl' => 'succeeded', 'bravo.nl' => 'succeeded'], $this->items($run));
+        $this->assertSame('finished', $run->refresh()->status);
+    }
 }

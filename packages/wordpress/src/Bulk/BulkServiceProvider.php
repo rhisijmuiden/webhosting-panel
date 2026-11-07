@@ -10,6 +10,9 @@ use Illuminate\Support\ServiceProvider;
 use Rhis\ObjectCache\ObjectCacheManager;
 use Rhis\Vulnerabilities\Scanner;
 use Rhis\WordPress\Bulk\Console\TickCommand;
+use Rhis\WordPress\Extensions\ExtensionManager;
+use Rhis\WordPress\Switches\Switches;
+use Rhis\WpIntegrity\Integrity;
 
 /** Bulk actions on many WordPress sites at once (admin only). Registered by WordPressServiceProvider. */
 final class BulkServiceProvider extends ServiceProvider
@@ -27,6 +30,21 @@ final class BulkServiceProvider extends ServiceProvider
         }
         if (class_exists(ObjectCacheManager::class)) {
             BulkActions::register(Actions\FlushObjectCache::class);
+        }
+        // Actions of other WordPress features, only when that feature is installed.
+        if (class_exists(ExtensionManager::class)) {
+            BulkActions::register(Integrations\ManageExtensions::class);
+            BulkActions::register(Integrations\InstallExtension::class);
+            BulkActions::register(Integrations\DeleteExtensions::class);
+        }
+        if (class_exists(Switches::class)) {
+            BulkActions::register(Integrations\ClearCaches::class);
+            foreach (Switches::SWITCHES as $switch) {
+                BulkActions::register(fn () => new Integrations\QuickSwitch(app(Switches::class), $switch));
+            }
+        }
+        if (class_exists(Integrity::class)) {
+            BulkActions::register(Integrations\IntegrityCheck::class);
         }
     }
 

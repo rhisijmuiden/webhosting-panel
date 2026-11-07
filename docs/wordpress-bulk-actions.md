@@ -22,7 +22,7 @@ Code: `packages/wordpress/src/Bulk/` (inside the WordPress package, registered b
    later `finish()`. An exception fails only that site.
 3. When `stop_after_failures` sites failed, the run is **paused**; the admin resumes or
    cancels. Cancel stops pending sites; busy sites finish.
-4. `AdvanceBulkRun` works for ~10 minutes, then queues a fresh copy of itself.
+4. Each `AdvanceBulkRun` is one short round and queues the next (see *Queue behaviour*).
    `whp:wp-bulk:tick` (every minute) picks up runs whose worker went away.
 
 ## Adding an action from another package
@@ -118,3 +118,19 @@ for `update-plugins`).
 | `security-scan` | security | `malware.scan` job + vulnerability match (`Rhis\Vulnerabilities\Scanner`), per website. Only when that package is installed. |
 | `wp-cron` | maintenance | Server timer or WordPress (`wp.cron_set`). |
 | `flush-object-cache` | maintenance | `objcache.flush`, per website, only sites with an object cache. Only when that package is installed. |
+| `plugins-manage` | plugins | Activate/deactivate/auto-updates of named slugs (`ExtensionManager::apply`). Only with Extensions. |
+| `plugins-install` | plugins | Install one wordpress.org slug, optionally switched on (`ExtensionManager::install`). |
+| `plugins-delete` | plugins | Delete named slugs where inactive. Dangerous (typed confirmation). |
+| `clear-cache` | maintenance | All caches (`Switches::clearCache`). |
+| `switch-maintenance`, `switch-debug`, `switch-indexing` | maintenance | Quick switches on/off (`Switches::set`); debug always with an expiry. |
+| `integrity-check` | security | `Integrity::start` (wpint.check job), then `Integrity::poll` stores the report. Only with packages/wp-integrity. |
+
+Integrations of other features live in `src/Bulk/Integrations/` and are registered in
+`BulkServiceProvider` behind `class_exists()`.
+
+## Queue behaviour
+
+Every `AdvanceBulkRun` is one short round (follow agent jobs, start what fits, at most one
+slow synchronous step), then it queues the next round (a few seconds later while waiting
+on agent jobs). The panel has one queue worker, so long rounds would block provisioning
+and other jobs. The job is unique per run until processing, so double dispatches collapse.
