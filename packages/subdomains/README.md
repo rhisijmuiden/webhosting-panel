@@ -1,6 +1,6 @@
 # rhis/subdomains
 
-Subdomains and website cloning for the Webhosting Panel.
+Subdomains and website cloning for Dekwerk.
 
 ## Subdomains
 

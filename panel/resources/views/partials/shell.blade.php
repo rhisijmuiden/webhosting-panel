@@ -17,7 +17,7 @@
     <aside class="sidebar" :class="{ open: nav }" id="sidebar">
         <button type="button" class="btn icon-btn sidebar-close" @click="nav = false" aria-label="{{ __('Close menu') }}"><x-icon name="close" /></button>
         <a class="brand" href="{{ route('home') }}">
-            <img src="{{ asset('brand/rhis-logo-wit.svg') }}" alt="{{ config('app.name') }}">
+            <img src="{{ asset(\App\Support\Brand::logo()) }}" alt="{{ \App\Support\Brand::name() }}">
             <span>{{ $product }}</span>
         </a>
 

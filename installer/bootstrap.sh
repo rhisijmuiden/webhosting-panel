@@ -26,10 +26,10 @@ done
 # channel decides which code (and so which version) gets installed.
 if [[ -z $channel && $quiet == no ]] && { : </dev/tty; } 2>/dev/null; then
   if [[ $lang == nl* ]]; then
-    printf '\nWebhosting Panel\n\nReleasekanaal\n  1) productie - stabiele versies (branch main, aanbevolen)\n  2) test - nieuwste functies eerst (branch test)\n' >/dev/tty
+    printf '\nDekwerk\n\nReleasekanaal\n  1) productie - stabiele versies (branch main, aanbevolen)\n  2) test - nieuwste functies eerst (branch test)\n' >/dev/tty
     prompt='Keuze [1]: '
   else
-    printf '\nWebhosting Panel\n\nRelease channel\n  1) production - stable releases (branch main, recommended)\n  2) test - newest features first (branch test)\n' >/dev/tty
+    printf '\nDekwerk\n\nRelease channel\n  1) production - stable releases (branch main, recommended)\n  2) test - newest features first (branch test)\n' >/dev/tty
     prompt='Choice [1]: '
   fi
   reply=''

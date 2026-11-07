@@ -79,7 +79,7 @@
                 </x-ui.field>
                 <div class="sd-add-btn"><x-ui.button variant="primary" icon="plus">{{ __('Add subdomain') }}</x-ui.button></div>
             </form>
-            <p class="small muted">{{ __('The address works within a minute, with its own SSL certificate. With RHIS DNS the DNS record is added for you.') }}
+            <p class="small muted">{{ __('The address works within a minute, with its own SSL certificate. With :provider DNS the DNS record is added for you.', ['provider' => \App\Support\Brand::provider()]) }}
                 @if ($sdLimit !== null) {{ __(':used of :limit used', ['used' => $sdList->count(), 'limit' => $sdLimit]) }}@endif</p>
         @elseif ($sdBlocker && $website->status === 'active')
             <p class="small muted">{{ $sdBlocker }}</p>

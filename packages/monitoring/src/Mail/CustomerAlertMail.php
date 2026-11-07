@@ -67,7 +67,7 @@ class CustomerAlertMail extends Mailable
                 'footer' => __('You receive this mail because you asked for it in the control panel.'),
                 'footerUrl' => route('client.monitoring.index').'#alerts',
                 'footerLink' => __('Change who receives these mails'),
-                'logo' => dirname(__DIR__, 2).'/resources/mail/rhis-logo-wit.png',
+                'logo' => dirname(__DIR__, 2).'/resources/mail/logo-wit.png',
             ],
         );
     }

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Webhosting Panel. Versions follow [Semantic Versioning](https://semver.org/).
+All notable changes to Dekwerk. Versions follow [Semantic Versioning](https://semver.org/).
 The `main` branch is the production channel, `test` is the test channel.
 
 ## [1.0.0] - 2026-11-06

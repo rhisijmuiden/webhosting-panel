@@ -1,0 +1,21 @@
+/* Dekwerk huisstijl: kleuren, type, ruimte en radius. Bron: tokens.json. Zie ../stijlgids.md */
+@font-face{font-family:"Lexend";font-style:normal;font-weight:100 900;font-display:swap;src:url("../fonts/lexend-latin.woff2") format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Lexend";font-style:normal;font-weight:100 900;font-display:swap;src:url("../fonts/lexend-latin-ext.woff2") format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
+:root{
+  /* Merkkleuren */
+  --haven:#123E7C; --diep:#0A2348; --golf:#3FA9F5; --touw:#D9B98C; --schuim:#F6F9FC;
+  /* Rollen, licht */
+  --surface:#F3F7FB; --surface-raised:#FFFFFF; --ink:#0A2348; --ink-muted:#4D607C; --line:#DFE7F0;
+  --accent:var(--golf); --accent-text:#0F6CB5; --on-accent:var(--diep);
+  --status-online:#1C8A57; --status-warning:#A86B00; --status-offline:#C23434;
+  --font-display:"Lexend",system-ui,sans-serif; --font-sans:"Lexend",system-ui,sans-serif;
+  --space-1:4px; --space-2:8px; --space-3:16px; --space-4:24px; --space-5:48px; --space-6:96px;
+  --radius-sm:8px; --radius-md:10px; --radius-lg:18px; --radius-pill:999px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --surface:#06142B; --surface-raised:#0D1F3D; --ink:#EDF3FA; --ink-muted:#9FB1CA; --line:#1A2F52;
+  --accent-text:#7CC6FF; --status-online:#4ACB8C; --status-warning:#F2B640; --status-offline:#FF7A7A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --surface:#06142B; --surface-raised:#0D1F3D; --ink:#EDF3FA; --ink-muted:#9FB1CA; --line:#1A2F52;
+  --accent-text:#7CC6FF; --status-online:#4ACB8C; --status-warning:#F2B640; --status-offline:#FF7A7A; color-scheme:dark}
+.dekwerk-display{font-family:var(--font-display);font-weight:700;letter-spacing:-.015em}

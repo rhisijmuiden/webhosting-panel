@@ -115,7 +115,7 @@ def update_running():
 def update_argv(branch):
     return [
         "systemd-run", "--wait", "--collect", "--quiet", "--unit", UPDATE_UNIT,
-        "--description", f"Webhosting Panel update ({branch})",
+        "--description", f"Dekwerk update ({branch})",
         "--property", "UMask=0022",
         "--property", f"StandardOutput=truncate:{UPDATE_LOG}",
         "--property", f"StandardError=append:{UPDATE_LOG}",

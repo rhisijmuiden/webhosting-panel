@@ -11,7 +11,7 @@
         <span class="muted small">{{ $daLimit === null ? trans_choice(':count alias|:count aliases', $daAliases->count()) : __(':used of :limit used', ['used' => $daAliases->count(), 'limit' => $daLimit]) }}</span>
     </x-slot:actions>
     @if ($daAliases->contains->isBusy())<meta http-equiv="refresh" content="5">@endif
-    <p class="muted small">{{ __('Extra domains for this website, for example your .be or .com next to the .nl. Each alias gets its own certificate and, with RHIS DNS, its DNS records.') }}</p>
+    <p class="muted small">{{ __('Extra domains for this website, for example your .be or .com next to the .nl. Each alias gets its own certificate and, with :provider DNS, its DNS records.', ['provider' => \App\Support\Brand::provider()]) }}</p>
     @include('domain-aliases::partials.messages')
     @if ($daAliases->isNotEmpty())
         @include('domain-aliases::partials.table', ['aliases' => $daAliases, 'area' => $daArea, 'showWebsite' => false])

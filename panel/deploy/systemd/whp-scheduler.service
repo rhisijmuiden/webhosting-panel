@@ -1,5 +1,5 @@
 [Unit]
-Description=Webhosting Panel scheduler
+Description=Dekwerk scheduler
 
 [Service]
 Type=oneshot

@@ -1,6 +1,6 @@
 # rhis/security
 
-Login protection for the Webhosting Panel, on top of CrowdSec and nftables.
+Login protection for Dekwerk, on top of CrowdSec and nftables.
 
 - **Admin** (`/admin/security/protection`, menu Server → Login protection):
   per service (SSH/SFTP, mail, control panel, WordPress) a temporary block

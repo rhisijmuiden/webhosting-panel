@@ -64,7 +64,7 @@
     "Test a change on test.:domain before it goes live, or run a shop or blog on its own address. Subdomains are part of this subscription: no extra package needed.": "Test een wijziging eerst op test.:domain voordat die live gaat, of draai een shop of blog op een eigen adres. Subdomeinen vallen onder dit abonnement: geen extra pakket nodig.",
     "Test copy on a subdomain": "Testkopie op een subdomein",
     "Test your change on the copy: an update, a plugin or a new design.": "Test je wijziging op de kopie: een update, een plugin of een nieuw ontwerp.",
-    "The address works within a minute, with its own SSL certificate. With RHIS DNS the DNS record is added for you.": "Het adres werkt binnen een minuut, met een eigen SSL-certificaat. Met RHIS DNS wordt het DNS-record voor je toegevoegd.",
+    "The address works within a minute, with its own SSL certificate. With :provider DNS the DNS record is added for you.": "Het adres werkt binnen een minuut, met een eigen SSL-certificaat. Met :provider DNS wordt het DNS-record voor je toegevoegd.",
     "The clone failed.": "Het klonen is mislukt.",
     "The clone failed. The copy was removed again; your live website was not changed.": "Het klonen is mislukt. De kopie is weer verwijderd; je live website is niet gewijzigd.",
     "The copy can still send email, for example from contact forms or orders. Test with your own email address.": "De kopie kan nog steeds e-mail versturen, bijvoorbeeld vanuit contactformulieren of bestellingen. Test met je eigen e-mailadres.",

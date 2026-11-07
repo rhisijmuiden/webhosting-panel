@@ -1,7 +1,7 @@
 # shellcheck shell=bash disable=SC2034
 # English messages (default). Keys are shared with nl.sh.
 EN_cmd_failed="Command failed"
-EN_welcome="Webhosting Panel installer for Debian 13 (Trixie)"
+EN_welcome="Dekwerk installer for Debian 13 (Trixie)"
 EN_need_root="Run this installer as root."
 EN_need_trixie="This installer supports Debian 13 (Trixie) only. Found: %s"
 EN_need_systemd="systemd must be PID 1."

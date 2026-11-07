@@ -1,5 +1,5 @@
 [Unit]
-Description=Webhosting Panel queue worker
+Description=Dekwerk queue worker
 After=network.target mariadb.service valkey-server.service whp-agent.service
 
 [Service]

@@ -1,6 +1,6 @@
 # Panel
 
-Laravel 12 admin and client panel of the Webhosting Panel, in the RHIS house style.
+Laravel 12 admin and client panel of Dekwerk, in the Dekwerk house style (brand/dekwerk).
 
 - Admin: dashboard, statistics, customers, packages, websites, services, CrowdSec,
   firewall, mail server (SMTP), updates (production/test channel), activity log.

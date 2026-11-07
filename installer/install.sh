@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Webhosting Panel - server installer for Debian 13 (Trixie), bare metal or VM.
+# Dekwerk - server installer for Debian 13 (Trixie), bare metal or VM.
 #
 #   installer/install.sh [options]
 #   installer/install.sh --help

@@ -1,6 +1,6 @@
 # whp-backup
 
-Backup engine of Webhosting Panel. A root CLI that the `whp-agent` calls with
+Backup engine of Dekwerk. A root CLI that the `whp-agent` calls with
 `--json`; the panel never talks to restic or the remote storage itself.
 
 - **restic** makes encrypted (AES-256), deduplicated, compressed snapshots.

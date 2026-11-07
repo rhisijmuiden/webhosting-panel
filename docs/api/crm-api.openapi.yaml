@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Webhosting Panel CRM API
+  title: Dekwerk CRM API
   version: 1.0.0
   summary: Lets the RHIS CRM create customers and hosting packages in the panel.
   description: |

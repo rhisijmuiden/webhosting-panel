@@ -47,7 +47,7 @@ final class DnsOnboarder
             return $accounts[0]['id'];
         }
 
-        throw new RuntimeException(__('The Cloudflare account for new domains is not set. Ask RHIS to finish the Cloudflare settings.'));
+        throw new RuntimeException(__('The Cloudflare account for new domains is not set. Ask :provider to finish the Cloudflare settings.', ['provider' => \App\Support\Brand::provider()]));
     }
 
     /** @return array{onboarding: DnsOnboarding, warnings: list<string>} */
@@ -66,9 +66,9 @@ final class DnsOnboarder
                 $zone = $client->createZone($domain->domain, $this->accountId());
             } catch (CloudflareException $e) {
                 throw new RuntimeException(match (true) {
-                    $e->hasCode(1061) => __('This domain is already in another Cloudflare account. Remove it there first, or contact RHIS.'),
+                    $e->hasCode(1061) => __('This domain is already in another Cloudflare account. Remove it there first, or contact :provider.', ['provider' => \App\Support\Brand::provider()]),
                     $e->hasCode(1049), $e->hasCode(1097) => __('Cloudflare does not accept this domain: is it registered, and is it the main domain (not a subdomain)?'),
-                    $e->httpStatus === 403 => __('The Cloudflare token may not add domains. Ask RHIS to give it “Zone: Edit”.'),
+                    $e->httpStatus === 403 => __('The Cloudflare token may not add domains. Ask :provider to give it “Zone: Edit”.', ['provider' => \App\Support\Brand::provider()]),
                     default => $e->getMessage(),
                 }, 0, $e);
             }

@@ -1,5 +1,5 @@
 [Unit]
-Description=Webhosting Panel agent (applies panel changes as root)
+Description=Dekwerk agent (applies panel changes as root)
 After=network.target nftables.service
 
 [Service]

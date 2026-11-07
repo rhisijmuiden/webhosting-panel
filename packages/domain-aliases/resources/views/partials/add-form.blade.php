@@ -12,7 +12,7 @@
         </div>
     @endunless
     <x-ui.field name="domain" :label="__('Extra domain')" placeholder="example.be" autocomplete="off" required
-        :help="__('Point the domain\'s DNS to this server. With RHIS DNS (Cloudflare) the records are set automatically.')" />
+        :help="__('Point the domain\'s DNS to this server. With :provider DNS (Cloudflare) the records are set automatically.', ['provider' => \App\Support\Brand::provider()])" />
     <div class="field">
         <span class="label">{{ __('Behaviour') }}</span>
         <div class="seg" role="radiogroup" aria-label="{{ __('Behaviour') }}">

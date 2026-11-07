@@ -2,7 +2,7 @@
 <x-layouts.base :title="$title">
 <div class="auth">
     <div class="auth-side">
-        <img src="{{ asset('brand/rhis-logo-wit.svg') }}" alt="{{ config('app.name') }}" style="height:30px;width:auto;align-self:flex-start">
+        <img src="{{ asset(\App\Support\Brand::logo()) }}" alt="{{ \App\Support\Brand::name() }}" style="height:36px;width:auto;align-self:flex-start">
         <div class="auth-tagline">
             <span class="pill">{{ __('Hosting panel') }}</span>
             <h1 style="margin-top:16px">{{ __('Your websites, safe and fast.') }}</h1>

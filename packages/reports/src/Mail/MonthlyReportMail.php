@@ -39,7 +39,7 @@ class MonthlyReportMail extends Mailable
             view: 'reports::mail.report',
             text: 'reports::mail.report-text',
             with: self::viewData($this->customer, $this->report, $this->supportEmail, $this->monthName()) + [
-                'logo' => dirname(__DIR__, 2).'/resources/mail/rhis-logo-wit.png',
+                'logo' => dirname(__DIR__, 2).'/resources/mail/logo-wit.png',
             ],
         );
     }

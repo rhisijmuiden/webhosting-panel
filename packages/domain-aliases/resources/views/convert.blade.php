@@ -38,13 +38,13 @@
         @elseif ($order && in_array($order->status, ['requested', 'awaiting_payment', 'accepted'], true))
             <x-ui.card :title="__('Upgrade ordered')">
                 <x-ui.pill status="pending">{{ __(ucfirst(str_replace('_', ' ', $order->status))) }}</x-ui.pill>
-                <p class="small">{{ __(':domain becomes a website of its own as soon as RHIS has processed your order.', ['domain' => $alias->domain]) }}</p>
+                <p class="small">{{ __(':domain becomes a website of its own as soon as :provider has processed your order.', ['provider' => \App\Support\Brand::provider(), 'domain' => $alias->domain]) }}</p>
                 @if ($order->message)<p class="small muted">{{ $order->message }}</p>@endif
                 @if ($order->checkout_url)<x-ui.button variant="primary" icon="external" :href="$order->checkout_url">{{ __('Pay now') }}</x-ui.button>@endif
             </x-ui.card>
         @elseif ($products !== [])
             <x-ui.card :title="__('Upgrade your package')">
-                <p class="small">{{ __('Your package has no room for another website. Choose an upgrade: RHIS processes the order and the website is created automatically.') }}</p>
+                <p class="small">{{ __('Your package has no room for another website. Choose an upgrade: :provider processes the order and the website is created automatically.', ['provider' => \App\Support\Brand::provider()]) }}</p>
                 <form method="POST" action="{{ route('client.domain-aliases.upgrade', $alias) }}" class="form">
                     @csrf
                     <div class="field">
@@ -59,7 +59,7 @@
             </x-ui.card>
         @else
             <x-ui.card :title="__('Upgrade your package')">
-                <p class="small">{{ __('Your package has no room for another website. Contact RHIS to upgrade your package.') }}</p>
+                <p class="small">{{ __('Your package has no room for another website. Contact :provider to upgrade your package.', ['provider' => \App\Support\Brand::provider()]) }}</p>
             </x-ui.card>
         @endif
     </section>

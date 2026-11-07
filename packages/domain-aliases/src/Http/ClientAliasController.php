@@ -49,6 +49,6 @@ final class ClientAliasController extends AliasController
             return redirect()->away($order->checkout_url);
         }
 
-        return back()->with('status', __('Thanks! Your order has been sent to RHIS. :domain becomes a website of its own as soon as the order is processed.', ['domain' => $alias->domain]));
+        return back()->with('status', __('Thanks! Your order has been sent to :provider. :domain becomes a website of its own as soon as the order is processed.', ['provider' => \App\Support\Brand::provider(), 'domain' => $alias->domain]));
     }
 }

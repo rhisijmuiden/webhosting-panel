@@ -279,8 +279,8 @@ abstract class DomainActions extends Controller
 
         return redirect()->to($this->route('domains.connect', $domain->id))
             ->with('status', $result['onboarding']->isActive()
-                ? __('Your DNS is already running on RHIS Cloudflare.')
-                : __(':domain is ready at RHIS Cloudflare. Now change the nameservers at your registrar.', ['domain' => $domain->domain]))
+                ? __('Your DNS is already running on :provider Cloudflare.', ['provider' => \App\Support\Brand::provider()])
+                : __(':domain is ready at :provider Cloudflare. Now change the nameservers at your registrar.', ['provider' => \App\Support\Brand::provider(), 'domain' => $domain->domain]))
             ->with('warnings', $result['warnings']);
     }
 
@@ -302,7 +302,7 @@ abstract class DomainActions extends Controller
         $o->refresh();
 
         return back()->with('status', match (true) {
-            $live => __('Done! DNS for :domain now runs on RHIS Cloudflare.', ['domain' => $domain->domain]),
+            $live => __('Done! DNS for :domain now runs on :provider Cloudflare.', ['provider' => \App\Support\Brand::provider(), 'domain' => $domain->domain]),
             $o->nameserversMatch() => __('The new nameservers are visible. Cloudflare confirms this within a few minutes; we keep checking.'),
             default => __('The nameservers have not changed yet. A change at the registrar can take a few hours; we keep checking and mail you.'),
         });
@@ -597,7 +597,7 @@ abstract class DomainActions extends Controller
     public static function providerLabel(MailProvider $p): string
     {
         return match ($p) {
-            MailProvider::Rhis => 'RHIS Mail (this server)',
+            MailProvider::Rhis => __(':provider Mail (this server)', ['provider' => \App\Support\Brand::provider()]),
             MailProvider::Microsoft365 => 'Microsoft 365',
             MailProvider::External => 'Other provider',
         };

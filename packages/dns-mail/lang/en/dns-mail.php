@@ -7,7 +7,7 @@ return [
         'webmail' => 'Webmail',
     ],
     'provider' => [
-        'rhis' => 'RHIS Mail (this server)',
+        'rhis' => ':provider Mail (this server)',
         'microsoft365' => 'Microsoft 365',
         'external' => 'Other provider',
     ],

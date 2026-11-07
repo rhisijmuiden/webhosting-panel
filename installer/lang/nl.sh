@@ -1,7 +1,7 @@
 # shellcheck shell=bash disable=SC2034
 # Nederlandse vertaling. Ontbrekende sleutels vallen terug op Engels.
 L_cmd_failed="Opdracht mislukt"
-L_welcome="Webhosting Panel-installer voor Debian 13 (Trixie)"
+L_welcome="Dekwerk-installer voor Debian 13 (Trixie)"
 L_need_root="Start deze installer als root."
 L_need_trixie="Deze installer ondersteunt alleen Debian 13 (Trixie). Gevonden: %s"
 L_need_systemd="systemd moet PID 1 zijn."

@@ -1,13 +1,11 @@
-# Brand: RHIS huisstijl
+# Brand
 
-Copy of the RHIS house style from `rhisijmuiden/rhis-huisstijl` (commit 7665a81),
-kept here so the panel always builds with the same brand.
+- `dekwerk/` the **Dekwerk** house style: the product's logo, colors, font (Lexend) and style guide (`dekwerk/stijlgids.md`). The panel uses this.
+- `rhis/` the RHIS house style, copied from `rhisijmuiden/rhis-huisstijl` (commit 7665a81). RHIS is the hosting company that runs Dekwerk; kept for reference.
 
-- `tokens/` colors, type, spacing and radius (`tokens.css`, `tokens.json`)
-- `logo/` logos, app icon and favicon
-- `fonts/` Archivo, self-hosted (SIL Open Font License)
-- `huisstijlgids.md` how to apply it
+Where the panel takes its brand from:
 
-The panel uses these in `panel/public/assets/app.css` and `panel/public/brand/`.
-To use another brand: replace the files here and in `panel/public/brand/`, and
-change the color tokens at the top of `app.css`.
+- Name, logo and icon paths: `panel/config/panel.php` (`brand`), read through `App\Support\Brand`.
+- The hosting company name customers see: Tools & settings > Branding (default `WHP_PROVIDER_NAME`, else RHIS).
+- Colors and font: the tokens at the top of `panel/public/assets/app.css`, copied from `dekwerk/tokens/tokens.css`.
+- Logo files served to browsers: `panel/public/brand/` (copies of `dekwerk/logo/`).

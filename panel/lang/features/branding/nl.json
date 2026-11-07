@@ -1,0 +1,10 @@
+{
+    "Branding": "Huisstijl",
+    "Your company name as customers see it": "Je bedrijfsnaam zoals klanten die zien",
+    "How your hosting company appears to customers in :app.": "Hoe je hostingbedrijf aan klanten wordt getoond in :app.",
+    "Hosting company": "Hostingbedrijf",
+    "Company name": "Bedrijfsnaam",
+    "Shown to customers, for example in “Let :name run your DNS” and in the name of the mail service. Default: :default.": "Klanten zien deze naam, bijvoorbeeld in “Laat :name je DNS verzorgen” en in de naam van de maildienst. Standaard: :default.",
+    "Product": "Product",
+    "The name and logo of the software. They are the same on every server.": "De naam en het logo van de software. Die zijn op elke server gelijk."
+}
