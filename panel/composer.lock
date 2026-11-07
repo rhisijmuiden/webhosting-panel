@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "347671406b5c330bc169b6f787a55584",
+    "content-hash": "5cca4ea96f58de29d9579396206e1e8a",
     "packages": [
         {
             "name": "brick/math",
@@ -3399,6 +3399,39 @@
                 "proprietary"
             ],
             "description": "CRM API for the Webhosting Panel (/api/v1/crm): plans, customers, subscriptions, usage, signed webhooks, catalog and orders.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/disk-usage",
+            "version": "dev-claude/project-thread-32u16i",
+            "dist": {
+                "type": "path",
+                "url": "../packages/disk-usage",
+                "reference": "948ebe9d11dfd57b9230401f2ce93b413d0ba878"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\DiskUsage\\DiskUsageServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\DiskUsage\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Disk usage explorer for the Webhosting Panel: which folders, databases and mailboxes fill a website's disk space, with drill-down, for customers and admins.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -9025,6 +9058,7 @@
         "rhis/apps": 20,
         "rhis/backups": 20,
         "rhis/crm-api": 20,
+        "rhis/disk-usage": 20,
         "rhis/dns-mail": 20,
         "rhis/domain-aliases": 20,
         "rhis/files": 20,
