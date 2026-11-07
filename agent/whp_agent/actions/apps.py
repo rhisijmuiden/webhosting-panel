@@ -7,6 +7,7 @@
     apps.list    {domain?}             installed apps (from the agent's own state), with
                                        the version on disk and whether an update is out
     apps.install {domain, app, ...}    job: database + files + configuration + admin user
+                                       (+ plugin_set for WordPress/WooCommerce, see wp_sets.py)
     apps.remove  {domain, id}          job: files, database and web server snippet
 
 How it stays safe:
@@ -48,7 +49,7 @@ import time
 import urllib.request
 import uuid
 
-from .. import paths, wordpress
+from .. import paths, wordpress, wp_sets
 from .. import validate as v
 from ..jobs import start_job
 from ..registry import ActionError, action
@@ -1445,6 +1446,8 @@ def _install_params(params):
         "admin_email": v.string(params, "admin_email", max_len=254, pattern=EMAIL_RE),
         "admin_password": password,
         "locale": locale,
+        # WordPress and WooCommerce only: plugins and themes added right after the install.
+        "plugin_set": wp_sets.validate(params.get("plugin_set")) if isinstance(recipe, WordPress) else None,
     }
 
 
@@ -1476,6 +1479,9 @@ def apps_install(params):
                 log("Creating the database")
                 ctx.db = databases.create_for_site(domain, recipe.id[:8])
             recipe.install(ctx)
+            plugin_set = None
+            if opts.get("plugin_set"):
+                plugin_set = wp_sets.apply(recipe.wp_runner(ctx), opts["plugin_set"], opts["locale"], log)
             snippet = recipe.nginx_snippet(ctx)
             if snippet:
                 write_snippet(domain, install_id, snippet)
@@ -1501,7 +1507,7 @@ def apps_install(params):
                 items.append(item)
                 _save_state(domain, items)
             log(f"{recipe.name} {ctx.version or ''} is ready at {ctx.url}")
-            return {**item, "page_cache_disabled": page_cache_off}
+            return {**item, "page_cache_disabled": page_cache_off, "plugin_set": plugin_set}
         except Exception:
             log("Install failed, rolling back")
             try:

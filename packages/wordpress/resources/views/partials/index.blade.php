@@ -7,6 +7,7 @@
     <div class="actions">
         @if ($area === 'admin')
             <form method="POST" action="{{ route('admin.wordpress.scan') }}">@csrf<x-ui.button icon="refresh">{{ __('Check all sites now') }}</x-ui.button></form>
+            @if (Route::has('admin.wordpress.bulk.index'))<x-ui.button icon="bolt" :href="route('admin.wordpress.bulk.index')">{{ __('Bulk actions') }}</x-ui.button>@endif
         @endif
         @if ($summary['outdated_installs'] > 0)
             <form method="POST" action="{{ route($area.'.wordpress.update-outdated') }}" onsubmit="return confirm(@js(__('Update everything that is outdated? A snapshot is taken first and a site that breaks is rolled back.')))">

@@ -1,0 +1,35 @@
+/* WordPress plugin sets (packages/apps, plugin-sets views). */
+.ps-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.ps-card { display: grid; gap: 12px; align-content: start; }
+.ps-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ps-card h2 { margin: 0; font-size: 17px; }
+.ps-card p { margin: 0; }
+.ps-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.ps-chips li { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--radius-pill); background: var(--surface-sunken); font-size: 13px; }
+.ps-chips li.ps-on::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--status-online); }
+.ps-chips li.ps-bad { background: var(--bad-bg); color: var(--bad-ink); }
+.ps-chips li .icon { width: 14px; height: 14px; }
+.ps-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--ink-muted); }
+.ps-meta .icon { width: 15px; height: 15px; vertical-align: -3px; }
+.ps-card footer { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+.ps-rows { display: grid; gap: 8px; }
+.ps-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.ps-row .input { min-width: 0; }
+.ps-row .check { white-space: nowrap; margin: 0; }
+.ps-row .error, .ps-row .help { grid-column: 1 / -1; }
+.ps-row .help { margin: -2px 2px 0; font-size: 12.5px; color: var(--ink-muted); }
+.ps-add { justify-self: start; }
+.ps-hint { margin: 0 0 10px; max-width: 76ch; }
+.ps-packages { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px 18px; }
+.ps-packages small { display: block; }
+.ps-pick { display: grid; gap: 10px; }
+.ps-preview { padding: 12px 14px; border-radius: var(--radius-md); background: var(--surface-sunken); display: grid; gap: 8px; }
+.ps-preview p { margin: 0; }
+.ps-report { display: grid; gap: 10px; }
+.ps-report ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ps-report li { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.ps-report li .small { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .ps-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .ps-row .check { grid-column: 1; }
+}

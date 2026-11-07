@@ -67,6 +67,7 @@
                 ? __('Updates of :app run through the WordPress tools (with a snapshot first) or WordPress itself. Backups of the files and the database are part of the nightly website backup.', ['app' => $meta['name']])
                 : __('Updates of :app itself are done from its own admin screen. Backups of the files and the database are part of the nightly website backup.', ['app' => $meta['name']]) }}</p>
         </x-ui.card>
+        @include('apps::plugin-sets.report')
     @endif
 
     @unless ($installation->busy())
