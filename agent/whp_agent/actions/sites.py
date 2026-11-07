@@ -82,6 +82,11 @@ def site_php(params):
         refresh_app_timers(domain)
     except ActionError:
         pass
+    try:
+        from .cron import refresh_units  # customer cron jobs (PHP version, slice)
+        refresh_units(domain)
+    except ActionError:
+        pass
     return result
 
 
@@ -143,6 +148,11 @@ def site_owner(params):
     try:
         from .apps import refresh_app_timers  # app background tasks (FreshRSS feeds)
         refresh_app_timers(domain)
+    except ActionError:
+        pass
+    try:
+        from .cron import refresh_units  # customer cron jobs (PHP version, slice)
+        refresh_units(domain)
     except ActionError:
         pass
     return result

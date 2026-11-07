@@ -234,6 +234,11 @@ skips scans younger than `max_age_hours`), `disk.usage` (one folder of the last 
 and `disk.summary` (scanned totals per website and the size of every MariaDB database). Scans are cached in
 `/var/lib/webhosting-panel/disk-usage/<domain>.json`. See `packages/disk-usage/README.md`.
 
+Cron jobs (`cron.py`, screens in `packages/cron`, `Rhis\Cron\`, admin `/admin/cron`, client `/cron`):
+`cron.apply`, `cron.calendar`, `cron.list`, `cron.run`, `cron.stop`, `cron.runs`, `cron.suspend`, `cron.remove`.
+One `whp-cron-<id>.timer` + oneshot service per job (site user, subscription slice); `cron_finish.py` saves
+every run (ExecStopPost). `site.php` / `site.owner` rewrite the units. See `docs/cron.md`.
+
 ## Release channels
 
 | Channel | Git branch |
