@@ -27,7 +27,7 @@ not changed.
 | Chroot | `DefaultRoot ~`: the account's folder |
 | Ports | FTPS `WHP_FTP_PORT` (21), SFTP `WHP_SFTP_PORT` (2222), passive 49152-49407 (saved in `installer.env`, opened in `/etc/nftables.d/whp-ftp.nft`) |
 | TLS | The server's Let's Encrypt certificate (the panel host name); the certbot deploy hook reloads ProFTPD |
-| SFTP host keys | The server's own OpenSSH host keys (same fingerprints as port 22) |
+| SFTP host keys | Own keys in PEM format, `/etc/proftpd/whp/ssh_host_{ecdsa,rsa}_key` (shown in the panel under How to connect) |
 | Brute force | ProFTPD logs to the journal; CrowdSec reads `proftpd.service` (`acquis.d/whp-ftp.yaml`, collection `crowdsecurity/proftpd`) |
 
 ## Agent

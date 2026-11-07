@@ -237,7 +237,8 @@ PY
   agent mail.imap_import_forget '{"id":1}' >/dev/null || true
   rm -f /etc/webhosting-panel/mail-import.conf
   echo "== FTP accounts (ProFTPD)"
-  check "proftpd active and its configuration valid" bash -c 'systemctl is-active --quiet proftpd && proftpd -t'
+  check "proftpd configuration valid" proftpd -t
+  check "proftpd active" bash -c 'systemctl is-active proftpd || { journalctl -u proftpd -n 30 --no-pager; false; }'
   check "proftpd listens on 21 and 2222" bash -c 'ss -ltnH "sport = :21" | grep -q . && ss -ltnH "sport = :2222" | grep -q .'
   check "firewall opens FTPS, SFTP and the passive ports" bash -c 'nft list set inet whp tcp_open | grep -q 2222 && nft list set inet whp tcp_open | grep -q 49152-49407'
   FTP_HASH=$(openssl passwd -6 'Smoke-ftp-pass-123')

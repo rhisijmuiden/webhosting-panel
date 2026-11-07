@@ -29,13 +29,17 @@ module_ftp() {
   # Members of this group are the read-only accounts (ftpd.group). A real system
   # group, so its id never belongs to anything else on the server.
   getent group whp-ftp-ro >/dev/null || run groupadd --system whp-ftp-ro
-  [[ -s /etc/ssh/ssh_host_ed25519_key ]] || run ssh-keygen -A
   install -d -m 0750 /etc/proftpd/whp
   install -d -m 0750 -o root -g adm /var/log/proftpd
   local f
   for f in ftpd.passwd ftpd.group; do
     [[ -e /etc/proftpd/whp/$f ]] || install -m 0600 /dev/null "/etc/proftpd/whp/$f"
   done
+  # Own SFTP host keys in PEM format: every mod_sftp build reads those
+  # (the OpenSSH-format keys of sshd need extra libraries in some builds).
+  [[ -s /etc/proftpd/whp/ssh_host_rsa_key ]] || run ssh-keygen -q -m PEM -t rsa -b 3072 -N '' -C "$WHP_HOSTNAME" -f /etc/proftpd/whp/ssh_host_rsa_key
+  [[ -s /etc/proftpd/whp/ssh_host_ecdsa_key ]] || run ssh-keygen -q -m PEM -t ecdsa -b 256 -N '' -C "$WHP_HOSTNAME" -f /etc/proftpd/whp/ssh_host_ecdsa_key
+  chmod 0600 /etc/proftpd/whp/ssh_host_*_key
   [[ -s /etc/proftpd/whp/ftpd.group ]] \
     || printf 'whp-ftp-ro:x:%s:\n' "$(getent group whp-ftp-ro | cut -d: -f3)" >/etc/proftpd/whp/ftpd.group
 
@@ -47,8 +51,10 @@ module_ftp() {
   backup_once /etc/proftpd/proftpd.conf
   render "$TPL/proftpd/proftpd.conf" /etc/proftpd/proftpd.conf
   render "$TPL/proftpd/common.conf" /etc/proftpd/whp/common.conf
-  if ! proftpd -t >>"$WHP_INSTALL_LOG" 2>&1; then
-    warn "proftpd configuration test failed, see $WHP_INSTALL_LOG"
+  local test_out
+  if ! test_out=$(proftpd -t 2>&1); then
+    printf '%s\n' "$test_out" >>"$WHP_INSTALL_LOG"
+    warn "proftpd configuration test failed: $(grep -iE 'fatal|error|unable' <<<"$test_out" | tail -n 3 | tr '\n' ' ')"
     return 0
   fi
   svc_enable proftpd

@@ -202,8 +202,8 @@ def _ports():
 
 def _fingerprints():
     out = []
-    for kind in ("ed25519", "ecdsa", "rsa"):
-        pub = f"/etc/ssh/ssh_host_{kind}_key.pub"
+    for kind in ("ecdsa", "rsa"):
+        pub = os.path.join(FTP_DIR, f"ssh_host_{kind}_key.pub")
         if not os.path.exists(pub):
             continue
         try:
