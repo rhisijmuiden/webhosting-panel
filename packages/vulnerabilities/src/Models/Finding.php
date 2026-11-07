@@ -87,6 +87,31 @@ class Finding extends Model
         return $this->kind === 'malware';
     }
 
+    /** Core or plugin files that differ from WordPress.org (rhis/wp-integrity). */
+    public function isIntegrity(): bool
+    {
+        return $this->kind === 'integrity';
+    }
+
+    /** Integrity findings store an English sentence as title; show it in the user's language. */
+    protected function title(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::get(fn ($value) => $this->kind === 'integrity' && is_string($value) ? __($value) : $value);
+    }
+
+    /** Where the customer fixes this finding in the client panel, if there is a better place than the list. */
+    public function clientFixUrl(): ?string
+    {
+        if ($this->isIntegrity() && $this->install && \Illuminate\Support\Facades\Route::has('client.wp-integrity.show') && config('wp-integrity.customer')) {
+            return route('client.wp-integrity.show', $this->install);
+        }
+        if (! $this->isMalware() && ! $this->isIntegrity() && $this->install && config('wordpress.customer_toolkit') && \Illuminate\Support\Facades\Route::has('client.wordpress.show')) {
+            return route('client.wordpress.show', $this->install);
+        }
+
+        return null;
+    }
+
     /** "Contact Form 7 5.8.1" or the file name. */
     public function componentLabel(): string
     {
@@ -108,6 +133,9 @@ class Finding extends Model
     {
         if ($this->isMalware()) {
             return __('Remove or replace this file and change the passwords of the website (FTP, WordPress administrators, database). If the file belongs to a plugin, reinstall that plugin from a clean copy.');
+        }
+        if ($this->isIntegrity()) {
+            return __('These files differ from the original on WordPress.org. Restore the original files with one click in the control panel. If you did not make the change yourself, also change the passwords of the website.');
         }
         $what = match ($this->component_type) {
             'core' => 'WordPress',
