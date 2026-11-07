@@ -111,6 +111,9 @@ if report["database"]["home"] != OLD_URL:  # show how this mariadb-dump writes w
 step("check reads the old address from the dump", report["database"]["home"] == OLD_URL, report["database"])
 step("check finds the old path", any(p["old"] == OLD_ROOT and p["likely"] for p in report["paths"]), report["paths"])
 step("check lists the Redis drop-in", any(c["file"] == "wp-content/object-cache.php" for c in report["site"]["cache"]))
+# The old site used www., the target has a www. alias: the wizard keeps the www. form.
+NEW_URL = report["target"]["url"]
+step("check proposes the www. address", NEW_URL == f"http://www.{target}", report["target"])
 
 state = wait(wpi.wp_import_run({"import": import_id, "domain": target, "new_url": report["target"]["url"],
                                 "paths": [p["old"] for p in report["paths"] if p["likely"]], "urls": [u["old"] for u in report["urls"]],
@@ -123,13 +126,13 @@ new_cfg = open(os.path.join(docroot, "wp-config.php")).read()
 step("wp-config.php points at the new database", fix.config_value(new_cfg, "DB_NAME") == result["database"]["name"]
      and fix.config_value(new_cfg, "DB_HOST") == "localhost" and fix.config_value(new_cfg, "DB_PASSWORD") != "Src-Db-Pass-2026")
 step("wp-config.php has the new paths", OLD_ROOT not in new_cfg and f"{docroot}/wp-content/plugins/wp-super-cache/" in new_cfg)
-step("the new address is set", option(target, "home") == f"http://{target}" and option(target, "siteurl") == f"http://{target}",
+step("the new address is set", option(target, "home") == NEW_URL and option(target, "siteurl") == NEW_URL,
      option(target, "home"))
 step("old paths are changed in the database", option(target, "upload_path") == f"{docroot}/wp-content/uploads")
 serial = wordpress.wp(target, ["option", "get", "whp_smoke_paths", "--format=json"]).stdout
 step("serialized values are changed too", docroot in serial and OLD_ROOT not in serial, serial)
 content = wordpress.wp(target, ["post", "list", "--post_type=post", "--fields=post_content", "--format=csv"]).stdout
-step("old links in posts point at the new address", "oldhost.example" not in content and f"http://{target}/wp-content/uploads/a.jpg" in content, content)
+step("old links in posts point at the new address", "oldhost.example" not in content and f"{NEW_URL}/wp-content/uploads/a.jpg" in content, content)
 step("the Redis drop-in is switched off", os.path.isfile(os.path.join(docroot, "wp-content/object-cache.php.whp-disabled"))
      and not os.path.exists(os.path.join(docroot, "wp-content/object-cache.php")))
 step("cache folders and files outside WordPress are not copied", not os.path.exists(os.path.join(docroot, "wp-content/cache"))
@@ -141,7 +144,7 @@ step("files belong to the website user", all(os.lstat(os.path.join(d, f)).st_uid
 grants = subprocess.run(["mariadb", "-uroot", "-N", "-e", f"SHOW GRANTS FOR '{result['database']['user']}'@'localhost'"],
                         capture_output=True, text=True).stdout
 step("the new database user only has its own database", "wpsrc" not in grants and result["database"]["name"] in grants, grants)
-page = subprocess.run(["curl", "-s", "--resolve", f"{target}:80:127.0.0.1", f"http://{target}/"], capture_output=True, text=True, timeout=60).stdout
+page = subprocess.run(["curl", "-sL", "--resolve", f"{target}:80:127.0.0.1", "--resolve", f"www.{target}:80:127.0.0.1", f"{NEW_URL}/"], capture_output=True, text=True, timeout=60).stdout
 step("the imported website answers", "Imported Smoke" in page, page[:300])
 step("the health check saw it", 200 <= result["health"] < 400, result["health"])
 step("uploads are removed by discard", wpi.wp_import_discard({"import": import_id})["removed"] == 3)
