@@ -44,7 +44,8 @@
 .su-banner.info { background: var(--info-bg); border-color: transparent; } .su-banner.info .ic { background: var(--accent); color: var(--nacht); }
 .su-banner .spin svg { animation: su-spin 1.2s linear infinite; }
 @keyframes su-spin { to { transform: rotate(360deg); } }
-.su-shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+.su-shots { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.su-shots > .su-shot-mobile:first-child, .su-shots > .su-shot-desktop + .su-shot-desktop { grid-column: 1; }
 .su-shot .card-head h2 { display: flex; align-items: center; gap: 8px; }
 .su-view { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--surface-sunken); max-height: 640px; overflow-y: auto; }
 .su-view img { display: block; width: 100%; height: auto; }
@@ -63,7 +64,7 @@
 .su-arrow { color: var(--ink-muted); padding: 0 4px; }
 .su-log { max-height: 380px; overflow: auto; font: 12px/1.5 ui-monospace, Menlo, monospace; background: var(--surface-sunken); border-radius: 10px; padding: 12px; white-space: pre-wrap; margin: 10px 0 0; }
 .su-bulk { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid var(--line-soft); }
-.su-bulk .select { min-width: 220px; }
+.su-bulk .select { min-width: 220px; width: auto; flex: 0 1 320px; }
 .su-two { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 20px; align-items: start; }
 .su-side { display: grid; gap: 20px; }
 .su-mini { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
@@ -78,7 +79,7 @@
 .su-threshold { display: flex; gap: 12px; align-items: center; }
 .su-threshold input[type=range] { flex: 1; accent-color: var(--accent); }
 .su-threshold output { min-width: 48px; font-weight: 700; text-align: right; }
-@media (max-width: 1000px) { .su-two { grid-template-columns: 1fr; } }
+@media (max-width: 1000px) { .su-two, .su-shots { grid-template-columns: 1fr; } .su-shots > * { grid-column: auto !important; } }
 @media (max-width: 860px) { .su-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } .su-step:nth-child(3) { border-left: 0; } .su-step:nth-child(n+3) { border-top: 1px solid var(--line-soft); } }
 @media (max-width: 520px) { .su-steps { grid-template-columns: 1fr; } .su-step + .su-step { border-left: 0; border-top: 1px solid var(--line-soft); } .su-shots { grid-template-columns: 1fr; } .su-banner { align-items: flex-start; } }
 </style>

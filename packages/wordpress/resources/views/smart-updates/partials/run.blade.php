@@ -76,7 +76,7 @@
             $keys = array_keys(array_filter(['slider' => isset($imgs['before'], $imgs['after']), 'before' => isset($imgs['before']), 'after' => isset($imgs['after']), 'diff' => isset($imgs['diff']), 'restored' => isset($imgs['restored'])]));
             $start = isset($imgs['diff']) && ($p['score'] ?? 0) > ($run->threshold ?? 10) ? 'diff' : ($keys[0] ?? 'before');
         @endphp
-        <x-ui.card class="su-shot" x-data="{ view: '{{ $start }}', pos: 50 }">
+        <x-ui.card class="su-shot su-shot-{{ $p['viewport'] }}" x-data="{ view: '{{ $start }}', pos: 50 }">
             <x-slot:title>{{ $p['page'] === '/' ? __('Home page') : $p['page'] }} · {{ $viewports[$p['viewport']] ?? $p['viewport'] }}</x-slot:title>
             <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
                 <div class="seg" role="radiogroup" aria-label="{{ __('View') }}">
