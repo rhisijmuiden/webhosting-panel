@@ -448,4 +448,10 @@ PY
   check "panel settings applied again" runuser -u whp -- php /opt/webhosting-panel/panel/artisan whp:security:apply
 fi
 
+# Per-feature smoke tests (one file per feature keeps this file out of merge conflicts).
+for f in "$(dirname "$0")"/smoke.d/*.sh; do
+  # shellcheck source=/dev/null
+  [[ -f $f ]] && source "$f"
+done
+
 exit $fail
