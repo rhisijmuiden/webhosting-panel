@@ -27,6 +27,7 @@ import ipaddress
 import os
 import re
 import shutil
+import time
 
 from .. import paths
 from .. import validate as v
@@ -39,6 +40,7 @@ SITES_DB = os.environ.get("WHP_SITES_DB", os.path.join(paths.STATE_DIR, "sites")
 GEOIP_DB = os.environ.get("WHP_GEOIP_DB", os.path.join(paths.STATE_DIR, "geoip", "country.mmdb"))
 GEOIP_CONF = os.environ.get("WHP_GEOIP_CONF", "/etc/nginx/conf.d/whp-geoip.conf")
 WHP_SITE = "/usr/local/sbin/whp-site"
+NGINX_PID = os.environ.get("WHP_NGINX_PID", "/run/nginx.pid")
 SNIPPET = "30-web-rules.conf"
 # SSL states in which the site has an HTTPS server block.
 HTTPS_STATES = ("active", "imported", "custom", "wildcard")
@@ -434,6 +436,40 @@ def server_ips():
     return sorted(set(ips))
 
 
+def _workers(master):
+    """Pids of the nginx worker processes of this master."""
+    pids = set()
+    try:
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit():
+                continue
+            try:
+                with open(f"/proc/{entry}/stat") as fh:
+                    if int(fh.read().rsplit(")", 1)[1].split()[1]) == master:
+                        pids.add(int(entry))
+            except (OSError, ValueError, IndexError):
+                continue
+    except OSError:
+        pass
+    return pids
+
+
+def reload_nginx(check=True):
+    """Reload nginx and wait until the old workers are gone, so the next
+    request is answered with the new rules (like whp-site's nginx_reload_wait)."""
+    try:
+        with open(NGINX_PID) as fh:
+            master = int(fh.read().strip())
+    except (OSError, ValueError):
+        master = None
+    old = _workers(master) if master else set()
+    run(["systemctl", "reload", "nginx"], timeout=60, check=check)
+    for _ in range(100):
+        if not old or not (old & _workers(master)):
+            break
+        time.sleep(0.1)
+
+
 def _nginx_test():
     proc = run(["nginx", "-t"], timeout=60, check=False)
     if proc.returncode != 0:
@@ -460,10 +496,10 @@ def apply(params):
         if cfg["force_https"] != force_was:
             run([WHP_SITE, "https", d, "force" if cfg["force_https"] else "allow", "--json"], timeout=180)
         else:
-            run(["systemctl", "reload", "nginx"], timeout=60)
+            reload_nginx()
     except ActionError:
         _restore(d, snap)
-        run(["systemctl", "reload", "nginx"], timeout=60, check=False)
+        reload_nginx(check=False)
         raise
     missing = []
     for code, path in cfg["error_pages"].items():
