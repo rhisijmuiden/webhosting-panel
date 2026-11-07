@@ -606,3 +606,20 @@ button.nav-section:focus-visible { outline: 2px solid var(--lucht); outline-offs
 .domain-table td.actions-col, .plans-page td.actions-col { width: 1%; white-space: nowrap; padding-left: 8px; }
 .domain-alias { flex-wrap: wrap; }
 .domain-alias span { white-space: nowrap; }
+
+/* Top bar trail on website pages: Domains › customer › domain › page (App\Support\Breadcrumbs) */
+.topbar-crumbs .crumb { display: inline-flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
+.topbar-crumbs .crumb > a, .topbar-crumbs .crumb > span { overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.topbar-crumbs .crumb > a:hover { color: var(--ink); text-decoration: underline; }
+.topbar-crumbs > strong.crumb, .topbar-crumbs > .crumb:nth-last-child(2) { flex-shrink: 0; }
+@media (max-width: 1800px) {
+  /* Long trails: drop the menu section ("Hosting services") first. */
+  .topbar-crumbs > .crumb:first-child:not(:nth-last-child(-n+4)) { display: none; }
+}
+@media (min-width: 1281px) {
+  .has-site-trail .page-head .crumbs { display: none; }
+}
+@media (max-width: 1280px) {
+  /* Narrow top bar: only the domain and the page; the small trail on the page keeps the rest. */
+  .topbar-crumbs > .crumb:not(:nth-last-child(-n+2)) { display: none; }
+}
