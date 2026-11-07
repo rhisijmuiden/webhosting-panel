@@ -9,7 +9,7 @@ managed files are rewritten, data and secrets are kept.
 ## Install
 
 ```bash
-# production channel (branch main)
+# asks for the channel (production or test), then installs its newest code
 curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/webhosting-panel/main/installer/bootstrap.sh | sudo bash
 
 # test channel (branch test), no questions
@@ -19,6 +19,33 @@ curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/webhosting-panel/test/
 
 Or from a checkout: `sudo installer/install.sh`. Run `installer/install.sh --help` for all options.
 Messages are in English, or Dutch with `--lang nl` (or a `nl_*` locale).
+
+**Release channel.** Without `--channel` an interactive install asks for it:
+production (branch `main`, stable) or test (branch `test`, newest features).
+`bootstrap.sh` asks before it downloads the code; `install.sh` run from
+`/opt/webhosting-panel` switches that checkout to the chosen branch, pulls the
+newest code and starts again from it (answers are kept, nothing is asked twice).
+Local changes in the checkout, `--upgrade` and checkouts elsewhere (CI,
+development) are never switched.
+
+**Progress.** The installer first shows its plan (every step, numbered), then
+per step `[7/22]`, a progress bar and percentage, a spinner with the running
+action (for example "Installing packages: nginx") and a result line with the
+time it took. Command output goes to `/var/log/webhosting-panel/install.log`
+only. On a failure it names the failed step and the log, and a re-run is safe.
+Without a terminal (panel updater, CI) the same lines are written plainly,
+without colours or spinner.
+
+**Readiness check.** The last steps check that every tool and service the
+panel features need is present and running (web, PHP, databases, certificates
+with the Cloudflare plugin, Chromium and Pillow for smart WordPress updates,
+restic/rclone for backups, ProFTPD, timers, mail, CrowdSec, the panel login
+page). Anything missing is listed on screen, in the log and in
+`/etc/webhosting-panel/install-summary.txt`; the next panel update installs it.
+Add a line to `installer/modules/88-verify.sh` when a feature needs a new
+program or service. The final screen shows the panel URL, the admin login
+(the first password only on the terminal of the first install), the time
+taken and any warnings.
 
 Requirements: Debian 13, amd64 or arm64, 2 GB RAM (4 GB with ClamAV), 20 GB disk,
 a public IPv4 address and an A record for the hostname (for Let's Encrypt).
