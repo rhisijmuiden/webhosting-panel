@@ -69,6 +69,12 @@ jobs:
             --hostname panel.example.test --email admin@example.test \
             --relay-host smtp.example.test --relay-port 587 --relay-user relay --relay-pass secret \
             --no-letsencrypt --clamav
+      - name: Readiness check found everything (installer/modules/88-verify.sh)
+        run: |
+          docker exec whp bash -c '
+            grep -E "^Ready check|^  missing" /etc/webhosting-panel/install-summary.txt
+            grep -q "^Ready check .*, 0 missing" /etc/webhosting-panel/install-summary.txt
+            grep -q "STEP  \[1/" /var/log/webhosting-panel/install.log'
       - name: Smoke tests
         run: docker exec whp bash /root/src/tests/smoke.sh
       - name: Backup engine tests (backups, restores, restore tests with MariaDB)

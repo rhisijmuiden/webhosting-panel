@@ -4,7 +4,7 @@
 set -uo pipefail
 mode=${1:-}
 services=(nginx mariadb valkey-server unbound nftables postfix dovecot rspamd clamav-daemon
-          crowdsec crowdsec-firewall-bouncer whp-agent)
+          crowdsec crowdsec-firewall-bouncer proftpd whp-agent whp-queue)
 for v in /etc/php/*/fpm; do
   v=${v#/etc/php/}; v=${v%/fpm}
   services+=("php$v-fpm")

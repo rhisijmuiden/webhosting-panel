@@ -24,6 +24,7 @@
         @include('client.websites.overview.tile', ['href' => $o->has('cron.index') && $o->allows('cron.customer_access') ? $o->url('cron.index', ['website' => $site->id]) : null, 'icon' => 'clock', 'label' => __('Cron jobs'),
             'sub' => class_exists(\Rhis\Cron\Models\CronJob::class) && ($n = \Rhis\Cron\Models\CronJob::where('website_id', $site->id)->count()) ? trans_choice(':count cron job|:count cron jobs', $n) : __('Run tasks on a schedule')])
         @include('client.websites.overview.tile', ['href' => $o->canUseTerminal() ? $o->url('files.terminal', $site) : null, 'icon' => 'terminal', 'label' => __('Web terminal'), 'sub' => __('Command line in your browser')])
+        @include('client.websites.overview.tile', ['href' => $o->allows('site-logs.customer_access') ? $o->url('site-logs.show', $site) : null, 'icon' => 'list', 'label' => __('Logs and errors'), 'sub' => __('Access, error and PHP logs')])
         @include('client.websites.overview.tile', ['href' => $o->has('apps.index') ? $o->url('apps.index') : null, 'icon' => 'apps', 'label' => __('App installer'), 'sub' => __('WordPress, Joomla, Nextcloud')])
         @include('client.websites.overview.tile', ['href' => $o->has('wp-import.index') && $o->allows('wp-import.customer_access') && $site->status === 'active' ? $o->url('wp-import.index', ['website' => $site->id]) : null,
             'icon' => 'upload', 'label' => __('Import WordPress'), 'sub' => __('Move a website from another host')])

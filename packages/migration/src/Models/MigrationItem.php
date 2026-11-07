@@ -20,7 +20,7 @@ class MigrationItem extends Model
 
     protected $fillable = [
         'migration_source_id', 'domain', 'customer_id', 'website_id', 'status', 'options', 'source_data', 'agent_job',
-        'job_kind', 'result', 'notes', 'log', 'secrets', 'error', 'started_at', 'copied_at', 'synced_at', 'cutover_at',
+        'job_kind', 'result', 'notes', 'log', 'wizard', 'secrets', 'error', 'started_at', 'copied_at', 'synced_at', 'cutover_at',
     ];
 
     protected $hidden = ['secrets'];
@@ -28,7 +28,7 @@ class MigrationItem extends Model
     protected function casts(): array
     {
         return [
-            'options' => 'array', 'source_data' => 'array', 'result' => 'array', 'notes' => 'array', 'log' => 'array', 'started_at' => 'datetime',
+            'options' => 'array', 'source_data' => 'array', 'result' => 'array', 'notes' => 'array', 'log' => 'array', 'wizard' => 'array', 'started_at' => 'datetime',
             'secrets' => 'encrypted:array', 'copied_at' => 'datetime', 'synced_at' => 'datetime', 'cutover_at' => 'datetime',
         ];
     }
@@ -46,6 +46,27 @@ class MigrationItem extends Model
     public function website(): BelongsTo
     {
         return $this->belongsTo(Website::class);
+    }
+
+    public function dnsSnapshots(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(MigrationDnsSnapshot::class)->latest('id');
+    }
+
+    /** Read a value of the per-domain wizard state, e.g. "confirmed.website". */
+    public function wizardValue(string $key, mixed $default = null): mixed
+    {
+        return data_get($this->wizard ?? [], $key, $default);
+    }
+
+    /** Change the wizard state. Not saved by itself. */
+    public function setWizard(string $key, mixed $value): static
+    {
+        $w = $this->wizard ?? [];
+        data_set($w, $key, $value);
+        $this->wizard = $w;
+
+        return $this;
     }
 
     public function isActive(): bool

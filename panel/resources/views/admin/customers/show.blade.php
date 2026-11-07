@@ -48,13 +48,13 @@
     <section class="grid grid-2" style="align-items:start">
         <x-ui.card :title="__('Logins')">
             <p class="muted small">{{ __('People who can log in to the client panel for this customer.') }}</p>
+            @error('password_link')<div class="alert alert-bad" role="alert"><x-icon name="info" />{{ $message }}</div>@enderror
             <div>
                 @forelse ($customer->users as $u)
                     <div class="row">
                         <span><strong>{{ $u->name }}</strong>@if ($u->teamMember) <x-ui.pill status="info" :dot="false" title="{{ implode(', ', $u->teamMember->areaLabels()) }}">{{ __('Team member') }}</x-ui.pill>@endif<br><span class="small muted">{{ $u->email }} · {{ $locales[$u->locale] ?? $u->locale }}@if ($u->hasTwoFactor()) · 2FA @endif</span></span>
                         <span class="login-actions">
-                            <form method="POST" action="{{ route('admin.customers.users.password', [$customer, $u]) }}" data-confirm="{{ __('Give :email a new password? The old password stops working.', ['email' => $u->email]) }}">@csrf
-                                <button class="btn btn-sm" type="submit" title="{{ __('New password') }}"><x-icon name="key" /><span class="login-action-label">{{ __('New password') }}</span></button></form>
+                            @include('admin.customers.password-menu', ['u' => $u])
                             @if ($u->hasTwoFactor())
                                 <form method="POST" action="{{ route('admin.customers.users.two-factor', [$customer, $u]) }}" data-confirm="{{ __('Turn off two-factor authentication for :email?', ['email' => $u->email]) }}">@csrf
                                     <button class="btn btn-sm" type="submit" title="{{ __('Turn off 2FA') }}"><x-icon name="lock" /><span class="login-action-label">{{ __('Turn off 2FA') }}</span></button></form>

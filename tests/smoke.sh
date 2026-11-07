@@ -170,6 +170,9 @@ for i in $(seq 1 30); do
 done
 check "local delivery through lmtp into Maildir" compgen -G '/var/vmail/example.test/info/Maildir/new/*'
 check "rspamd scanned the message" bash -c "rspamc -h 127.0.0.1:11334 -P '$RSPAMD_CONTROLLER_PASS' stat | grep -qE 'Messages scanned: [1-9]'"
+check "website mail SMTP listens on loopback only" bash -c "ss -ltnH | grep -q '127.0.0.1:10587 ' && ! ss -ltnH | grep -qE '(0\.0\.0\.0|\[::\]|\*):10587 '"
+check "agent answers wp.mail_status" bash -c "python3 $(dirname "$0")/agent_call.py wp.mail_status '{\"domain\":\"wp.test\"}' | jq -e '.smtp == true' >/dev/null"
+check "WordPress mail through this server (DKIM, sender, Reply-To, staging held back)" python3 "$(dirname "$0")/wp_mail_smoke.py" wp.test test.wp.test info@example.test
 check "spam (GTUBE) from outside gets action reject" bash -c "printf 'From: a@example.org\nTo: info@example.test\nSubject: x\n\nXJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X\n' | rspamc -h 127.0.0.1:11333 --ip 203.0.113.5 --from a@example.org | grep -qi 'Action: reject'"
 
 echo "== tools"
@@ -467,6 +470,57 @@ PY
   check "failed IMAP logins get the address blocked" wait_ban 203.0.113.61 whp/mail-bf
   cscli decisions delete --ip 203.0.113.50 >/dev/null 2>&1 || true
   check "panel settings applied again" runuser -u whp -- php /opt/webhosting-panel/panel/artisan whp:security:apply
+
+  echo "== website logs"
+  printf '<?php trigger_error("smoke-php-warning", E_USER_WARNING); echo "ok";\n' >/var/www/vhosts/site.test/public/warn.php
+  chown s_site_test: /var/www/vhosts/site.test/public/warn.php
+  curl -s -o /dev/null -H 'Host: site.test' 'http://127.0.0.1/smoke-log-viewer?x=1'
+  curl -s -o /dev/null -H 'Host: site.test' http://127.0.0.1/warn.php
+  sleep 6  # access log buffer flushes every 5 seconds
+  check "logs: access log entry with status and path" bash -c 'agent sitelog.read "{\"domain\":\"site.test\",\"log\":\"access\",\"q\":\"smoke-log-viewer\"}" | jq -e "(.entries | length > 0) and .entries[-1].path == \"/smoke-log-viewer?x=1\" and .cursor.offset > 0"'
+  check "logs: PHP warning in the PHP error log" bash -c 'agent sitelog.read "{\"domain\":\"site.test\",\"log\":\"php\",\"levels\":[\"warning\"]}" | jq -e "[.entries[] | select(.message | test(\"smoke-php-warning\"))] | length > 0"'
+  check "logs: list of log files" bash -c 'agent sitelog.files "{\"domain\":\"site.test\"}" | jq -e "(.logs.access | length > 0) and (.logs.access[0].name == \"access.log\")"'
+  check "logs: a symlinked log is refused" bash -c 'ln -sf /etc/shadow /var/www/vhosts/site.test/logs/access.log.9; out=$(agent sitelog.read "{\"domain\":\"site.test\",\"log\":\"access\",\"file\":\"access.log.9\"}"); rc=$?; rm -f /var/www/vhosts/site.test/logs/access.log.9; [[ $rc != 0 ]] && grep -q forbidden <<<"$out"'
+  # logrotate.service runs the generator before every run; the file from the install predates site.test.
+  check "logrotate: config regenerated for the current websites" whp-site-logrotate
+  check "logrotate: every website has a block, run as its own user" bash -c 'whp-site-logrotate --print | grep -q "su s_site_test s_site_test" && grep -q "/var/www/vhosts/site.test/logs/access.log" /etc/logrotate.d/whp-sites && logrotate --debug /etc/logrotate.d/whp-sites'
+  check "logrotate: forced rotation, Nginx and PHP keep logging" bash -c 'logrotate --force /etc/logrotate.d/whp-sites && systemctl kill --kill-whom=main --signal=USR1 nginx.service && sleep 2 && [[ -f /var/www/vhosts/site.test/logs/access.log.1 ]] && curl -s -o /dev/null -H "Host: site.test" http://127.0.0.1/after-rotate && curl -s -o /dev/null -H "Host: site.test" http://127.0.0.1/warn.php && sleep 6 && grep -q after-rotate /var/www/vhosts/site.test/logs/access.log && [[ $(stat -c %U /var/www/vhosts/site.test/logs/php-error.log) == s_site_test ]]'
+  check "logrotate: systemd runs the generator first" bash -c 'systemctl cat logrotate.service | grep -q whp-site-logrotate'
+
+  echo "== web application firewall"
+  if [[ -f /etc/nginx/conf.d/whp-waf.conf ]]; then
+    SQLI='/?id=1%27%20OR%20%271%27%3D%271%27%20UNION%20SELECT%20password%20FROM%20users--'
+    waf_code() { curl -s -o /dev/null -w '%{http_code}' -H "Host: site.test" -A "Mozilla/5.0 (smoke)" "http://127.0.0.1$1"; }
+    waf_events() { agent_call waf.events "{\"cursor\":$WAF_CUR}" | jq -c '.data'; }
+    # nginx reloads asynchronously: give the new workers a moment before testing.
+    waf_apply() { agent_call waf.apply "$1" && sleep 3; }
+    export -f waf_code waf_apply
+    check "ModSecurity and the OWASP CRS are loaded once for all sites" bash -c '[[ $(nginx -T 2>/dev/null | grep -c "modsecurity_rules_file /etc/nginx/whp/waf/main.conf") == 1 ]] && ls /etc/nginx/whp/waf/main.conf'
+    check "a site without firewall is not filtered" bash -c "[[ \$(waf_code '$SQLI') == 200 ]]"
+    WAF_CUR=$(agent_call waf.events '{}' | jq -c '.data.cursor')
+    check "agent switches site.test to block mode" waf_apply '{"paranoia":1,"threshold":5,"sites":[{"domain":"site.test","mode":"block"},{"domain":"off.test","mode":"off"}]}'
+    check "an SQL injection is blocked (403)" bash -c "code=\$(waf_code '$SQLI'); echo \"HTTP \$code\"; [[ \$code == 403 ]]"
+    check "a normal page still works in block mode" bash -c 'curl -s -H "Host: site.test" -A "Mozilla/5.0 (smoke)" http://127.0.0.1/ | grep -q php=8.5'
+    sleep 1
+    waf_events >/tmp/waf-ev.json
+    check "the blocked request is in the audit log with its rules" bash -c "jq -e '[.events[] | select(.domain == \"site.test\" and .blocked and (.rules | length) > 0)] | length > 0' /tmp/waf-ev.json || { cat /tmp/waf-ev.json; tail -c 3000 /var/log/modsecurity/audit.log; false; }"
+    check "no cookies or passwords in the events" bash -c '! grep -qi cookie /tmp/waf-ev.json'
+    WAF_CUR=$(jq -c '.cursor' /tmp/waf-ev.json)
+    WAF_EXC=$(jq -c '[.events[] | select(.domain == "site.test") | .rules[].id] | unique | map({rule: ., path: "/"})' /tmp/waf-ev.json)
+    check "an exception for the matched rules lets the request through" bash -c "waf_apply '{\"sites\":[{\"domain\":\"site.test\",\"mode\":\"block\",\"exceptions\":$WAF_EXC}]}' >/dev/null && code=\$(waf_code '$SQLI'); echo \"HTTP \$code ($WAF_EXC)\"; [[ \$code == 200 ]]"
+    check "server-wide exceptions are accepted too" waf_apply '{"exceptions":[{"rule":920350},{"rule":941100,"param":"comment"}],"sites":[{"domain":"site.test","mode":"detect"}]}'
+    check "detect mode logs but does not block" bash -c "code=\$(waf_code '$SQLI'); echo \"HTTP \$code\"; [[ \$code == 200 ]]"
+    sleep 1
+    check "detected requests are logged as not blocked" bash -c "agent_call waf.events '{\"cursor\":$WAF_CUR}' | jq -e '[.data.events[] | select(.domain == \"site.test\" and (.blocked | not) and .mode == \"detect\")] | length > 0'"
+    check "an invalid exception is refused before nginx sees it" bash -c "! agent_call waf.apply '{\"sites\":[{\"domain\":\"site.test\",\"mode\":\"block\",\"exceptions\":[{\"rule\":1,\"path\":\"/x\\\" deny\"}]}]}' && nginx -t"
+    check "mode off removes the site's firewall files" bash -c "waf_apply '{\"sites\":[{\"domain\":\"site.test\",\"mode\":\"off\"}]}' >/dev/null && ! test -e /etc/nginx/whp/sites/site.test/20-waf.conf && [[ \$(waf_code '$SQLI') == 200 ]]"
+    check "panel applies its firewall settings" runuser -u whp -- php /opt/webhosting-panel/panel/artisan whp:waf:apply
+    check "panel collects firewall events" runuser -u whp -- php /opt/webhosting-panel/panel/artisan whp:waf:collect
+    check "nginx config still valid after the firewall tests" nginx -t
+  else
+    bad "web application firewall not installed (see install.log)"
+    grep -i "web application firewall" /var/log/webhosting-panel/install.log | tail -5
+  fi
 fi
 
 # Per-feature smoke tests (one file per feature keeps this file out of merge conflicts).

@@ -31,6 +31,7 @@
     </div>
 @endif
 
+@includeIf('wp-hardening.card', ['install' => $install, 'area' => $area])
 @includeIf('wordpress::switches.card')
 
 <x-ui.card :title="__('Updates')">
@@ -165,3 +166,5 @@
     </x-ui.table>
     @endif
 </x-ui.card>
+
+@includeIf('wordpress::mail.partials.card', ['install' => $install, 'area' => $area])

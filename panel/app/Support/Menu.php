@@ -153,6 +153,22 @@ class Menu
         ])->values()->all();
     }
 
+    /** One visible item (placed, with its parent resolved), or null when it is hidden or unknown. */
+    public function item(string $key): ?array
+    {
+        $items = $this->resolved();
+        $item = $items[$key] ?? null;
+        if ($item === null) {
+            return null;
+        }
+        $parent = $item['parent'] !== null ? ($items[$item['parent']] ?? null) : null;
+
+        return $item + [
+            'section_label' => $parent['label'] ?? ($item['section'] ?? ''),
+            'section_route' => $parent['route'] ?? null,
+        ];
+    }
+
     /**
      * The active item for the breadcrumbs in the top bar. A child page returns
      * itself, with its parent as the crumb before it.

@@ -106,6 +106,8 @@
             </ul>
         </div>
 
+        @includeIf('waf::admin.security-center-card')
+
         {{-- Last days --}}
         <div class="card span-12">
             <div class="kpi-row">

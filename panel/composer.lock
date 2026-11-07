@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e5decc00b335397fd40aa8f6e4cecf61",
+    "content-hash": "92406e3b843961931a8eadcc761e07f8",
     "packages": [
         {
             "name": "brick/math",
@@ -3850,6 +3850,39 @@
             }
         },
         {
+            "name": "rhis/site-logs",
+            "version": "dev-claude/project-thread-32u16i",
+            "dist": {
+                "type": "path",
+                "url": "../packages/site-logs",
+                "reference": "b988be21cf555ee15347eacf94cd666d335deb71"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\SiteLogs\\SiteLogsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\SiteLogs\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Log viewer for the Webhosting Panel: access, error, PHP and PHP-FPM logs per website, with search, filters and a live tail, for customers and admins.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "rhis/subdomains",
             "version": "dev-claude/project-thread-32u16i",
             "dist": {
@@ -3910,6 +3943,39 @@
                 "proprietary"
             ],
             "description": "Security alerts for the Webhosting Panel: vulnerable WordPress core, plugins and themes and malware found on customer sites, a branded mail to the customer with the fix, and the admin security overview with customer risk ranking.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/waf",
+            "version": "dev-claude/project-thread-32u16i",
+            "dist": {
+                "type": "path",
+                "url": "../packages/waf",
+                "reference": "1cf2d5befd5984bb50b65ff55b1a45224f9d96ac"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Waf\\WafServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Waf\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Web application firewall for the Webhosting Panel: ModSecurity with the OWASP Core Rule Set per website (block, detect only, off), rule exceptions and attack events.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -9237,8 +9303,10 @@
         "rhis/reports": 20,
         "rhis/security": 20,
         "rhis/server-admin": 20,
+        "rhis/site-logs": 20,
         "rhis/subdomains": 20,
         "rhis/vulnerabilities": 20,
+        "rhis/waf": 20,
         "rhis/web-rules": 20,
         "rhis/webapps": 20,
         "rhis/wordpress": 20,
