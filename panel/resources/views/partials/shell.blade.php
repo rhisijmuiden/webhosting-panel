@@ -3,6 +3,7 @@
     $user = auth()->user();
     $sections = $menu->sections();
     $current = $menu->active();
+    $siteTrail = (new \App\Support\Breadcrumbs($menu, $user->isAdmin(), $title ?? null))->forSite();
     $versions = app(\App\Services\VersionService::class);
     $channel = $versions->channel();
     $isAdmin = $user->isAdmin();
@@ -79,10 +80,19 @@
     </aside>
     <div class="backdrop" :class="{ open: nav }" @click="nav = false"></div>
 
-    <div class="main">
+    <div @class(['main', 'has-site-trail' => $siteTrail && $siteTrail['direct']])>
         <header class="topbar" x-data="palette(@js($paletteItems))" @keydown.window.prevent.ctrl.k="show()" @keydown.window.prevent.meta.k="show()">
             <button type="button" class="btn icon-btn menu-toggle" @click="nav = !nav" :aria-expanded="nav" aria-controls="sidebar" aria-label="{{ __('Menu') }}"><x-icon name="menu" /></button>
             <nav class="topbar-crumbs" aria-label="{{ __('Breadcrumbs') }}">
+                @if ($siteTrail)
+                    @foreach ($siteTrail['crumbs'] as $crumb)
+                        @if ($loop->last)
+                            <strong class="crumb" aria-current="page">{{ $crumb['label'] }}</strong>
+                        @else
+                            <span class="crumb">@if ($crumb['url'])<a href="{{ $crumb['url'] }}">{{ $crumb['label'] }}</a>@else<span>{{ $crumb['label'] }}</span>@endif<x-icon name="chevron" /></span>
+                        @endif
+                    @endforeach
+                @else
                 @if ($current && $current['section_label'] !== '')
                     @if (! empty($current['section_route']))
                         <a href="{{ route($current['section_route']) }}">{{ __($current['section_label']) }}</a><x-icon name="chevron" />
@@ -91,6 +101,7 @@
                     @endif
                 @endif
                 <strong>{{ $current ? __($current['label']) : ($title ?? '') }}</strong>
+                @endif
             </nav>
             <button type="button" class="palette-btn" @click="show()">
                 <x-icon name="search" /><span>{{ __('Go to…') }}</span><kbd>⌘K</kbd>
