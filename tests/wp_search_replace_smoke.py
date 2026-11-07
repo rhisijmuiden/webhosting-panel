@@ -48,7 +48,8 @@ post = wp("post", "create", "--post_status=publish", "--post_title=SR smoke", "-
           f'--post_content=Welkom bij Smoke SR Bedrijf. <a href="http://{domain}/contact">Contact</a> '
           f'<a href="https://www.{domain}/x">www</a> <a href="http://{domain}.au/">ander</a>')
 wp("option", "update", "whp_sr_test", json.dumps({"url": f"http://{domain}/logo.png", "n": 1}), "--format=json")
-wp("post", "meta", "update", post, "whp_sr_json", json.dumps({"img": f"http://{domain}/img.png"}))
+# json_encode escapes slashes (https:\/\/...), like page builders store their data.
+wp("eval", f'update_post_meta({int(post)}, "whp_sr_json", wp_slash(json_encode(["img" => "http://{domain}/img.png"])));')
 step("JSON meta is stored escaped", "\\/" in wp("post", "meta", "get", post, "whp_sr_json"))
 
 # --- text search & replace
