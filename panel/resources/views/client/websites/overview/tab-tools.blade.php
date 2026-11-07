@@ -40,8 +40,9 @@
 <div class="tool-group">
     <h2>{{ __('Security') }}</h2>
     <div class="tool-grid">
-        @include('client.websites.overview.tile', ['href' => $o->url('websites.show', [$site, 'tab' => 'hosting']).'#connection', 'icon' => 'lock', 'label' => __('SSL/TLS certificate'),
-            'sub' => $site->ssl_status === 'active' ? __('Let\'s Encrypt, renewed automatically') : __('No valid certificate yet'), 'tone' => $site->ssl_status === 'active' ? 'ok' : 'warn'])
+        @include('client.websites.overview.tile', ['href' => $o->url('certificates.show', $site) ?? $o->url('websites.show', [$site, 'tab' => 'hosting']).'#connection', 'icon' => 'lock', 'label' => __('SSL/TLS certificate'),
+            'sub' => class_exists(\Rhis\Certificates\Present::class) ? \Rhis\Certificates\Present::summary($site) : ($site->ssl_status === 'active' ? __('Let\'s Encrypt, renewed automatically') : __('No valid certificate yet')),
+            'tone' => class_exists(\Rhis\Certificates\Present::class) ? \Rhis\Certificates\Present::tone($site) : ($site->ssl_status === 'active' ? 'ok' : 'warn')])
         @includeIf('web-rules::tile', ['o' => $o, 'site' => $site, 'kind' => 'access'])
         @include('client.websites.overview.tile', ['href' => $o->has('protection.show') ? $o->url('protection.show', $o->isAdmin() ? [] : $site) : null, 'icon' => 'shield', 'label' => __('Login protection'), 'sub' => __('Block password guessing')])
         @include('client.websites.overview.tile', ['href' => $findings !== null ? $o->url('vulns.index') : null, 'icon' => 'firewall', 'label' => __('Security alerts'),

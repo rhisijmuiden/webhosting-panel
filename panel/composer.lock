@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ec981f6db299ce1a4b9a80083689a682",
+    "content-hash": "856592718cf3b83c48b2ffacc705de23",
     "packages": [
         {
             "name": "brick/math",
@@ -3366,6 +3366,40 @@
                 "proprietary"
             ],
             "description": "Backup screens for the Webhosting Panel (admin and client), on top of whp-backup through the agent.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/certificates",
+            "version": "dev-claude/project-thread-32u16i",
+            "dist": {
+                "type": "path",
+                "url": "../packages/certificates",
+                "reference": "df318792b86136c6a323670505d2d6ff401d47eb"
+            },
+            "require": {
+                "ext-openssl": "*",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Certificates\\CertificatesServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Certificates\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "SSL certificates for the Webhosting Panel: upload own certificates (PEM or PFX, CSR generator), wildcard Let's Encrypt through Cloudflare DNS-01, and expiry warnings.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -9123,6 +9157,7 @@
     "stability-flags": {
         "rhis/apps": 20,
         "rhis/backups": 20,
+        "rhis/certificates": 20,
         "rhis/crm-api": 20,
         "rhis/cron": 20,
         "rhis/dns-mail": 20,

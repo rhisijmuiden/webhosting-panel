@@ -1,0 +1,25 @@
+{
+    "name": "rhis/certificates",
+    "description": "SSL certificates for the Webhosting Panel: upload own certificates (PEM or PFX, CSR generator), wildcard Let's Encrypt through Cloudflare DNS-01, and expiry warnings.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3",
+        "ext-openssl": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rhis\\Certificates\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rhis\\Certificates\\CertificatesServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
