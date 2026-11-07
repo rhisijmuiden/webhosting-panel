@@ -63,7 +63,7 @@
                 <x-slot:head>
                     <th class="check"><input type="checkbox" aria-label="{{ __('Select all') }}" :checked="selected.length && selected.length === all.length" @change="toggleAll($event.target.checked)"></th>
                     <th><a href="{{ $sortUrl('domain') }}">{{ __('Domain name') }} {{ $sortMark('domain') }}</a></th>
-                    <th>{{ __('Owner') }}</th>
+                    <th><a href="{{ $sortUrl('owner') }}">{{ __('Owner') }} {{ $sortMark('owner') }}</a></th>
                     <th class="num"><a href="{{ $sortUrl('disk') }}">{{ __('Disk usage') }} {{ $sortMark('disk') }}</a></th>
                     <th class="num"><a href="{{ $sortUrl('traffic') }}">{{ __('Traffic') }} {{ $sortMark('traffic') }}</a></th>
                     <th>{{ __('Status') }}</th>
@@ -72,7 +72,7 @@
                 @foreach ($websites as $w)
                     @php($x = $extras[$w->id])
                     <tr @class(['is-selected' => false]) :class="{ 'is-selected': selected.includes({{ $w->id }}) }">
-                        <td class="check"><input type="checkbox" name="ids[]" form="bulk" value="{{ $w->id }}" x-model.number="selected" aria-label="{{ $w->domain }}"></td>
+                        <td class="check m-check"><input type="checkbox" name="ids[]" form="bulk" value="{{ $w->id }}" x-model.number="selected" aria-label="{{ $w->domain }}"></td>
                         <td>
                             <div class="domain-cell">
                                 <span class="domain-avatar" aria-hidden="true">{{ strtoupper(mb_substr(preg_replace('/^www\./', '', $w->domain), 0, 2)) }}</span>
@@ -103,7 +103,7 @@
                         <td class="num">{{ Number::fileSize((int) $w->traffic_bytes) }}<span class="muted small"> / {{ __('month') }}</span></td>
                         <td><x-ui.pill :status="$w->status">{{ __(ucfirst($w->status)) }}</x-ui.pill></td>
                         <td class="actions-col">
-                            <div class="quick-actions">
+                            <div class="row-actions">
                                 @if ($x['wordpress'])
                                     <a href="{{ route('admin.wordpress.show', $x['wordpress']) }}" title="WordPress" aria-label="WordPress {{ $w->domain }}"><x-icon name="wordpress" /></a>
                                 @endif

@@ -22,7 +22,7 @@ class WebsiteController extends Controller
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('q'));
-        $sort = in_array($request->query('sort'), ['domain', 'disk', 'traffic', 'created'], true) ? $request->query('sort') : 'domain';
+        $sort = in_array($request->query('sort'), ['domain', 'owner', 'disk', 'traffic', 'created'], true) ? $request->query('sort') : 'domain';
         $direction = $request->query('dir') === 'desc' ? 'desc' : 'asc';
         $perPage = in_array((int) $request->query('per_page'), [10, 25, 100], true) ? (int) $request->query('per_page') : 25;
 
@@ -34,6 +34,8 @@ class WebsiteController extends Controller
             ->when($request->query('php'), fn ($q, $v) => $q->where('php_version', $v))
             ->when($request->query('status'), fn ($q, $v) => $q->where('status', $v))
             ->orderBy(match ($sort) {
+                // The owner column shows the company name, or the person's name without one
+                'owner' => Customer::selectRaw("COALESCE(NULLIF(company, ''), name)")->whereColumn('customers.id', 'websites.customer_id')->limit(1),
                 'disk' => 'disk_used_mb',
                 'traffic' => 'traffic_bytes',
                 'created' => 'created_at',
