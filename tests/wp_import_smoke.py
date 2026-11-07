@@ -25,6 +25,13 @@ from whp_agent import jobs, wordpress  # noqa: E402
 from whp_agent.actions import wp_import as wpi  # noqa: E402
 from whp_agent.migration import wordpress_fix as fix  # noqa: E402
 
+from whp_agent.actions import client_backup as cb  # noqa: E402
+
+# Site users run site_worker.py: use the installed copy, the checkout below /root is not readable for them.
+INSTALLED_WORKER = "/opt/webhosting-panel/agent/whp_agent/site_worker.py"
+if os.path.exists(INSTALLED_WORKER):
+    cb.WORKER = INSTALLED_WORKER
+
 source, target = sys.argv[1], sys.argv[2]
 OLD_URL = "https://www.oldhost.example"
 OLD_ROOT = "/home/old123/public_html"
