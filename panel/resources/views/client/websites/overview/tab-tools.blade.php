@@ -8,6 +8,8 @@
     <div class="tool-grid">
         @include('client.websites.overview.tile', ['href' => $o->has('files.browse') ? $o->url('files.browse', $site) : null, 'icon' => 'folder', 'label' => __('File manager'), 'sub' => __('Upload, edit and unzip')])
         @include('client.websites.overview.tile', ['href' => $o->url('websites.show', [$site, 'tab' => 'hosting']).'#connection', 'icon' => 'plug', 'label' => __('Connection details'), 'sub' => __('For SFTP and databases')])
+        @include('client.websites.overview.tile', ['href' => $o->has('ftp-accounts.index') ? $o->url('websites.show', [$site, 'tab' => 'hosting']).'#ftp-accounts' : null, 'icon' => 'upload', 'label' => __('FTP accounts'),
+            'sub' => ($ftpCount = \App\Models\FtpAccount::where('website_id', $site->id)->count()) ? trans_choice(':count account|:count accounts', $ftpCount) : __('Extra logins with their own folder')])
         @include('client.websites.overview.tile', ['href' => $o->url('websites.show', [$site, 'tab' => 'hosting']).'#databases', 'icon' => 'database', 'label' => __('Databases'), 'sub' => trans_choice(':count database|:count databases', $site->databases()->count())])
         @include('client.websites.overview.tile', ['href' => $o->has('backups.index') ? $o->url('backups.index') : null, 'icon' => 'backup', 'label' => __('Backups'),
             'sub' => $o->lastBackup ? __('Last one :time', ['time' => ($o->lastBackup->finished_at ?? $o->lastBackup->created_at)->diffForHumans()]) : __('Make and restore backups')])

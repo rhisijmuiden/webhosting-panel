@@ -31,6 +31,7 @@
             <div><button type="submit" class="btn btn-dark">{{ __('Save') }}</button></div>
         </form>
     </x-ui.card>
+    @includeIf('object-cache::partials.site-card', ['website' => $site])
     <x-ui.card :title="__('Connection details')" id="connection">
         <dl class="kv kv-tight">
             <dt>{{ __('SFTP server') }}</dt><dd class="mono">{{ $o->serverIp ?? request()->getHost() }}</dd>
@@ -53,5 +54,6 @@
 </section>
 @include('partials.website-php', ['website' => $site, 'action' => $o->url('websites.php', $site)])
 @includeIf('domain-aliases::partials.website-card', ['website' => $site])
+@include('ftp-accounts.partials.website-card', ['website' => $site])
 @includeIf('subdomains::partials.website-card', ['website' => $site])
 @includeIf('certificates::partials.website-card', ['website' => $site])
