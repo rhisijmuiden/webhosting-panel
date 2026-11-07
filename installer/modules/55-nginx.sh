@@ -54,6 +54,9 @@ module_nginx() {
   install -d /etc/letsencrypt/renewal-hooks/deploy
   install -m 0755 "$TPL/nginx/certbot-deploy-hook.sh" /etc/letsencrypt/renewal-hooks/deploy/whp-reload.sh
   systemctl enable --now certbot.timer >/dev/null 2>&1 || true
+  # Wildcard certificates (panel: SSL certificates) use a DNS-01 challenge at Cloudflare.
+  apt_install python3-certbot-dns-cloudflare
+  install -d -m 0700 "$WHP_ETC/ssl"
 
   run nginx -t
   svc_enable nginx

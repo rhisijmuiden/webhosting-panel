@@ -383,6 +383,40 @@ class AppsTest(unittest.TestCase):
         self.assertEqual(install[1], "a-very-long-secret\n")
         self.assertFalse(any("a-very-long-secret" in a for c in calls for a in c[0]))
 
+    def test_wordpress_install_applies_the_plugin_set(self):
+        calls = []
+
+        class FakeWordPress(apps.WordPress):
+            id = "fakewp"
+
+            def install(self, ctx):
+                Path(ctx.target, "wp-config.php").write_text("<?php")
+                ctx.version = "6.9"
+
+            def wp_runner(self, ctx):
+                def wp(args, input_text=None, timeout=300):
+                    calls.append(list(args))
+                    if "broken" in args:
+                        raise ActionError("command_failed", "boom")
+                    return CompletedProcess(args, 0, "", "")
+                return wp
+
+        apps.RECIPES["fakewp"] = FakeWordPress()
+        state = wait(apps.apps_install(self.params(app="fakewp", locale="en", plugin_set={
+            "name": "RHIS", "plugins": [{"source": "wordfence", "activate": True}, {"source": "broken"}]})))
+        self.assertEqual(state["status"], "succeeded", state)
+        report = state["result"]["plugin_set"]
+        self.assertEqual(report["name"], "RHIS")
+        self.assertEqual(report["failed"], 1)
+        self.assertIn(["plugin", "install", "wordfence", "--activate"], calls)
+
+    def test_plugin_set_is_ignored_for_other_apps_and_checked_for_wordpress(self):
+        apps.RECIPES["fake"] = FakeRecipe()
+        state = wait(apps.apps_install(self.params(plugin_set={"plugins": [{"source": "wordfence"}]})))
+        self.assertIsNone(state["result"]["plugin_set"])
+        with self.assertRaises(ActionError):
+            apps.apps_install(self.params(app="wordpress", plugin_set={"plugins": [{"source": "--eval=x"}]}))
+
 
 if __name__ == "__main__":
     unittest.main()

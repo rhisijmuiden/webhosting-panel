@@ -101,14 +101,14 @@ class PackageController extends Controller
                 : ['required', 'integer', "min:$min", "max:$max"];
         }
         // App limits are optional: missing (older forms, the CRM API) means unlimited.
-        foreach (HostingPackage::APP_LIMITS as $key => [, , $min, $max]) {
+        foreach (HostingPackage::APP_LIMITS + HostingPackage::CACHE_LIMITS as $key => [, , $min, $max]) {
             $rules[$key] = $request->boolean("unlimited.$key") || ! $request->filled($key)
                 ? ['nullable']
                 : ['integer', "min:$min", "max:$max"];
         }
         $data = $request->validate($rules);
         unset($data['unlimited']);
-        foreach (array_keys(HostingPackage::APP_LIMITS) as $key) {
+        foreach (array_keys(HostingPackage::APP_LIMITS + HostingPackage::CACHE_LIMITS) as $key) {
             $data[$key] = $request->boolean("unlimited.$key") || ! $request->filled($key) ? null : (int) $data[$key];
         }
         foreach (HostingPackage::limitKeys() as $key) {

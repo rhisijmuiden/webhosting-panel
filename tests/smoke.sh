@@ -90,6 +90,26 @@ check "alias redirect mode" bash -c "whp-site alias mode site.test alias.test re
 check "site cannot be added on an alias name" bash -c "! whp-site add alias.test --no-ssl"
 check "alias remove" bash -c "whp-site alias remove site.test alias.test --json | jq -e '.domain_aliases == []' >/dev/null && ! curl -s -H 'Host: alias.test' http://127.0.0.1/ | grep -q php="
 check "nginx config still valid" nginx -t
+echo "== own and wildcard certificates"
+whp-site add cert.test --no-ssl --json >/dev/null
+d=$(mktemp -d)
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 30 -subj /CN=cert.test \
+  -addext "subjectAltName=DNS:cert.test,DNS:www.cert.test" -keyout "$d/key.pem" -out "$d/cert.pem" 2>/dev/null
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 30 -subj /CN=other -keyout "$d/other.pem" -out "$d/other.crt" 2>/dev/null
+check "own certificate: a key of another certificate is refused" bash -c "! whp-site ssl cert.test --custom-cert $d/cert.pem --custom-key $d/other.pem"
+check "own certificate installed" bash -c "whp-site ssl cert.test --custom-cert $d/cert.pem --custom-key $d/key.pem --custom-chain $d/other.crt --json | jq -e '.ssl == \"active\"' >/dev/null && whp-site cert cert.test | jq -e '.ssl == \"custom\"' >/dev/null"
+check "own certificate is served over HTTPS" bash -c "echo | openssl s_client -connect 127.0.0.1:443 -servername cert.test 2>/dev/null | openssl x509 -noout -subject | grep -q 'CN *= *cert.test'"
+check "own certificate: HTTP redirects to HTTPS" bash -c "curl -s -o /dev/null -D - -H 'Host: cert.test' http://127.0.0.1/ | grep -qi '^location: https://cert.test/'"
+check "own certificate: chain appended, key private" bash -c "[[ \$(grep -c 'BEGIN CERTIFICATE' /etc/webhosting-panel/ssl/cert.test/fullchain.pem) == 2 && \$(stat -c %a /etc/webhosting-panel/ssl/cert.test/privkey.pem) == 600 ]]"
+check "cert shows the served files" bash -c "whp-site cert cert.test | jq -e '.ssl == \"custom\" and .cert_file == \"/etc/webhosting-panel/ssl/cert.test/fullchain.pem\"' >/dev/null && whp-site cert --all | jq -e '.certificates | length > 1' >/dev/null"
+check "own certificate is not replaced by the hourly retry" bash -c "whp-site ssl --pending >/dev/null 2>&1; whp-site cert cert.test | jq -e '.ssl == \"custom\"' >/dev/null"
+check "back to Let's Encrypt keeps the own certificate when it cannot issue" bash -c "! whp-site ssl cert.test --letsencrypt >/dev/null 2>&1 && whp-site cert cert.test | jq -e '.ssl == \"custom\"' >/dev/null"
+check "wildcard without a Cloudflare token fails cleanly" bash -c "! whp-site ssl cert.test --wildcard 2>/tmp/wc.err && grep -q 'Cloudflare' /tmp/wc.err && whp-site cert cert.test | jq -e '.ssl == \"custom\"' >/dev/null"
+check "certbot Cloudflare plugin installed" python3 -c 'import certbot_dns_cloudflare'
+check "agent reads certificate details" bash -c "python3 $(dirname "$0")/agent_call.py ssl.info '{\"domain\":\"cert.test\"}' | jq -e '.certificate.names == [\"cert.test\",\"www.cert.test\"] and .certificate.days_left >= 29' >/dev/null"
+check "remove site with own certificate" bash -c "whp-site remove cert.test --json >/dev/null && [[ ! -e /etc/webhosting-panel/ssl/cert.test ]]"
+rm -rf "$d"
+check "nginx config valid after certificates" nginx -t
 check "add laravel site" whp-site add app.test --profile laravel --no-ssl --json
 printf '<?php echo "laravel-docroot";\n' >/var/www/vhosts/app.test/app/public/index.php
 check "laravel docroot app/public and pretty URLs" bash -c "curl -s -H 'Host: app.test' http://127.0.0.1/some/route | grep -q laravel-docroot"
@@ -113,10 +133,15 @@ check "a subdomain of another domain is refused" bash -c "! whp-site add test.si
 check "a subdomain has no quota of its own" bash -c "! whp-site quota test.wp.test 100"
 check "the main site cannot be removed while it has subdomains" bash -c "! whp-site remove wp.test"
 check "clone WordPress into the subdomain (files, database, addresses)" python3 "$(dirname "$0")/clone_smoke.py" wp.test test.wp.test
+check "WordPress staging: push to live with backup, restore" python3 "$(dirname "$0")/staging_smoke.py" test.wp.test wp.test
 
 echo "== git deployments"
 check "git, ssh-keygen and npm installed" bash -c "command -v git && command -v ssh-keygen && command -v npm"
 check "deploy, zero downtime switch, failed build, rollback, remove" python3 "$(dirname "$0")/git_smoke.py" site.test
+
+echo "== databases and phpMyAdmin"
+check "phpMyAdmin installed for sign-on only" bash -c "test -f /var/www/phpmyadmin/whp-sso.php && ! test -e /var/www/phpmyadmin/setup"
+check "databases, users, passwords and phpMyAdmin sign-on" python3 "$(dirname "$0")/db_smoke.py"
 
 echo "== mail"
 printf 'example.test OK\n' >>/etc/postfix/whp/virtual_domains
@@ -145,6 +170,9 @@ for i in $(seq 1 30); do
 done
 check "local delivery through lmtp into Maildir" compgen -G '/var/vmail/example.test/info/Maildir/new/*'
 check "rspamd scanned the message" bash -c "rspamc -h 127.0.0.1:11334 -P '$RSPAMD_CONTROLLER_PASS' stat | grep -qE 'Messages scanned: [1-9]'"
+check "website mail SMTP listens on loopback only" bash -c "ss -ltnH | grep -q '127.0.0.1:10587 ' && ! ss -ltnH | grep -qE '(0\.0\.0\.0|\[::\]|\*):10587 '"
+check "agent answers wp.mail_status" bash -c "python3 $(dirname "$0")/agent_call.py wp.mail_status '{\"domain\":\"wp.test\"}' | jq -e '.smtp == true' >/dev/null"
+check "WordPress mail through this server (DKIM, sender, Reply-To, staging held back)" python3 "$(dirname "$0")/wp_mail_smoke.py" wp.test test.wp.test info@example.test
 check "spam (GTUBE) from outside gets action reject" bash -c "printf 'From: a@example.org\nTo: info@example.test\nSubject: x\n\nXJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X\n' | rspamc -h 127.0.0.1:11333 --ip 203.0.113.5 --from a@example.org | grep -qi 'Action: reject'"
 
 echo "== tools"
@@ -236,6 +264,23 @@ PY
   check "imap import: master user refused from outside loopback" grep -q 'allow_nets=127.0.0.1/32,::1/128' /etc/dovecot/master-users
   agent mail.imap_import_forget '{"id":1}' >/dev/null || true
   rm -f /etc/webhosting-panel/mail-import.conf
+  echo "== FTP accounts (ProFTPD)"
+  check "proftpd configuration valid" proftpd -t
+  check "proftpd active" bash -c 'systemctl is-active proftpd || { journalctl -u proftpd -n 30 --no-pager; false; }'
+  check "proftpd listens on 21 and 2222" bash -c 'ss -ltnH "sport = :21" | grep -q . && ss -ltnH "sport = :2222" | grep -q .'
+  check "firewall opens FTPS, SFTP and the passive ports" bash -c 'nft list set inet whp tcp_open | grep -q 2222 && nft list set inet whp tcp_open | grep -q 49152-49407'
+  FTP_HASH=$(openssl passwd -6 'Smoke-ftp-pass-123')
+  export FTP_HASH
+  check "ftp.sync writes the accounts" bash -c 'agent ftp.sync "{\"accounts\":[{\"login\":\"up@site.test\",\"domain\":\"site.test\",\"password_hash\":\"$FTP_HASH\",\"folder\":\"public/ftp-up\"},{\"login\":\"ro@site.test\",\"domain\":\"site.test\",\"password_hash\":\"$FTP_HASH\",\"folder\":\"public\",\"read_only\":true}]}" | jq -e ".accounts == 2 and .read_only == 1"'
+  echo smoke >/tmp/ftp-smoke.txt
+  check "FTPS upload lands in the account folder, owned by the site user" bash -c 'curl -sS --ssl-reqd -k -u "up@site.test:Smoke-ftp-pass-123" -T /tmp/ftp-smoke.txt ftp://127.0.0.1/ && [[ $(stat -c %U /var/www/vhosts/site.test/public/ftp-up/ftp-smoke.txt) == s_site_test ]]'
+  check "plain FTP without TLS is refused" bash -c '! curl -s -u "up@site.test:Smoke-ftp-pass-123" ftp://127.0.0.1/'
+  check "SFTP login lists the account folder" bash -c 'curl -sS -k -u "ro@site.test:Smoke-ftp-pass-123" sftp://127.0.0.1:2222/ | grep -q ftp-up'
+  check "read-only account cannot upload" bash -c '! curl -s -k -u "ro@site.test:Smoke-ftp-pass-123" -T /tmp/ftp-smoke.txt sftp://127.0.0.1:2222/x.txt && [[ ! -e /var/www/vhosts/site.test/public/x.txt ]]'
+  check "Linux users cannot log in to ProFTPD" bash -c '! curl -s --ssl-reqd -k -u "root:x" ftp://127.0.0.1/'
+  check "ftp.status reports the ports" bash -c 'agent ftp.status | jq -e ".active and .ftp_port == 21 and .sftp_port == 2222 and .accounts == 2"'
+  check "ftp.sync removes the accounts again" bash -c 'agent ftp.sync "{\"accounts\":[]}" | jq -e ".accounts == 0" && ! curl -s --ssl-reqd -k -u "up@site.test:Smoke-ftp-pass-123" ftp://127.0.0.1/'
+  rm -rf /tmp/ftp-smoke.txt /var/www/vhosts/site.test/public/ftp-up
   check "app catalog" bash -c 'agent apps.catalog | jq -e "[.apps[].id] == [\"wordpress\",\"woocommerce\",\"joomla\",\"nextcloud\",\"piwigo\",\"mediawiki\",\"dokuwiki\",\"phpbb\",\"freshrss\"]"'
   agent apps.catalog | jq -r '.apps[] | "   \(.id): \(.latest_version) released \(.released_at // "-") maintained=\(.maintained)"' || true
   check "app catalog: every app has a latest release and is maintained" bash -c 'agent apps.catalog | jq -e "all(.apps[]; .latest_version != null and .maintained == true)"'
@@ -426,6 +471,22 @@ PY
   cscli decisions delete --ip 203.0.113.50 >/dev/null 2>&1 || true
   check "panel settings applied again" runuser -u whp -- php /opt/webhosting-panel/panel/artisan whp:security:apply
 
+  echo "== website logs"
+  printf '<?php trigger_error("smoke-php-warning", E_USER_WARNING); echo "ok";\n' >/var/www/vhosts/site.test/public/warn.php
+  chown s_site_test: /var/www/vhosts/site.test/public/warn.php
+  curl -s -o /dev/null -H 'Host: site.test' 'http://127.0.0.1/smoke-log-viewer?x=1'
+  curl -s -o /dev/null -H 'Host: site.test' http://127.0.0.1/warn.php
+  sleep 6  # access log buffer flushes every 5 seconds
+  check "logs: access log entry with status and path" bash -c 'agent sitelog.read "{\"domain\":\"site.test\",\"log\":\"access\",\"q\":\"smoke-log-viewer\"}" | jq -e "(.entries | length > 0) and .entries[-1].path == \"/smoke-log-viewer?x=1\" and .cursor.offset > 0"'
+  check "logs: PHP warning in the PHP error log" bash -c 'agent sitelog.read "{\"domain\":\"site.test\",\"log\":\"php\",\"levels\":[\"warning\"]}" | jq -e "[.entries[] | select(.message | test(\"smoke-php-warning\"))] | length > 0"'
+  check "logs: list of log files" bash -c 'agent sitelog.files "{\"domain\":\"site.test\"}" | jq -e "(.logs.access | length > 0) and (.logs.access[0].name == \"access.log\")"'
+  check "logs: a symlinked log is refused" bash -c 'ln -sf /etc/shadow /var/www/vhosts/site.test/logs/access.log.9; out=$(agent sitelog.read "{\"domain\":\"site.test\",\"log\":\"access\",\"file\":\"access.log.9\"}"); rc=$?; rm -f /var/www/vhosts/site.test/logs/access.log.9; [[ $rc != 0 ]] && grep -q forbidden <<<"$out"'
+  # logrotate.service runs the generator before every run; the file from the install predates site.test.
+  check "logrotate: config regenerated for the current websites" whp-site-logrotate
+  check "logrotate: every website has a block, run as its own user" bash -c 'whp-site-logrotate --print | grep -q "su s_site_test s_site_test" && grep -q "/var/www/vhosts/site.test/logs/access.log" /etc/logrotate.d/whp-sites && logrotate --debug /etc/logrotate.d/whp-sites'
+  check "logrotate: forced rotation, Nginx and PHP keep logging" bash -c 'logrotate --force /etc/logrotate.d/whp-sites && systemctl kill --kill-whom=main --signal=USR1 nginx.service && sleep 2 && [[ -f /var/www/vhosts/site.test/logs/access.log.1 ]] && curl -s -o /dev/null -H "Host: site.test" http://127.0.0.1/after-rotate && curl -s -o /dev/null -H "Host: site.test" http://127.0.0.1/warn.php && sleep 6 && grep -q after-rotate /var/www/vhosts/site.test/logs/access.log && [[ $(stat -c %U /var/www/vhosts/site.test/logs/php-error.log) == s_site_test ]]'
+  check "logrotate: systemd runs the generator first" bash -c 'systemctl cat logrotate.service | grep -q whp-site-logrotate'
+
   echo "== web application firewall"
   if [[ -f /etc/nginx/conf.d/whp-waf.conf ]]; then
     SQLI='/?id=1%27%20OR%20%271%27%3D%271%27%20UNION%20SELECT%20password%20FROM%20users--'
@@ -461,5 +522,11 @@ PY
     grep -i "web application firewall" /var/log/webhosting-panel/install.log | tail -5
   fi
 fi
+
+# Per-feature smoke tests (one file per feature keeps this file out of merge conflicts).
+for f in "$(dirname "$0")"/smoke.d/*.sh; do
+  # shellcheck source=/dev/null
+  [[ -f $f ]] && source "$f"
+done
 
 exit $fail

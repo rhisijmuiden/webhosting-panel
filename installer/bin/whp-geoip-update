@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Country database for per-site country blocking (panel: Redirects & access).
+# Downloads the free DB-IP "IP to Country Lite" database (CC BY 4.0,
+# https://db-ip.com), which needs no account or licence key, and makes it
+# available to Nginx as $whp_country (ngx_http_geoip2_module).
+# Runs from the installer and monthly from whp-geoip-update.timer.
+#
+#   whp-geoip-update [--quiet]
+set -Eeuo pipefail
+STATE=${WHP_STATE:-/var/lib/webhosting-panel}
+DIR=$STATE/geoip
+DB=$DIR/country.mmdb
+CONF=/etc/nginx/conf.d/whp-geoip.conf
+URL_BASE=${WHP_GEOIP_URL:-https://download.db-ip.com/free}
+QUIET=no
+[[ ${1:-} == --quiet ]] && QUIET=yes
+say() { [[ $QUIET == yes ]] || printf '%s\n' "$*"; }
+
+[[ $EUID -eq 0 ]] || { echo "whp-geoip-update: run as root" >&2; exit 1; }
+install -d -m 0755 "$DIR"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# The file of this month, or of last month in the first days of a month.
+got=no
+for month in "$(date -u +%Y-%m)" "$(date -u -d "$(date -u +%Y-%m-01) -1 day" +%Y-%m)"; do
+  if curl -fsSL --retry 2 --max-time 300 -o "$tmp/db.gz" "$URL_BASE/dbip-country-lite-$month.mmdb.gz"; then
+    got=yes
+    break
+  fi
+done
+if [[ $got == yes ]] && gunzip -c "$tmp/db.gz" >"$tmp/country.mmdb" 2>/dev/null \
+   && (( $(stat -c %s "$tmp/country.mmdb") > 1000000 )); then
+  install -m 0644 "$tmp/country.mmdb" "$DB.new"
+  mv -f "$DB.new" "$DB"
+  say "GeoIP country database updated ($(stat -c %s "$DB") bytes)"
+elif [[ -s $DB ]]; then
+  say "GeoIP download failed, keeping the database from $(date -r "$DB" +%F)"
+else
+  echo "whp-geoip-update: could not download the GeoIP country database" >&2
+  exit 1
+fi
+
+# Nginx side: only with the geoip2 module, so nginx never refuses its config.
+if ! ls /etc/nginx/modules-enabled/*geoip2* >/dev/null 2>&1; then
+  echo "whp-geoip-update: the Nginx geoip2 module is not installed (libnginx-mod-http-geoip2)" >&2
+  exit 1
+fi
+new=no
+if [[ ! -f $CONF ]]; then
+  new=yes
+  cat >"$CONF" <<CONF
+# Managed by whp-geoip-update. Country of the visitor for per-site country
+# blocking (panel: Redirects & access). Data: DB-IP.com (CC BY 4.0).
+geoip2 $DB {
+    \$whp_country country iso_code;
+}
+CONF
+fi
+if ! nginx -t >/dev/null 2>&1; then
+  [[ $new == yes ]] && rm -f "$CONF"
+  echo "whp-geoip-update: nginx -t failed with the GeoIP configuration" >&2
+  exit 1
+fi
+systemctl reload nginx >/dev/null 2>&1 || true
+exit 0

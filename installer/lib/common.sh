@@ -15,7 +15,9 @@ WHP_LANG=${WHP_LANG:-}
 if [[ -t 1 ]]; then
   C_RESET=$'\e[0m' C_BOLD=$'\e[1m' C_DIM=$'\e[2m'
   C_RED=$'\e[31m' C_GREEN=$'\e[32m' C_YELLOW=$'\e[33m' C_BLUE=$'\e[34m'
+  BAR_FULL='█' BAR_EMPTY='░'
 else
+  BAR_FULL='#' BAR_EMPTY='-'
   C_RESET='' C_BOLD='' C_DIM='' C_RED='' C_GREEN='' C_YELLOW='' C_BLUE=''
 fi
 
@@ -24,11 +26,76 @@ _log_file() {
   printf '%s %s\n' "$(date '+%F %T')" "$*" >>"$WHP_INSTALL_LOG"
 }
 
-info()  { printf '%s\n' "${C_BLUE}•${C_RESET} $*"; _log_file "INFO  $*"; }
-ok()    { printf '%s\n' "${C_GREEN}✓${C_RESET} $*"; _log_file "OK    $*"; }
-warn()  { printf '%s\n' "${C_YELLOW}!${C_RESET} $*" >&2; _log_file "WARN  $*"; }
-die()   { printf '%s\n' "${C_RED}✗ $*${C_RESET}" >&2; _log_file "FATAL $*"; exit 1; }
-step()  { printf '\n%s\n' "${C_BOLD}== $* ==${C_RESET}"; _log_file "STEP  $*"; }
+# Progress display (install.sh): numbered steps with a bar, a spinner while a
+# command runs, a result line with the time per step. The spinner and the colours
+# only appear on a terminal; without one (panel update unit, CI, a log file) the
+# same lines are written plainly, one per event, so the output stays readable.
+WHP_PROGRESS=${WHP_PROGRESS:-no}
+STEP_NO=0 STEP_TOTAL=0 STEP_LABEL='' STEP_STARTED=$SECONDS _RUN_PID=''
+WHP_WARNINGS=()
+
+_ind() { ((STEP_NO > 0)) && printf '   '; return 0; }
+_dur() { local s=$1; if ((s >= 60)); then printf '%dm%02ds' $((s / 60)) $((s % 60)); else printf '%ds' "$s"; fi; }
+
+info()  { printf '%s\n' "$(_ind)${C_BLUE}•${C_RESET} $*"; _log_file "INFO  $*"; }
+ok()    { printf '%s\n' "$(_ind)${C_GREEN}✓${C_RESET} $*"; _log_file "OK    $*"; }
+warn()  {
+  printf '%s\n' "$(_ind)${C_YELLOW}!${C_RESET} $*" >&2; _log_file "WARN  $*"
+  WHP_WARNINGS+=("$*")
+}
+die()   {
+  printf '%s\n' "${C_RED}✗ $*${C_RESET}" >&2; _log_file "FATAL $*"
+  if [[ $WHP_PROGRESS == yes ]] && ((STEP_NO > 0 && BASH_SUBSHELL == 0)); then
+    printf '\n%s\n' "${C_RED}${C_BOLD}$(t step_failed "$STEP_NO" "$STEP_TOTAL" "$STEP_LABEL" "$(_dur $((SECONDS - STEP_STARTED)))")${C_RESET}" >&2
+    printf '  %s\n  %s\n' "$(t see_log "$WHP_INSTALL_LOG")" "$(t rerun_safe)" >&2
+    STEP_NO=0
+  fi
+  exit 1
+}
+step()  { printf '\n%s\n' "${C_BOLD}▸ $*${C_RESET}"; _log_file "STEP  $*"; }
+
+# _bar <percent>: a 24 character progress bar.
+_bar() {
+  local pct=$1 w=24 n i bar='' full=$BAR_FULL empty=$BAR_EMPTY
+  n=$((pct * w / 100))
+  for ((i = 0; i < w; i++)); do if ((i < n)); then bar+="$full"; else bar+="$empty"; fi; done
+  printf '%s' "$bar"
+}
+
+# step_begin <label>: start the next numbered step (STEP_TOTAL is set by install.sh).
+step_begin() {
+  STEP_NO=$((STEP_NO + 1)) STEP_LABEL=$1 STEP_STARTED=$SECONDS
+  local pct=$(((STEP_NO - 1) * 100 / (STEP_TOTAL > 0 ? STEP_TOTAL : 1)))
+  printf '\n%s[%*d/%d]%s %s %3d%%  %s%s%s\n' "$C_BOLD" "${#STEP_TOTAL}" "$STEP_NO" "$STEP_TOTAL" "$C_RESET" \
+    "$C_BLUE$(_bar "$pct")$C_RESET" "$pct" "$C_BOLD" "$STEP_LABEL" "$C_RESET"
+  _log_file "STEP  [$STEP_NO/$STEP_TOTAL] $STEP_LABEL"
+}
+
+# step_end: result line of the current step.
+step_end() {
+  local took
+  took=$(_dur $((SECONDS - STEP_STARTED)))
+  printf '%s\n' "   ${C_GREEN}${C_BOLD}✓${C_RESET} ${C_DIM}$(t step_done "$STEP_LABEL" "$took")${C_RESET}"
+  _log_file "DONE  [$STEP_NO/$STEP_TOTAL] $STEP_LABEL ($took)"
+}
+
+# Short, readable text for the spinner: "Installing packages: nginx" instead of
+# the full apt-get command line.
+_run_label() {
+  local l=$1 cols max
+  while [[ $l =~ ^(env|[A-Za-z_][A-Za-z0-9_]*=[^\ ]*)\ (.*)$ ]]; do l=${BASH_REMATCH[2]}; done
+  case $l in
+    apt-get*\ update*) l=$(t act_apt_update) ;;
+    apt-get*full-upgrade*) l=$(t act_apt_upgrade) ;;
+    apt-get*\ install\ *) l="$(t act_apt_install) ${l##*--no-install-recommends }" ;;
+    apt-get*\ purge\ *) l="$(t act_apt_remove) ${l##* }" ;;
+  esac
+  cols=$(tput cols 2>/dev/null) || cols=80
+  [[ $cols =~ ^[0-9]+$ ]] || cols=80
+  max=$((cols - 22)); ((max < 20)) && max=20
+  ((${#l} > max)) && l="${l:0:max-1}…"
+  printf '%s' "$l"
+}
 
 # Run a command, send its output to the install log, and show the tail on error.
 run() { _run "$*" "$@"; }
@@ -41,12 +108,41 @@ _run() {
   local label=$1; shift
   _log_file "RUN   $label"
   local out rc=0
-  out=$("$@" 2>&1) || rc=$?
+  if [[ $WHP_PROGRESS == yes && -t 1 ]]; then
+    # On a terminal: the command runs in the background while a spinner shows
+    # what it is doing and for how long. Output still goes to the log only.
+    local tmp pid i=0 t0=$SECONDS short
+    local frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    tmp=$(mktemp)
+    short=$(_run_label "$label")
+    "$@" >"$tmp" 2>&1 </dev/null &
+    pid=$! _RUN_PID=$!
+    while kill -0 "$pid" 2>/dev/null; do
+      printf '\r\e[K   %s%s%s %s %s%s%s' "$C_BLUE" "${frames[i++ % 10]}" "$C_RESET" "$short" \
+        "$C_DIM" "$(_dur $((SECONDS - t0)))" "$C_RESET"
+      sleep 0.12
+    done
+    wait "$pid" || rc=$?
+    _RUN_PID=''
+    printf '\r\e[K'
+    out=$(<"$tmp")
+    rm -f "$tmp"
+  else
+    # Without a terminal (panel updater, CI) the long actions get a plain line,
+    # so the update log shows what the installer is busy with.
+    if [[ $WHP_PROGRESS == yes ]]; then
+      case $label in
+        *apt-get*|bash\ *) printf '   %s %s\n' '·' "$(_run_label "$label")" ;;
+      esac
+    fi
+    out=$("$@" 2>&1) || rc=$?
+  fi
   [[ -n $out ]] && _log_file "$out"
   if ((rc != 0)); then
     printf '%s\n' "$out" | tail -n 25 >&2
     die "$(t cmd_failed): $label"
   fi
+  return 0
 }
 
 # ---------------------------------------------------------------- i18n

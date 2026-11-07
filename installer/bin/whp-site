@@ -15,6 +15,15 @@
 #   whp-site ssl <domain> --import-cert <fullchain.pem> --import-key <key.pem>
 #                                    (serve a certificate taken over from another server,
 #                                     SSL becomes 'imported' until Let's Encrypt succeeds)
+#   whp-site ssl <domain> --custom-cert <cert.pem> --custom-key <key.pem> [--custom-chain <chain.pem>]
+#                                    (serve your own certificate, e.g. bought from a CA: SSL 'custom',
+#                                     never replaced by Let's Encrypt; expiry is watched by the panel)
+#   whp-site ssl <domain> --wildcard (Let's Encrypt for <domain> and *.<domain> via a DNS-01
+#                                     challenge at Cloudflare, see whp-cert-dns: SSL 'wildcard'.
+#                                     A subdomain site uses the wildcard of its parent when that covers it)
+#   whp-site ssl <domain> --letsencrypt
+#                                    (back to the normal automatic Let's Encrypt certificate)
+#   whp-site cert <domain>|--all     (which certificate files a site serves, as JSON)
 #   whp-site quota <domain> <MB>     (0 = unlimited; hard limit when the filesystem
 #                                     has project quotas, see docs/installer.md)
 #   whp-site limits <domain> [--cpu 200%] [--memory 1G]   (empty value removes the cap)
@@ -32,6 +41,9 @@
 #                                    (serve the whole site from a Node.js or Python app on
 #                                     127.0.0.1:<port> instead of PHP; the panel's app manager
 #                                     sets this, apps on a sub path use a snippet instead)
+#   whp-site https <domain> force|allow
+#                                    (force: plain HTTP redirects to HTTPS, the default;
+#                                     allow: the site is also served over plain HTTP)
 #   whp-site remove <domain> [--keep-files]
 #   whp-site list [--json]
 #   whp-site show <domain>
@@ -242,19 +254,15 @@ site_apply() {
     if [[ -n ${SITE_PROXY:-} ]]; then body=$(render_string "$TPL/nginx/site-proxy-body.conf")
     else body=$(render_string "$TPL/nginx/site-body.conf"); fi
   fi
-  if [[ $SITE_SSL == active || $SITE_SSL == imported ]]; then
-    if [[ $SITE_SSL == imported ]]; then
-      SITE_CERT=$(imported_cert_dir "$SITE_DOMAIN")/fullchain.pem
-      SITE_KEY=$(imported_cert_dir "$SITE_DOMAIN")/privkey.pem
-    else
-      SITE_CERT=/etc/letsencrypt/live/$SITE_DOMAIN/fullchain.pem
-      SITE_KEY=/etc/letsencrypt/live/$SITE_DOMAIN/privkey.pem
-    fi
+  if ssl_serving; then
+    site_cert_files
     if nginx_has_http3; then SITE_QUIC="listen 443 quic;
     listen [::]:443 quic;"; else SITE_QUIC="# HTTP/3 not available"; fi
     SITE_BODY=$body
     # shellcheck disable=SC2016 # nginx variables
     SITE_HTTP_BODY='location / { return 301 https://$host$request_uri; }'
+    # Force HTTPS can be switched off per site (panel: Redirects & access).
+    [[ -f $SITES_DB/$SITE_DOMAIN.http-allowed ]] && SITE_HTTP_BODY=$body
     SITE_HTTPS_SERVER=$(render_string "$TPL/nginx/site-https.conf")
   else
     SITE_HTTP_BODY=$body
@@ -360,7 +368,7 @@ name_owner() {
 # Server blocks for every alias of the loaded site. $1 = the site's location body.
 alias_servers() {
   local body=$1 a mode www ssl out='' target_scheme=http
-  [[ $SITE_SSL == active || $SITE_SSL == imported ]] && target_scheme=https
+  ssl_serving && target_scheme=https
   while read -r a mode www ssl; do
     [[ -n $a ]] || continue
     out+=$(
@@ -514,6 +522,128 @@ render_string() {
 
 imported_cert_dir() { printf '%s/ssl/%s' "$WHP_ETC" "$1"; }
 
+# ---- Certificate sources --------------------------------------------------
+# SITE_SSL: off, pending (waiting for Let's Encrypt), active (Let's Encrypt,
+# HTTP-01), imported (taken over from another server until Let's Encrypt
+# works), custom (uploaded own certificate, kept until replaced) or wildcard
+# (Let's Encrypt <base> + *.<base> through Cloudflare DNS-01).
+
+ssl_serving() { [[ $SITE_SSL =~ ^(active|imported|custom|wildcard)$ ]]; }
+
+# SSL state for the panel's website list: an own or wildcard certificate is a
+# valid certificate ("active"); "whp-site cert" tells which source it is.
+ssl_public() { if [[ $SITE_SSL == custom || $SITE_SSL == wildcard ]]; then printf active; else printf '%s' "$SITE_SSL"; fi; }
+
+# Does the wildcard certificate of <base> cover host name <name>?
+wildcard_covers() {
+  local base=$1 name=$2 label
+  [[ $name == "$base" ]] && return 0
+  [[ $name == *".$base" ]] || return 1
+  label=${name%".$base"}
+  [[ $label != *.* ]]
+}
+
+# The domain whose wildcard certificate the loaded site serves: its own, or
+# the one of its parent site when that covers the site and all its names.
+wildcard_base() {
+  local live=/etc/letsencrypt/live/whp-wildcard- n names=()
+  if [[ -r $live$SITE_DOMAIN/fullchain.pem || -z ${SITE_PARENT:-} || ! -r $live$SITE_PARENT/fullchain.pem ]]; then
+    printf '%s' "$SITE_DOMAIN"; return 0
+  fi
+  [[ -n $SITE_ALIASES ]] && IFS=',' read -r -a names <<<"$SITE_ALIASES"
+  for n in "$SITE_DOMAIN" "${names[@]}"; do
+    wildcard_covers "$SITE_PARENT" "$n" || { printf '%s' "$SITE_DOMAIN"; return 0; }
+  done
+  printf '%s' "$SITE_PARENT"
+}
+
+# Sets SITE_CERT and SITE_KEY for the loaded site's certificate source.
+site_cert_files() {
+  local dir
+  case $SITE_SSL in
+    imported|custom) dir=$(imported_cert_dir "$SITE_DOMAIN") ;;
+    wildcard) dir=/etc/letsencrypt/live/whp-wildcard-$(wildcard_base) ;;
+    *) dir=/etc/letsencrypt/live/$SITE_DOMAIN ;;
+  esac
+  SITE_CERT=$dir/fullchain.pem
+  SITE_KEY=$dir/privkey.pem
+}
+
+# Install an own certificate (cert + key + optional intermediate chain).
+site_cert_custom() {
+  local cert=$1 key=$2 chain=${3:-} dir tmp
+  [[ -r $cert && -r $key ]] || die "certificate or key file not readable"
+  [[ -z $chain || -r $chain ]] || die "chain file not readable"
+  openssl x509 -noout -in "$cert" >/dev/null 2>&1 || die "not a PEM certificate: $cert"
+  [[ "$(openssl x509 -pubkey -noout -in "$cert")" == "$(openssl pkey -pubout -in "$key" 2>/dev/null)" ]] \
+    || die "the key does not belong to the certificate"
+  openssl x509 -checkend 0 -noout -in "$cert" >/dev/null || die "the certificate has expired"
+  dir=$(imported_cert_dir "$SITE_DOMAIN")
+  install -d -m 0700 "$dir"
+  tmp=$(mktemp "$dir/.new.XXXX")
+  { openssl x509 -in "$cert"; [[ -z $chain ]] || cat "$chain"; } >"$tmp"
+  chmod 0644 "$tmp"
+  install -m 0600 "$key" "$dir/privkey.pem.new"
+  mv -f "$tmp" "$dir/fullchain.pem"
+  mv -f "$dir/privkey.pem.new" "$dir/privkey.pem"
+  SITE_SSL=custom
+  info "own certificate installed for $SITE_DOMAIN (valid until $(openssl x509 -noout -enddate -in "$cert" | cut -d= -f2))"
+}
+
+# Issue (or renew) the wildcard certificate; dies with certbot's reason.
+site_cert_wildcard() {
+  local base err
+  base=$(wildcard_base)
+  if [[ $base != "$SITE_DOMAIN" ]]; then
+    info "$SITE_DOMAIN uses the wildcard certificate of $base"
+  elif ! err=$("$INSTALLER_DIR/bin/whp-cert-dns" "$SITE_DOMAIN" 2>&1 >/dev/null); then
+    die "No wildcard certificate for $SITE_DOMAIN: ${err:-certbot failed (see /var/log/webhosting-panel/certbot.log)}"
+  fi
+  SITE_SSL=wildcard
+  info "$(t cert_ok "*.$base")"
+}
+
+# The site no longer serves its own wildcard certificate: delete it, unless
+# a subdomain site still uses it.
+wildcard_cleanup() {
+  local domain=$1 f
+  [[ -e /etc/letsencrypt/renewal/whp-wildcard-$domain.conf ]] || return 0
+  for f in "$SITES_DB"/*.env; do
+    [[ -e $f ]] || continue
+    [[ $(env_get "$f" SITE_PARENT || true) == "$domain" && $(env_get "$f" SITE_SSL || true) == wildcard ]] && return 0
+  done
+  certbot delete --non-interactive --cert-name "whp-wildcard-$domain" >>"$WHP_INSTALL_LOG" 2>&1 || true
+}
+
+# Which certificate a site serves, as JSON (the agent reads the files for details).
+print_cert() {
+  site_load "$1"
+  local cert='' key=''
+  if ssl_serving; then site_cert_files; cert=$SITE_CERT; key=$SITE_KEY; fi
+  [[ -n $cert && ! -r $cert ]] && cert='' key=''
+  local base=''
+  [[ $SITE_SSL == wildcard ]] && base=$(wildcard_base)
+  jq -n --arg d "$SITE_DOMAIN" --arg ssl "$SITE_SSL" --arg cert "$cert" --arg key "$key" --arg base "$base" \
+    --arg aliases "$SITE_ALIASES" --arg parent "${SITE_PARENT:-}" \
+    '{domain:$d, ssl:$ssl, cert_file:(if $cert == "" then null else $cert end), key_file:(if $key == "" then null else $key end),
+      wildcard_of:(if $base == "" then null else $base end), parent:(if $parent == "" then null else $parent end),
+      names:([$d] + ($aliases|split(",")|map(select(length>0))))}'
+}
+
+cmd_cert() {
+  local target=${1:-} f out='[]'
+  [[ -n $target ]] || usage
+  if [[ $target == --all ]]; then
+    for f in "$SITES_DB"/*.env; do
+      [[ -e $f ]] || continue
+      out=$(jq -c --argjson c "$(print_cert "$(env_get "$f" SITE_DOMAIN)")" '. + [$c]' <<<"$out")
+    done
+    jq -n --argjson c "$out" '{certificates:$c}' >&3
+  else
+    print_cert "${target,,}" >&3
+  fi
+}
+
 site_cert() {
   local names=()
   [[ -n $SITE_ALIASES ]] && IFS=',' read -r -a names <<<"$SITE_ALIASES"
@@ -549,7 +679,7 @@ print_site() {
   site_load "$1"
   jq -n >&3 --arg domain "$SITE_DOMAIN" --arg user "$SITE_USER" --arg php "$SITE_PHP" \
     --arg aliases "$SITE_ALIASES" --arg cache "$SITE_CACHE" --arg profile "$SITE_PROFILE" \
-    --arg root "$SITE_ROOT" --arg docroot "$SITE_ROOT/$SITE_DOCROOT_REL" --arg ssl "$SITE_SSL" \
+    --arg root "$SITE_ROOT" --arg docroot "$SITE_ROOT/$SITE_DOCROOT_REL" --arg ssl "$(ssl_public)" \
     --arg created "$SITE_CREATED" --arg socket "/run/php/site-$SITE_ID.sock" \
     --arg unit "whp-site-$SITE_ID.service" \
     --argjson quota "${SITE_QUOTA_MB:-0}" --arg qmode "$(quota_mode)" \
@@ -995,27 +1125,47 @@ cmd_ssl() {
   else
     list=("$target")
   fi
-  local import_cert='' import_key=''
+  local import_cert='' import_key='' custom_cert='' custom_key='' custom_chain='' mode=''
   shift
   while (($#)); do
     case $1 in
       --import-cert) import_cert=${2:-}; shift ;;
       --import-key) import_key=${2:-}; shift ;;
+      --custom-cert) custom_cert=${2:-}; mode=custom; shift ;;
+      --custom-key) custom_key=${2:-}; mode=custom; shift ;;
+      --custom-chain) custom_chain=${2:-}; mode=custom; shift ;;
+      --wildcard) mode=wildcard ;;
+      --letsencrypt) mode=letsencrypt ;;
       --json) ;;
       *) usage ;;
     esac
     shift
   done
-  local d
+  [[ -z $mode || $target != --pending ]] || usage
+  local d before
   for d in "${list[@]}"; do
     site_load "$d"
+    before=$SITE_SSL
     if [[ -n $import_cert || -n $import_key ]]; then
       [[ $target != --pending ]] || usage
       site_cert_import "$import_cert" "$import_key"
+    elif [[ $mode == custom ]]; then
+      site_cert_custom "$custom_cert" "$custom_key" "$custom_chain"
+    elif [[ $mode == wildcard || ( -z $mode && $SITE_SSL == wildcard ) ]]; then
+      site_cert_wildcard
+    elif [[ -z $mode && $SITE_SSL == custom ]]; then
+      info "$d serves its own certificate: nothing to request"
     else
       site_cert
+      if [[ $SITE_SSL == pending && $before =~ ^(custom|wildcard)$ ]]; then
+        # Never drop a working certificate because Let's Encrypt cannot issue one yet.
+        SITE_SSL=$before
+        die "$(t site_cert_pending "$SITE_DOMAIN" "$SITE_DOMAIN") The current certificate stays in use."
+      fi
     fi
     site_save
+    [[ $before == wildcard && $SITE_SSL != wildcard ]] && wildcard_cleanup "$SITE_DOMAIN"
+    if [[ $before == custom && $SITE_SSL =~ ^(active|wildcard)$ ]]; then rm -rf "$(imported_cert_dir "$SITE_DOMAIN")"; fi
     site_apply
     if [[ $JSON == yes && $target != --pending ]]; then print_site "$d"; fi
   done
@@ -1096,6 +1246,10 @@ cmd_remove() {
   systemctl disable --now "whp-site-$SITE_ID" >/dev/null 2>&1 || true
   rm -rf "/etc/systemd/system/whp-site-$SITE_ID.service" "/etc/systemd/system/whp-site-$SITE_ID.service.d" \
     "$WHP_ETC/php-fpm/$SITE_ID.conf"
+  # Object cache of the site (agent objcache.*), when the panel did not remove it first.
+  systemctl disable --now "whp-objcache-$SITE_USER" >/dev/null 2>&1 || true
+  rm -f "/etc/systemd/system/whp-objcache-$SITE_USER.service" "$WHP_ETC/objcache/$SITE_USER.conf" \
+    "$WHP_STATE/objcache/$domain.json"
   [[ $keep == yes ]] || rm -f "$WHP_LOG_DIR/php-fpm/$SITE_ID.log"
   systemctl daemon-reload
   pkill -u "$SITE_USER" 2>/dev/null || true
@@ -1105,11 +1259,14 @@ cmd_remove() {
     certbot delete --non-interactive --cert-name "$domain" >>"$WHP_INSTALL_LOG" 2>&1 || true
   fi
   rm -rf "$(imported_cert_dir "$domain")"
+  wildcard_cleanup "$domain"
   local a _m _w _s
   while read -r a _m _w _s; do
     [[ -n $a && $keep == no ]] && { certbot delete --non-interactive --cert-name "$a" >>"$WHP_INSTALL_LOG" 2>&1 || true; }
   done < <(alias_lines "$domain")
   rm -f "$(alias_file "$domain")"
+  # Redirects & access (whp-agent webrules.apply): HSTS entry, password files, HTTP flag.
+  rm -rf "/etc/nginx/whp/hsts/$domain.conf" "/etc/nginx/whp/auth/$domain" "$SITES_DB/$domain.http-allowed"
   userdel "$SITE_USER" 2>/dev/null || true
   rm -f "$(site_file "$domain")"
   ok "$(t site_removed "$domain")"
@@ -1131,18 +1288,32 @@ cmd_list() {
   return 0
 }
 
+# Force HTTPS (default) or also serve the site over plain HTTP.
+cmd_https() {
+  local domain=${1:-} mode=${2:-}
+  [[ -n $domain && $mode =~ ^(force|allow)$ ]] || usage
+  site_load "$domain"
+  local flag=$SITES_DB/$domain.http-allowed
+  if [[ $mode == allow ]]; then install -m 0640 /dev/null "$flag"; else rm -f "$flag"; fi
+  site_apply
+  ok "$domain https $mode"
+  if [[ $JSON == yes ]]; then print_site "$domain" 3>&1 | jq --arg m "$mode" '. + {force_https: ($m == "force")}' >&3; fi
+}
+
 cmd=${1:-}; shift || true
 case $cmd in
   add) cmd_add "$@" ;;
   php) cmd_php "$@" ;;
   cache) cmd_cache "$@" ;;
   ssl) cmd_ssl "$@" ;;
+  cert) cmd_cert "$@" ;;
   quota) cmd_quota "$@" ;;
   limits) cmd_limits "$@" ;;
   owner) cmd_owner "$@" ;;
   slice) cmd_slice "$@" ;;
   phpini) cmd_phpini "$@" ;;
   proxy) cmd_proxy "$@" ;;
+  https) cmd_https "$@" ;;
   suspend) cmd_suspend "${1:-}" yes ;;
   unsuspend) cmd_suspend "${1:-}" no ;;
   remove) cmd_remove "$@" ;;

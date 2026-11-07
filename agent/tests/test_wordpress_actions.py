@@ -153,6 +153,35 @@ class WordPressTest(unittest.TestCase):
         self.assertEqual(["--skip-plugins", "--skip-themes"], argv[-2:])
         self.assertNotIn("--allow-root", argv)
 
+    # --- DB_HOST over TCP (Plesk "localhost:3306"): mariadb-dump got 1045 for user@127.0.0.1
+
+    def test_local_tcp_db_host_is_switched_to_the_socket_before_db_commands(self):
+        cfg = self.docroot / "wp-config.php"
+        cfg.write_text("<?php\ndefine( 'DB_NAME', 'klant_wp' );\ndefine( 'DB_HOST', 'localhost:3306' );\n")
+        me = SimpleNamespace(pw_uid=os.getuid(), pw_gid=os.getgid())
+        with mock.patch("pwd.getpwnam", return_value=me):
+            wordpress.wp("klant.nl", ["db", "export", "/tmp/x.sql"])
+        self.assertIn("define( 'DB_HOST', 'localhost' );", cfg.read_text())
+        self.assertIn("define( 'DB_NAME', 'klant_wp' );", cfg.read_text())
+
+    def test_db_host_is_left_alone_for_other_commands_and_other_hosts(self):
+        cfg = self.docroot / "wp-config.php"
+        me = SimpleNamespace(pw_uid=os.getuid(), pw_gid=os.getgid())
+        with mock.patch("pwd.getpwnam", return_value=me):
+            cfg.write_text("<?php\ndefine('DB_HOST', '127.0.0.1');\n")
+            wordpress.wp("klant.nl", ["plugin", "list"])
+            self.assertIn("'127.0.0.1'", cfg.read_text())
+            for host in ("localhost", "db.extern.nl", "localhost:/run/mysqld/mysqld.sock"):
+                cfg.write_text(f"<?php\ndefine('DB_HOST', '{host}');\n")
+                wordpress.wp("klant.nl", ["db", "import", "/tmp/x.sql"])
+                self.assertIn(f"'{host}'", cfg.read_text())
+
+    def test_socket_db_host(self):
+        for host in ("127.0.0.1", "127.0.0.1:3306", "localhost:3306", "LOCALHOST:3306", "::1", "[::1]:3306"):
+            self.assertEqual("localhost", wordpress.socket_db_host(host), host)
+        for host in (None, "localhost", "db.extern.nl", "10.0.0.5:3306", "localhost:/tmp/my.sock"):
+            self.assertIsNone(wordpress.socket_db_host(host), host)
+
     # --- status
 
     def test_status_lists_outdated_parts_and_skips_dropins(self):

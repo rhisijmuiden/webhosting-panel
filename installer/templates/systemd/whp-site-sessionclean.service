@@ -1,0 +1,8 @@
+[Unit]
+Description=Webhosting Panel: remove expired PHP sessions of the websites
+
+[Service]
+Type=oneshot
+Nice=10
+IOSchedulingClass=idle
+ExecStart=/usr/local/sbin/whp-site-sessionclean

@@ -111,6 +111,7 @@
                                 <td>
                                     @if ($item)
                                         <a href="{{ route('admin.migration.items.show', $item) }}"><x-ui.pill :status="$item->statusPill()">{{ $statusLabels[$item->status] ?? $item->status }}</x-ui.pill></a>
+                                        @if (in_array($item->status, ['copied', 'live'], true))<a class="btn btn-sm" href="{{ route('admin.migration.wizard.show', $item) }}"><x-icon name="migrate" />{{ $item->status === 'copied' ? __('Start wizard') : __('Wizard') }}</a>@endif
                                     @else
                                         <span class="muted small">–</span>
                                     @endif

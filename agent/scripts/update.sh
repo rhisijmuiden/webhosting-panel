@@ -22,16 +22,30 @@ echo "==> Fetching $BRANCH"
 "${GIT[@]}" fetch --quiet origin "$BRANCH"
 PREVIOUS="$("${GIT[@]}" rev-parse HEAD)"
 
-echo "==> Maintenance mode on"
-as_panel php "$PANEL/artisan" down --retry=15 || true
-
+# Whatever happens from here (an error, a kill, the agent being restarted), the
+# panel must never stay in maintenance mode: that leaves every page on HTTP 503.
+DONE=no
 rollback() {
   echo "!! Update failed, going back to $PREVIOUS" >&2
   "${GIT[@]}" checkout --quiet -f "$PREVIOUS" || true
   (cd "$PANEL" && as_panel composer install --no-dev --no-interaction --optimize-autoloader --quiet) || true
-  as_panel php "$PANEL/artisan" up || true
+  as_panel php "$PANEL/artisan" optimize:clear >/dev/null 2>&1 || true
 }
-trap rollback ERR
+finish() {
+  local rc=$?
+  trap - EXIT TERM INT HUP
+  if [ "$DONE" != yes ]; then
+    rollback
+  fi
+  echo "==> Maintenance mode off"
+  as_panel php "$PANEL/artisan" up || rm -f "$PANEL/storage/framework/down"
+  exit "$rc"
+}
+trap finish EXIT
+trap 'exit 143' TERM INT HUP
+
+echo "==> Maintenance mode on"
+as_panel php "$PANEL/artisan" down --retry=15 || true
 
 echo "==> Checking out origin/$BRANCH"
 "${GIT[@]}" checkout --quiet -B "$BRANCH" "origin/$BRANCH"
@@ -70,7 +84,7 @@ as_panel php "$PANEL/artisan" migrate --force
 as_panel php "$PANEL/artisan" optimize:clear >/dev/null
 as_panel php "$PANEL/artisan" optimize
 
-trap - ERR
+DONE=yes
 
 echo "==> Restarting services"
 systemctl reload php8.4-fpm || true
@@ -81,5 +95,4 @@ systemd-run --on-active=5 --unit "whp-agent-restart-$(date +%s)" systemctl resta
 systemd-run --on-active=20 --unit "whp-security-apply-$(date +%s)" \
   runuser -u "$PANEL_USER" -- php "$PANEL/artisan" whp:security:apply >/dev/null 2>&1 || true
 
-as_panel php "$PANEL/artisan" up
 echo "==> Done: $(cat "$ROOT/VERSION") ($("${GIT[@]}" rev-parse --short HEAD))"

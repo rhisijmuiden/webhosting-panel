@@ -9,6 +9,9 @@
             <h1>{{ $area === 'admin' ? __('App installer') : __('Apps') }}</h1>
             <p class="sub">{{ __('Put a ready-to-use website or app in a website folder with one click: files, database, configuration and an admin account.') }}</p>
         </div>
+        @if ($area === 'admin' && \Illuminate\Support\Facades\Route::has('admin.apps.sets.index'))
+            <div class="actions"><x-ui.button icon="wordpress" :href="route('admin.apps.sets.index')">{{ __('WordPress plugin sets') }}</x-ui.button></div>
+        @endif
     </div>
     @if (session('status'))<div class="alert alert-ok" role="status">{{ session('status') }}</div>@endif
     @error('agent')<div class="alert alert-bad" role="alert"><x-icon name="info" />{{ $message }}</div>@enderror

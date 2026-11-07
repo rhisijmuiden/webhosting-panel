@@ -27,7 +27,8 @@ jobs:
         run: |
           shellcheck --version
           shellcheck -x installer/install.sh installer/bootstrap.sh installer/lib/*.sh \
-            installer/modules/*.sh installer/lang/*.sh installer/bin/* tests/smoke.sh
+            installer/modules/*.sh installer/lang/*.sh installer/bin/* tests/smoke.sh tests/smoke.d/*.sh \
+            agent/scripts/*.sh panel/deploy/*.sh
 
   install-debian13:
     name: Full install on Debian 13 (systemd container)
@@ -68,6 +69,12 @@ jobs:
             --hostname panel.example.test --email admin@example.test \
             --relay-host smtp.example.test --relay-port 587 --relay-user relay --relay-pass secret \
             --no-letsencrypt --clamav
+      - name: Readiness check found everything (installer/modules/88-verify.sh)
+        run: |
+          docker exec whp bash -c '
+            grep -E "^Ready check|^  missing" /etc/webhosting-panel/install-summary.txt
+            grep -q "^Ready check .*, 0 missing" /etc/webhosting-panel/install-summary.txt
+            grep -q "STEP  \[1/" /var/log/webhosting-panel/install.log'
       - name: Smoke tests
         run: docker exec whp bash /root/src/tests/smoke.sh
       - name: Backup engine tests (backups, restores, restore tests with MariaDB)
@@ -105,6 +112,22 @@ jobs:
             whp-status --plain
             curl -s -H "Host: site.test" http://127.0.0.1/ | grep -q php=8.5
             [[ $(curl -sk -o /dev/null -w %{http_code} --resolve panel.example.test:8443:127.0.0.1 https://panel.example.test:8443/login) == 200 ]]'
+      - name: Panel never stays in maintenance mode (HTTP 503)
+        run: |
+          docker exec whp bash -c '
+            set -e
+            login() { curl -sk -o /dev/null -w %{http_code} --resolve panel.example.test:8443:127.0.0.1 https://panel.example.test:8443/login; }
+            systemctl is-enabled --quiet whp-maintenance-guard.timer
+            cd /opt/webhosting-panel/panel
+            # A recent maintenance window is left alone (an update may be running).
+            runuser -u whp -- php artisan down
+            [[ $(login) == 503 ]]
+            systemctl start whp-maintenance-guard.service
+            [[ $(login) == 503 ]]
+            # One left behind by a killed update is lifted.
+            touch -d "-2 hours" storage/framework/down
+            systemctl start whp-maintenance-guard.service
+            [[ $(login) == 200 ]]'
       - name: Collect logs
         if: failure()
         run: |

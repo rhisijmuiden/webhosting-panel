@@ -31,7 +31,9 @@ Usage: install.sh [options]
   --relay-pass PASS        Relay password (or set WHP_RELAY_PASS)
   --php LIST               PHP versions, comma separated (default 8.3,8.4,8.5)
   --timezone TZ            Time zone (default Europe/Amsterdam)
-  --channel NAME           production (branch main) or test (branch test)
+  --channel NAME           production (branch main) or test (branch test); asked
+                           when missing on an interactive install. The installer
+                           switches its checkout to that branch and its latest code.
   --ssh-port PORT          SSH port to allow in the firewall (default: detected)
   --[no-]ssh-harden        Key-only SSH login when keys exist (default on)
   --no-firewall            Do not configure nftables
@@ -76,6 +78,7 @@ WHP_CROWDSEC_ENROLL=${WHP_CROWDSEC_ENROLL:-}
 WHP_REPO_URL=${WHP_REPO_URL:-$WHP_REPO_URL_DEFAULT}
 FORCE=no
 CONFIRM=''
+ORIG_ARGS=("$@")
 
 while (($#)); do
   case $1 in
@@ -113,6 +116,9 @@ done
 load_lang "$INSTALLER_DIR/lang"
 install -d -m 0750 "$WHP_LOG_DIR"
 trap 'die "line $LINENO: $BASH_COMMAND"' ERR
+# Ctrl-C: stop the command behind the spinner too (background jobs ignore SIGINT).
+trap '[[ -n $_RUN_PID ]] && kill "$_RUN_PID" 2>/dev/null; printf "\n"; die "$(t interrupted)"' INT TERM
+WHP_PROGRESS=yes
 
 # On --upgrade every saved choice wins over the defaults (also --no-mail and the like).
 if [[ $WHP_UPGRADE == yes ]]; then
@@ -142,12 +148,21 @@ fi
 if [[ -z $WHP_CHANNEL ]] && prev=$(env_get "$WHP_ETC/installer.env" WHP_CHANNEL) && [[ -n $prev ]]; then
   WHP_CHANNEL=$prev
 fi
-WHP_CHANNEL=${WHP_CHANNEL:-production}
+# Nothing chosen yet: ask on an interactive fresh install, production otherwise.
+CHANNEL_ASK=no
+if [[ -z $WHP_CHANNEL ]]; then
+  if [[ -z $CONFIRM && $WHP_UPGRADE != yes ]] && _tty; then CHANNEL_ASK=yes; else WHP_CHANNEL=production; fi
+fi
 if [[ -z $WHP_RELAY_PASS ]] && prev=$(env_get "$WHP_ETC/secrets.env" RELAY_PASS 2>/dev/null); then
   WHP_RELAY_PASS=$prev
 fi
 
-printf '%s\n' "${C_BOLD}$(t welcome)${C_RESET}"
+printf '\n%s\n' "${C_BOLD}$(t welcome)${C_RESET}"
+if [[ -r $REPO_DIR/VERSION ]]; then
+  printf '%s\n' "${C_DIM}$(t welcome_version "$(<"$REPO_DIR/VERSION")" \
+    "$(git -C "$REPO_DIR" symbolic-ref --short -q HEAD 2>/dev/null || echo -)" \
+    "$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo -)")${C_RESET}"
+fi
 
 # ---------------------------------------------------------------- questions
 
@@ -186,6 +201,7 @@ gather() {
   ask WHP_TZ "$(t q_tz)" Europe/Amsterdam
   [[ -e /usr/share/zoneinfo/$WHP_TZ ]] || WHP_TZ=Europe/Amsterdam
   ask_yn WHP_SSH_HARDEN "$(t q_ssh_harden)" y
+  [[ $CHANNEL_ASK == yes ]] && ask_channel
 
   case $WHP_CHANNEL in production|main) WHP_CHANNEL=production ;; test) ;; *) die "channel: production|test" ;; esac
 
@@ -217,6 +233,47 @@ save_answers() {
   return 0
 }
 
+# ask_channel: production or test, with the branch of this checkout as default.
+ask_channel() {
+  local reply='' def=1
+  [[ $(git -C "$REPO_DIR" symbolic-ref --short -q HEAD 2>/dev/null || true) == test ]] && def=2
+  printf '\n%s\n  1) %s\n  2) %s\n' "$(t q_channel)" "$(t channel_production)" "$(t channel_test)"
+  read -r -p "$(t q_choice) [$def]: " reply </dev/tty || true
+  case ${reply:-$def} in 2|t|test) WHP_CHANNEL='test' ;; *) WHP_CHANNEL=production ;; esac
+}
+
+# channel_sync: a fresh install from the server's own checkout (/opt/webhosting-panel)
+# continues with the newest code of the chosen channel: switch to its branch, pull,
+# and start again from the new code when anything changed. The answers are saved
+# first, so the new run asks nothing. CI and development checkouts elsewhere, an
+# --upgrade (the panel updater picks the code) and local changes are left alone.
+channel_sync() {
+  [[ $WHP_UPGRADE != yes && $REPO_DIR == "$WHP_CODE_DIR" && -d $REPO_DIR/.git && -z ${WHP_CHANNEL_SYNCED:-} ]] || return 0
+  local want=main cur before after g=(git -C "$REPO_DIR")
+  [[ $WHP_CHANNEL == test ]] && want='test'
+  cur=$("${g[@]}" symbolic-ref --short -q HEAD 2>/dev/null) || return 0
+  [[ $cur == main || $cur == test ]] || return 0
+  if [[ -n $("${g[@]}" status --porcelain --untracked-files=no 2>/dev/null) ]]; then
+    warn "$(t channel_dirty "$REPO_DIR")"; return 0
+  fi
+  before=$("${g[@]}" rev-parse HEAD)
+  info "$(t channel_fetch "$WHP_CHANNEL" "$want")"
+  if ! "${g[@]}" fetch -q origin "$want" >>"$WHP_INSTALL_LOG" 2>&1; then
+    warn "$(t channel_fetch_failed "$want")"; return 0
+  fi
+  if [[ $cur != "$want" ]]; then
+    "${g[@]}" checkout -q "$want" >>"$WHP_INSTALL_LOG" 2>&1 \
+      || "${g[@]}" checkout -q -b "$want" "origin/$want" >>"$WHP_INSTALL_LOG" 2>&1 \
+      || { warn "$(t channel_fetch_failed "$want")"; return 0; }
+  fi
+  "${g[@]}" merge -q --ff-only "origin/$want" >>"$WHP_INSTALL_LOG" 2>&1 || warn "$(t channel_fetch_failed "$want")"
+  after=$("${g[@]}" rev-parse HEAD)
+  [[ $after == "$before" ]] && return 0
+  info "$(t channel_restart "$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo dev)" "$("${g[@]}" rev-parse --short HEAD)")"
+  export WHP_CHANNEL_SYNCED=1
+  exec bash "$REPO_DIR/installer/install.sh" "${ORIG_ARGS[@]}" --channel "$WHP_CHANNEL" --yes
+}
+
 # ---------------------------------------------------------------- run
 
 for m in "$INSTALLER_DIR"/modules/*.sh; do
@@ -227,21 +284,51 @@ done
 preflight
 gather
 save_answers
+channel_sync
 
-step "$(t step_base)";      module_base
-step "$(t step_quota)";     module_quota
-step "$(t step_ssh)";       module_ssh
-step "$(t step_firewall)";  module_firewall
-step "$(t step_unbound)";   module_unbound
-step "$(t step_valkey)";    module_valkey
-step "$(t step_mariadb)";   module_mariadb
-step "$(t step_php)";       module_php
-step "$(t step_nginx)";     module_nginx
-step "$(t step_runtimes)";  module_runtimes
-step "$(t step_waf)";       module_waf
-if [[ $WHP_MAIL == yes ]]; then step "$(t step_mail)"; module_mail; fi
-step "$(t step_antivirus)"; module_antivirus
-if [[ $WHP_CROWDSEC == yes ]]; then step "$(t step_crowdsec)"; module_crowdsec; fi
-step "$(t step_panel)";     module_panel
-step "$(t step_migrations)"; module_migrations
-step "$(t step_finish)";    module_finish
+# The plan: every step that runs on this server, numbered, shown up front.
+PLAN=()
+plan() { PLAN+=("$1:$2"); }
+plan step_base       module_base
+plan step_quota      module_quota
+plan step_ssh        module_ssh
+plan step_firewall   module_firewall
+plan step_unbound    module_unbound
+plan step_valkey     module_valkey
+plan step_mariadb    module_mariadb
+plan step_php        module_php
+plan step_nginx      module_nginx
+plan step_web_rules  module_web_rules
+plan step_runtimes   module_runtimes
+plan step_waf        module_waf
+plan step_wp_visual  module_wp_visual
+if [[ $WHP_MAIL == yes ]]; then plan step_mail module_mail; fi
+plan step_antivirus  module_antivirus
+if [[ $WHP_CROWDSEC == yes ]]; then plan step_crowdsec module_crowdsec; fi
+plan step_ftp        module_ftp
+plan step_panel      module_panel
+plan step_phpmyadmin module_phpmyadmin
+plan step_sitelogs   module_site_logs
+plan step_migrations module_migrations
+plan step_verify     module_verify
+plan step_finish     module_finish
+STEP_TOTAL=${#PLAN[@]}
+
+printf '\n%s\n' "${C_BOLD}$(t plan_title "$STEP_TOTAL")${C_RESET}"
+n=0
+for entry in "${PLAN[@]}"; do
+  n=$((n + 1))
+  printf '  %s%*d.%s %s\n' "$C_DIM" "${#STEP_TOTAL}" "$n" "$C_RESET" "$(t "${entry%%:*}")"
+done
+printf '%s\n' "${C_DIM}$(t plan_log "$WHP_INSTALL_LOG")${C_RESET}"
+_log_file "PLAN  $STEP_TOTAL steps: ${PLAN[*]}"
+
+FIRST_INSTALL=no
+[[ $WHP_UPGRADE != yes && ! -e $WHP_STATE/panel/.admin-created ]] && FIRST_INSTALL=yes
+INSTALL_STARTED=$SECONDS
+for entry in "${PLAN[@]}"; do
+  step_begin "$(t "${entry%%:*}")"
+  "${entry#*:}"
+  step_end
+done
+final_report

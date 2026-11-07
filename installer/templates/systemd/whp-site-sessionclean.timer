@@ -1,0 +1,10 @@
+[Unit]
+Description=Webhosting Panel: remove expired PHP sessions every half hour
+
+[Timer]
+OnCalendar=*-*-* *:09,39:00
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

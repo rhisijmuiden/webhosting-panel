@@ -136,6 +136,13 @@ days, days forever.
 Other phases add their own module (`dns.py`, `mail.py`, `backup.py`), for
 example `backup.run` calling `whp-backup … --json`.
 
+Website logs (`sitelogs.py`, see `packages/site-logs/README.md`): `sitelog.files`
+(access, error, PHP and PHP-FPM log of a site with their rotated copies) and
+`sitelog.read` (newest matching entries, parsed, with filters and an
+`{inode, offset}` cursor for the live tail). Files are opened with
+`O_NOFOLLOW` from the vhosts folder; links and non-regular files are refused.
+logrotate rotates them daily as the site user (`installer/bin/whp-site-logrotate`).
+
 Mail log (`maillog.py`, see `docs/mail-log.md`): `mail.log_read` (Postfix
 events from the journal after a cursor) and `mail.spam_history` (Rspamd scan
 history).
@@ -228,6 +235,21 @@ client `/uptime`, public `/status`): `monitor.check` (read only) returns per web
 certificate it serves (SNI on 127.0.0.1:443: days left, issuer, host match), real disks with inode use,
 service states, memory, load and the Postfix queue. See `docs/monitoring.md`.
 
+Disk usage explorer (`disk_usage.py` + `diskscan.py`, screens in `packages/disk-usage`, `Rhis\DiskUsage\`,
+admin `/admin/disk-usage`, client `/disk-usage`): `disk.scan` (job, one website), `disk.scan_all` (job, nightly,
+skips scans younger than `max_age_hours`), `disk.usage` (one folder of the last scan: sub folders, largest files)
+and `disk.summary` (scanned totals per website and the size of every MariaDB database). Scans are cached in
+`/var/lib/webhosting-panel/disk-usage/<domain>.json`. See `packages/disk-usage/README.md`.
+
+Extra FTP/SFTP accounts (`ftp.py`, ProFTPD from `installer/modules/75-ftp.sh`, screens in the core panel:
+`App\Services\FtpAccounts`, admin `/admin/ftp-accounts`, client `/ftp-accounts`): `ftp.sync` (the complete list of
+virtual users, password hashes only) and `ftp.status`. FTPS on 21 (TLS required), SFTP on 2222. See `docs/ftp-accounts.md`.
+
+Cron jobs (`cron.py`, screens in `packages/cron`, `Rhis\Cron\`, admin `/admin/cron`, client `/cron`):
+`cron.apply`, `cron.calendar`, `cron.list`, `cron.run`, `cron.stop`, `cron.runs`, `cron.suspend`, `cron.remove`.
+One `whp-cron-<id>.timer` + oneshot service per job (site user, subscription slice); `cron_finish.py` saves
+every run (ExecStopPost). `site.php` / `site.owner` rewrite the units. See `docs/cron.md`.
+
 ## Release channels
 
 | Channel | Git branch |
@@ -235,7 +257,8 @@ service states, memory, load and the Postfix queue. See `docs/monitoring.md`.
 | production | `main` |
 | test | `test` |
 
-`panel.update` runs `agent/scripts/update.sh <channel>`: fetch, check out the
+`panel.update` runs `agent/scripts/update.sh <channel>` in its own unit
+(`systemd-run --wait --unit whp-panel-update`, so an agent restart cannot kill it): fetch, check out the
 channel branch, `composer install --no-dev`, `php artisan migrate --force`,
 cache config, restart the pool and the queue worker. Built frontend assets are
 committed in `panel/public/build`, so the server needs no Node.js.
