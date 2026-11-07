@@ -30,6 +30,8 @@
     </div>
 @endif
 
+@includeIf('wp-hardening.card', ['install' => $install, 'area' => $area])
+
 <x-ui.card :title="__('Updates')">
     <x-slot:actions>
         <form method="POST" action="{{ $r('update') }}" onsubmit="return confirm(@js(__('Update WordPress, all plugins, themes and translations now?')))">
