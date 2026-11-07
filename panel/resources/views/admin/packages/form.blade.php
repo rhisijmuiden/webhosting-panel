@@ -56,6 +56,7 @@
                 @endforeach
             </div>
         </x-ui.card>
+        @includeIf('object-cache::admin.package-card', ['package' => $package])
         <div class="actions">
             <button type="submit" class="btn btn-primary">{{ __('Save') }}</button>
             <a class="btn" href="{{ route('admin.packages.index') }}">{{ __('Cancel') }}</a>
