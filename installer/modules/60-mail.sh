@@ -230,5 +230,6 @@ module_mail() {
   mail_rspamd
   mail_postfix   # creates the postfix user and spool that Dovecot's sockets live in
   mail_dovecot
+  mail_websites  # 61-website-mail.sh
   svc_restart postfix
 }

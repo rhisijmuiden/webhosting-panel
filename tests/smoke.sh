@@ -170,6 +170,9 @@ for i in $(seq 1 30); do
 done
 check "local delivery through lmtp into Maildir" compgen -G '/var/vmail/example.test/info/Maildir/new/*'
 check "rspamd scanned the message" bash -c "rspamc -h 127.0.0.1:11334 -P '$RSPAMD_CONTROLLER_PASS' stat | grep -qE 'Messages scanned: [1-9]'"
+check "website mail SMTP listens on loopback only" bash -c "ss -ltnH | grep -q '127.0.0.1:10587 ' && ! ss -ltnH | grep -qE '(0\.0\.0\.0|\[::\]|\*):10587 '"
+check "agent answers wp.mail_status" bash -c "python3 $(dirname "$0")/agent_call.py wp.mail_status '{\"domain\":\"wp.test\"}' | jq -e '.smtp == true' >/dev/null"
+check "WordPress mail through this server (DKIM, sender, Reply-To, staging held back)" python3 "$(dirname "$0")/wp_mail_smoke.py" wp.test test.wp.test info@example.test
 check "spam (GTUBE) from outside gets action reject" bash -c "printf 'From: a@example.org\nTo: info@example.test\nSubject: x\n\nXJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X\n' | rspamc -h 127.0.0.1:11333 --ip 203.0.113.5 --from a@example.org | grep -qi 'Action: reject'"
 
 echo "== tools"

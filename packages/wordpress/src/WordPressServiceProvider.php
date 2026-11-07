@@ -17,6 +17,7 @@ final class WordPressServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/wordpress.php', 'wordpress');
+        $this->app->register(Mail\WpMailServiceProvider::class);
     }
 
     public function boot(): void

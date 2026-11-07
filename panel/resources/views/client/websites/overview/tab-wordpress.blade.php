@@ -51,6 +51,7 @@
                 </dl>
             </div>
         </div>
+        @includeIf('wordpress::mail.partials.domain-row', ['i' => $i, 'o' => $o])
     </div>
 @endforeach
 @includeIf('subdomains::staging.partials.wordpress-card', ['site' => $site])
