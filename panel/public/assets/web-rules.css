@@ -11,7 +11,7 @@
 .wr-folder header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .wr-folder header .icon, .wr-users .icon { width: 16px; height: 16px; vertical-align: -3px; }
 .wr-users { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-.wr-users li { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border-radius: 999px; background: var(--surface-sunken); font-size: 13.5px; }
+.wr-users li { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--surface-sunken); font-size: 13.5px; }
 .wr-users form { display: inline; }
 .wr-inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .wr-inline .input { flex: 1 1 160px; min-width: 0; }

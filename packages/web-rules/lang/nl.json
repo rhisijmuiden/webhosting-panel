@@ -42,6 +42,7 @@
     "Block visitors": "Bezoekers blokkeren",
     "Blocking on": "Blokkeren aan",
     "Choose at least one country, or switch country blocking off.": "Kies minstens één land, of zet blokkeren per land uit.",
+    "Chosen countries": "Gekozen landen",
     "Countries": "Landen",
     "Country blocking is not available on this server yet: the country database is missing.": "Blokkeren per land is nog niet beschikbaar op deze server: de landendatabase ontbreekt.",
     "Country blocking is not available on this server yet: the country database is missing. It is downloaded during the next update.": "Blokkeren per land is nog niet beschikbaar op deze server: de landendatabase ontbreekt. Die wordt bij de volgende update gedownload.",

@@ -33,6 +33,12 @@
             @endforeach
         </div>
         <div x-show="cmode !== 'off'">
+            @if ($chosen)
+                @php $names = \Rhis\WebRules\WebRules::countries(); @endphp
+                <ul class="wr-users" aria-label="{{ __('Chosen countries') }}">
+                    @foreach ($chosen as $code)<li><span>{{ $names[$code] ?? $code }} ({{ $code }})</span></li>@endforeach
+                </ul>
+            @endif
             <x-ui.field name="countries[]" type="select" :label="__('Countries')" multiple size="10" class="wr-countries">
                 @foreach (\Rhis\WebRules\WebRules::countries() as $code => $name)
                     <option value="{{ $code }}" @selected(in_array($code, $chosen, true))>{{ $name }} ({{ $code }})</option>
