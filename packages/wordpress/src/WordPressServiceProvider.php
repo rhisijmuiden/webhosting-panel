@@ -16,8 +16,10 @@ final class WordPressServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/wordpress.php', 'wordpress');
+        // Website mail (wp_mail through this server): own routes, views, translations and schedule.
         $this->app->register(Mail\WpMailServiceProvider::class);
+        $this->mergeConfigFrom(__DIR__.'/../config/wordpress.php', 'wordpress');
+        $this->app->register(Extensions\ExtensionsServiceProvider::class);
         // Quick switches (maintenance, debug + debug.log, indexing, clear cache): own routes, views and translations.
         $this->app->register(Switches\SwitchesServiceProvider::class);
         $this->app->register(Bulk\BulkServiceProvider::class);

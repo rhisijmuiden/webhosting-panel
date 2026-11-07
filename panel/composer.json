@@ -32,7 +32,8 @@
         "rhis/vulnerabilities": "@dev",
         "rhis/web-rules": "@dev",
         "rhis/webapps": "@dev",
-        "rhis/wordpress": "@dev"
+        "rhis/wordpress": "@dev",
+        "rhis/wp-integrity": "@dev"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
