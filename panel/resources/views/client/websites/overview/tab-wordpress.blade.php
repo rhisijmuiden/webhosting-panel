@@ -54,3 +54,4 @@
     </div>
 @endforeach
 @includeIf('subdomains::staging.partials.wordpress-card', ['site' => $site])
+@includeIf('wordpress::smart-updates.partials.site-card', ['site' => $site])
