@@ -144,4 +144,44 @@ class WordPressBulkIntegrationsTest extends TestCase
         $this->assertNotNull($report->checked_at);
         $this->assertNull($report->job_id);
     }
+
+    public function test_hardening_on_and_off(): void
+    {
+        $s = $this->sites();
+        $this->actingAsAdmin();
+        $this->get('/admin/wordpress/bulk')->assertSee('Security hardening')->assertSee('Clean up the database');
+
+        $run = $this->bulk('hardening', $this->ids($s), ['mode' => 'on', 'file_edit' => '1', 'user_enum' => '1']);
+        $this->assertSame(['succeeded', 'succeeded'], array_column($this->items($run), 0));
+        $call = collect($this->agent()->calls)->firstWhere('action', 'wphard.apply');
+        $this->assertSame(['file_edit' => true, 'user_enum' => true], $call['params']['measures']);
+        $this->assertTrue(\App\Models\ActivityLog::where('action', 'wp_hardening.applied')->exists());
+
+        // Already on according to the fresh stored state: skipped.
+        $again = $this->bulk('hardening', [$s['alfa.nl']->id], ['mode' => 'on', 'file_edit' => '1']);
+        $this->assertSame('skipped', $this->items($again)['alfa.nl'][0]);
+
+        $off = $this->bulk('hardening', [$s['alfa.nl']->id], ['mode' => 'off', 'file_edit' => '1']);
+        $this->assertSame('succeeded', $this->items($off)['alfa.nl'][0]);
+        $this->assertSame(['file_edit' => false], collect($this->agent()->calls)->where('action', 'wphard.apply')->last()['params']['measures']);
+        $this->assertFalse(collect($this->agent()->calls)->contains('action', 'wphard.salts'));
+    }
+
+    public function test_database_cleanup_follows_the_job(): void
+    {
+        $s = $this->sites();
+        $this->actingAsAdmin();
+
+        $run = $this->bulk('db-cleanup', [$s['alfa.nl']->id], ['revisions' => '1', 'spam_comments' => '1', 'keep_revisions' => '3']);
+        $call = collect($this->agent()->calls)->firstWhere('action', 'wp.dbclean_run');
+        $this->assertSame(['revisions', 'spam_comments'], $call['params']['items']);
+        $this->assertSame(3, $call['params']['keep_revisions']);
+        $this->assertSame('succeeded', $this->items($run)['alfa.nl'][0]);
+        $this->assertSame('succeeded', \Rhis\WordPress\DbCleanup\DbCleanup::first()->status);
+
+        // A running cleanup is not started twice.
+        \Rhis\WordPress\DbCleanup\DbCleanup::query()->update(['status' => 'running']);
+        $run = $this->bulk('db-cleanup', [$s['alfa.nl']->id], ['revisions' => '1', 'keep_revisions' => '0']);
+        $this->assertSame(['skipped', 'A cleanup is already running on this site.'], $this->items($run)['alfa.nl']);
+    }
 }

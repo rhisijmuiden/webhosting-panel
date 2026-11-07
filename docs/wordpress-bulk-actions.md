@@ -124,6 +124,8 @@ for `update-plugins`).
 | `clear-cache` | maintenance | All caches (`Switches::clearCache`). |
 | `switch-maintenance`, `switch-debug`, `switch-indexing` | maintenance | Quick switches on/off (`Switches::set`); debug always with an expiry. |
 | `integrity-check` | security | `Integrity::start` (wpint.check job), then `Integrity::poll` stores the report. Only with packages/wp-integrity. |
+| `hardening` | security | `Hardening::apply` with the chosen measures on or off. Salts stay out of bulk (they log everybody out). Skips sites whose fresh state already matches. |
+| `db-cleanup` | maintenance | `Cleaner::start` (snapshot first, rollback when the site breaks), then `Cleaner::sync`. Skips a site that already has a cleanup running. |
 
 Integrations of other features live in `src/Bulk/Integrations/` and are registered in
 `BulkServiceProvider` behind `class_exists()`.
