@@ -17,6 +17,7 @@
             <a href="{{ $o->url('wordpress.show', $i) }}"><x-icon name="refresh" />{{ __('Plugins & themes') }}</a>
             <a href="{{ $o->url('wordpress.show', $i) }}"><x-icon name="key" />{{ __('Administrators') }}</a>
             @if ($o->has('backups.index'))<a href="{{ $o->url('backups.index') }}"><x-icon name="backup" />{{ __('Backups') }}</a>@endif
+            @includeIf('wordpress::dbclean.link')
             <a href="{{ $i->url() }}" target="_blank" rel="noopener"><x-icon name="external" />{{ __('Open website') }}</a>
         </div>
 
