@@ -9058,6 +9058,7 @@
     "stability-flags": {
         "rhis/apps": 20,
         "rhis/backups": 20,
+        "rhis/certificates": 20,
         "rhis/crm-api": 20,
         "rhis/dns-mail": 20,
         "rhis/domain-aliases": 20,
