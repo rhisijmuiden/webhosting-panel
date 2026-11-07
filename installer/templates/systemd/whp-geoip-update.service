@@ -1,0 +1,9 @@
+[Unit]
+Description=Webhosting Panel: update the GeoIP country database
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Nice=10
+ExecStart=/usr/local/sbin/whp-geoip-update --quiet

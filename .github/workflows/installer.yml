@@ -27,7 +27,7 @@ jobs:
         run: |
           shellcheck --version
           shellcheck -x installer/install.sh installer/bootstrap.sh installer/lib/*.sh \
-            installer/modules/*.sh installer/lang/*.sh installer/bin/* tests/smoke.sh
+            installer/modules/*.sh installer/lang/*.sh installer/bin/* tests/smoke.sh tests/smoke.d/*.sh
 
   install-debian13:
     name: Full install on Debian 13 (systemd container)
