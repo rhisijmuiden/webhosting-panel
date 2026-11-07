@@ -113,6 +113,7 @@ check "a subdomain of another domain is refused" bash -c "! whp-site add test.si
 check "a subdomain has no quota of its own" bash -c "! whp-site quota test.wp.test 100"
 check "the main site cannot be removed while it has subdomains" bash -c "! whp-site remove wp.test"
 check "clone WordPress into the subdomain (files, database, addresses)" python3 "$(dirname "$0")/clone_smoke.py" wp.test test.wp.test
+check "WordPress staging: push to live with backup, restore" python3 "$(dirname "$0")/staging_smoke.py" test.wp.test wp.test
 
 echo "== git deployments"
 check "git, ssh-keygen and npm installed" bash -c "command -v git && command -v ssh-keygen && command -v npm"

@@ -21,6 +21,8 @@
         @include('client.websites.overview.tile', ['href' => $o->url('websites.show', [$site, 'tab' => 'hosting']).'#php', 'icon' => 'code', 'label' => 'PHP', 'sub' => __('Version :v', ['v' => $site->php_version])])
         @include('client.websites.overview.tile', ['href' => $git ? ($o->gitRepos->count() === 1 ? $o->url('git.show', $o->gitRepos->first()) : ($o->gitRepos->isEmpty() ? $o->url('git.create', ['website' => $site->id]) : $o->url('git.index'))) : null,
             'icon' => 'git', 'label' => __('Git deployments'), 'sub' => $o->gitRepos->isEmpty() ? __('Deploy on every push') : trans_choice(':count repository|:count repositories', $o->gitRepos->count())])
+        @include('client.websites.overview.tile', ['href' => $o->has('cron.index') && $o->allows('cron.customer_access') ? $o->url('cron.index', ['website' => $site->id]) : null, 'icon' => 'clock', 'label' => __('Cron jobs'),
+            'sub' => class_exists(\Rhis\Cron\Models\CronJob::class) && ($n = \Rhis\Cron\Models\CronJob::where('website_id', $site->id)->count()) ? trans_choice(':count cron job|:count cron jobs', $n) : __('Run tasks on a schedule')])
         @include('client.websites.overview.tile', ['href' => $o->canUseTerminal() ? $o->url('files.terminal', $site) : null, 'icon' => 'terminal', 'label' => __('Web terminal'), 'sub' => __('Command line in your browser')])
         @include('client.websites.overview.tile', ['href' => $o->has('apps.index') ? $o->url('apps.index') : null, 'icon' => 'apps', 'label' => __('App installer'), 'sub' => __('WordPress, Joomla, Nextcloud')])
         @if ($o->has('clones.create'))
