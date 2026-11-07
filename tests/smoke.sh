@@ -119,6 +119,10 @@ echo "== git deployments"
 check "git, ssh-keygen and npm installed" bash -c "command -v git && command -v ssh-keygen && command -v npm"
 check "deploy, zero downtime switch, failed build, rollback, remove" python3 "$(dirname "$0")/git_smoke.py" site.test
 
+echo "== databases and phpMyAdmin"
+check "phpMyAdmin installed for sign-on only" bash -c "test -f /var/www/phpmyadmin/whp-sso.php && ! test -e /var/www/phpmyadmin/setup"
+check "databases, users, passwords and phpMyAdmin sign-on" python3 "$(dirname "$0")/db_smoke.py"
+
 echo "== mail"
 printf 'example.test OK\n' >>/etc/postfix/whp/virtual_domains
 printf 'info@example.test example.test/info/\n' >>/etc/postfix/whp/virtual_mailboxes
@@ -237,6 +241,23 @@ PY
   check "imap import: master user refused from outside loopback" grep -q 'allow_nets=127.0.0.1/32,::1/128' /etc/dovecot/master-users
   agent mail.imap_import_forget '{"id":1}' >/dev/null || true
   rm -f /etc/webhosting-panel/mail-import.conf
+  echo "== FTP accounts (ProFTPD)"
+  check "proftpd configuration valid" proftpd -t
+  check "proftpd active" bash -c 'systemctl is-active proftpd || { journalctl -u proftpd -n 30 --no-pager; false; }'
+  check "proftpd listens on 21 and 2222" bash -c 'ss -ltnH "sport = :21" | grep -q . && ss -ltnH "sport = :2222" | grep -q .'
+  check "firewall opens FTPS, SFTP and the passive ports" bash -c 'nft list set inet whp tcp_open | grep -q 2222 && nft list set inet whp tcp_open | grep -q 49152-49407'
+  FTP_HASH=$(openssl passwd -6 'Smoke-ftp-pass-123')
+  export FTP_HASH
+  check "ftp.sync writes the accounts" bash -c 'agent ftp.sync "{\"accounts\":[{\"login\":\"up@site.test\",\"domain\":\"site.test\",\"password_hash\":\"$FTP_HASH\",\"folder\":\"public/ftp-up\"},{\"login\":\"ro@site.test\",\"domain\":\"site.test\",\"password_hash\":\"$FTP_HASH\",\"folder\":\"public\",\"read_only\":true}]}" | jq -e ".accounts == 2 and .read_only == 1"'
+  echo smoke >/tmp/ftp-smoke.txt
+  check "FTPS upload lands in the account folder, owned by the site user" bash -c 'curl -sS --ssl-reqd -k -u "up@site.test:Smoke-ftp-pass-123" -T /tmp/ftp-smoke.txt ftp://127.0.0.1/ && [[ $(stat -c %U /var/www/vhosts/site.test/public/ftp-up/ftp-smoke.txt) == s_site_test ]]'
+  check "plain FTP without TLS is refused" bash -c '! curl -s -u "up@site.test:Smoke-ftp-pass-123" ftp://127.0.0.1/'
+  check "SFTP login lists the account folder" bash -c 'curl -sS -k -u "ro@site.test:Smoke-ftp-pass-123" sftp://127.0.0.1:2222/ | grep -q ftp-up'
+  check "read-only account cannot upload" bash -c '! curl -s -k -u "ro@site.test:Smoke-ftp-pass-123" -T /tmp/ftp-smoke.txt sftp://127.0.0.1:2222/x.txt && [[ ! -e /var/www/vhosts/site.test/public/x.txt ]]'
+  check "Linux users cannot log in to ProFTPD" bash -c '! curl -s --ssl-reqd -k -u "root:x" ftp://127.0.0.1/'
+  check "ftp.status reports the ports" bash -c 'agent ftp.status | jq -e ".active and .ftp_port == 21 and .sftp_port == 2222 and .accounts == 2"'
+  check "ftp.sync removes the accounts again" bash -c 'agent ftp.sync "{\"accounts\":[]}" | jq -e ".accounts == 0" && ! curl -s --ssl-reqd -k -u "up@site.test:Smoke-ftp-pass-123" ftp://127.0.0.1/'
+  rm -rf /tmp/ftp-smoke.txt /var/www/vhosts/site.test/public/ftp-up
   check "app catalog" bash -c 'agent apps.catalog | jq -e "[.apps[].id] == [\"wordpress\",\"woocommerce\",\"joomla\",\"nextcloud\",\"piwigo\",\"mediawiki\",\"dokuwiki\",\"phpbb\",\"freshrss\"]"'
   agent apps.catalog | jq -r '.apps[] | "   \(.id): \(.latest_version) released \(.released_at // "-") maintained=\(.maintained)"' || true
   check "app catalog: every app has a latest release and is maintained" bash -c 'agent apps.catalog | jq -e "all(.apps[]; .latest_version != null and .maintained == true)"'

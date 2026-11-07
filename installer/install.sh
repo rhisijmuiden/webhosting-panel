@@ -242,7 +242,9 @@ step "$(t step_runtimes)";  module_runtimes
 if [[ $WHP_MAIL == yes ]]; then step "$(t step_mail)"; module_mail; fi
 step "$(t step_antivirus)"; module_antivirus
 if [[ $WHP_CROWDSEC == yes ]]; then step "$(t step_crowdsec)"; module_crowdsec; fi
+step "$(t step_ftp)";       module_ftp
 step "$(t step_panel)";     module_panel
+step "$(t step_phpmyadmin)"; module_phpmyadmin
 step "$(t step_sitelogs)";  module_site_logs
 step "$(t step_migrations)"; module_migrations
 step "$(t step_finish)";    module_finish

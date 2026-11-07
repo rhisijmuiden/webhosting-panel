@@ -235,6 +235,10 @@ client `/uptime`, public `/status`): `monitor.check` (read only) returns per web
 certificate it serves (SNI on 127.0.0.1:443: days left, issuer, host match), real disks with inode use,
 service states, memory, load and the Postfix queue. See `docs/monitoring.md`.
 
+Extra FTP/SFTP accounts (`ftp.py`, ProFTPD from `installer/modules/75-ftp.sh`, screens in the core panel:
+`App\Services\FtpAccounts`, admin `/admin/ftp-accounts`, client `/ftp-accounts`): `ftp.sync` (the complete list of
+virtual users, password hashes only) and `ftp.status`. FTPS on 21 (TLS required), SFTP on 2222. See `docs/ftp-accounts.md`.
+
 Cron jobs (`cron.py`, screens in `packages/cron`, `Rhis\Cron\`, admin `/admin/cron`, client `/cron`):
 `cron.apply`, `cron.calendar`, `cron.list`, `cron.run`, `cron.stop`, `cron.runs`, `cron.suspend`, `cron.remove`.
 One `whp-cron-<id>.timer` + oneshot service per job (site user, subscription slice); `cron_finish.py` saves
