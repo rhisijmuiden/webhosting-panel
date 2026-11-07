@@ -15,6 +15,7 @@
     </div>
     <div class="actions">
         <form method="POST" action="{{ $r('refresh') }}">@csrf<x-ui.button icon="refresh">{{ __('Check now') }}</x-ui.button></form>
+        @if (Route::has($area.'.wordpress.extensions.index') && ($area === 'admin' || config('wordpress-extensions.customer_access')))<x-ui.button :href="route($area.'.wordpress.extensions.index', $install)" icon="apps">{{ __('Plugins & themes') }}</x-ui.button>@endif
         <form method="POST" action="{{ $r('login') }}" target="_blank">@csrf<x-ui.button variant="primary" icon="external">{{ __('Log in to WP admin') }}</x-ui.button></form>
     </div>
 </div>
@@ -87,6 +88,8 @@
     @endif
 </x-ui.card>
 
+@includeIf('wp-integrity::partials.wordpress-card')
+
 <section class="grid grid-2" style="align-items:start">
     <x-ui.card :title="__('WP-cron')">
         <p class="muted small">{{ __('WordPress normally runs scheduled tasks when someone visits the site. On quiet sites tasks run late, on busy sites it slows pages down. Let the server run them on a fixed schedule instead.') }}</p>
@@ -143,6 +146,7 @@
 </section>
 
 @include('wordpress::search-replace.card')
+@include('wordpress::dbclean.card')
 
 <x-ui.card :title="__('Snapshots')" flush>
     @if (empty($snapshots))
