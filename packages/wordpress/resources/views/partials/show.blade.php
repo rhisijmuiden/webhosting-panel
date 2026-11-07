@@ -30,6 +30,8 @@
     </div>
 @endif
 
+@includeIf('wordpress::switches.card')
+
 <x-ui.card :title="__('Updates')">
     <x-slot:actions>
         <form method="POST" action="{{ $r('update') }}" onsubmit="return confirm(@js(__('Update WordPress, all plugins, themes and translations now?')))">
@@ -139,6 +141,8 @@
         @endif
     </x-ui.card>
 </section>
+
+@include('wordpress::search-replace.card')
 
 <x-ui.card :title="__('Snapshots')" flush>
     @if (empty($snapshots))
