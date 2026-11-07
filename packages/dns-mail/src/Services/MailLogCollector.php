@@ -98,7 +98,9 @@ final class MailLogCollector
                 $m->client_ip = $this->str($e['client_ip'] ?? null, 64);
                 $m->client_host = $this->str($e['client_host'] ?? null, 255);
                 $m->sasl_username = $this->lower($e['sasl_username'] ?? null);
-                $m->origin = $m->sasl_username ? 'authenticated' : ($this->isLoopback($m->client_ip) ? 'system' : 'inbound');
+                // "website": WordPress mail through the loopback service postfix/website (wp.mail_*).
+                $m->origin = $m->sasl_username ? 'authenticated'
+                    : ($m->service === 'website' ? 'website' : ($this->isLoopback($m->client_ip) ? 'system' : 'inbound'));
                 break;
             case 'pickup':
                 $m->service = 'pickup';

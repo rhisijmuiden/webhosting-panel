@@ -51,13 +51,21 @@ class HostingPackage extends Model
         'webapp_cpu_percent' => ['CPU per app', '%', 10, 10_000],
     ];
 
+    /**
+     * Valkey object cache per website (packages/object-cache). NULL = the server default,
+     * 0 = not available for this package. Optional like the app limits.
+     */
+    public const CACHE_LIMITS = [
+        'object_cache_mb' => ['Object cache memory', 'MB', 0, 65536],
+    ];
+
     public const TRAFFIC_ACTIONS = ['notify', 'suspend'];
 
     protected $fillable = [
         'name', 'crm_id', 'description', 'disk_mb', 'traffic_gb_month', 'traffic_action', 'max_websites',
         'max_mailboxes', 'max_databases', 'max_cronjobs', 'cpu_percent', 'memory_mb', 'io_mbps',
         'max_processes', 'php_workers', 'db_connections', 'allow_ssh', 'is_active',
-        'max_webapps', 'webapp_memory_mb', 'webapp_cpu_percent',
+        'max_webapps', 'webapp_memory_mb', 'webapp_cpu_percent', 'object_cache_mb',
     ];
 
     protected $attributes = ['traffic_action' => 'notify'];
@@ -103,7 +111,7 @@ class HostingPackage extends Model
         }
 
         return match ($key) {
-            'disk_mb', 'memory_mb', 'webapp_memory_mb' => Number::fileSize($value * 1024 * 1024),
+            'disk_mb', 'memory_mb', 'webapp_memory_mb', 'object_cache_mb' => Number::fileSize($value * 1024 * 1024),
             'traffic_gb_month' => Number::fileSize($value * 1024 ** 3).' / '.__('month'),
             'cpu_percent', 'webapp_cpu_percent' => trans_choice(':percent % (:cores core)|:percent % (:cores cores)', $value / 100, ['percent' => $value, 'cores' => rtrim(rtrim(number_format($value / 100, 1), '0'), '.')]),
             'io_mbps' => $value.' MB/s',

@@ -90,6 +90,26 @@ check "alias redirect mode" bash -c "whp-site alias mode site.test alias.test re
 check "site cannot be added on an alias name" bash -c "! whp-site add alias.test --no-ssl"
 check "alias remove" bash -c "whp-site alias remove site.test alias.test --json | jq -e '.domain_aliases == []' >/dev/null && ! curl -s -H 'Host: alias.test' http://127.0.0.1/ | grep -q php="
 check "nginx config still valid" nginx -t
+echo "== own and wildcard certificates"
+whp-site add cert.test --no-ssl --json >/dev/null
+d=$(mktemp -d)
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 30 -subj /CN=cert.test \
+  -addext "subjectAltName=DNS:cert.test,DNS:www.cert.test" -keyout "$d/key.pem" -out "$d/cert.pem" 2>/dev/null
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 30 -subj /CN=other -keyout "$d/other.pem" -out "$d/other.crt" 2>/dev/null
+check "own certificate: a key of another certificate is refused" bash -c "! whp-site ssl cert.test --custom-cert $d/cert.pem --custom-key $d/other.pem"
+check "own certificate installed" bash -c "whp-site ssl cert.test --custom-cert $d/cert.pem --custom-key $d/key.pem --custom-chain $d/other.crt --json | jq -e '.ssl == \"active\"' >/dev/null && whp-site cert cert.test | jq -e '.ssl == \"custom\"' >/dev/null"
+check "own certificate is served over HTTPS" bash -c "echo | openssl s_client -connect 127.0.0.1:443 -servername cert.test 2>/dev/null | openssl x509 -noout -subject | grep -q 'CN *= *cert.test'"
+check "own certificate: HTTP redirects to HTTPS" bash -c "curl -s -o /dev/null -D - -H 'Host: cert.test' http://127.0.0.1/ | grep -qi '^location: https://cert.test/'"
+check "own certificate: chain appended, key private" bash -c "[[ \$(grep -c 'BEGIN CERTIFICATE' /etc/webhosting-panel/ssl/cert.test/fullchain.pem) == 2 && \$(stat -c %a /etc/webhosting-panel/ssl/cert.test/privkey.pem) == 600 ]]"
+check "cert shows the served files" bash -c "whp-site cert cert.test | jq -e '.ssl == \"custom\" and .cert_file == \"/etc/webhosting-panel/ssl/cert.test/fullchain.pem\"' >/dev/null && whp-site cert --all | jq -e '.certificates | length > 1' >/dev/null"
+check "own certificate is not replaced by the hourly retry" bash -c "whp-site ssl --pending >/dev/null 2>&1; whp-site cert cert.test | jq -e '.ssl == \"custom\"' >/dev/null"
+check "back to Let's Encrypt keeps the own certificate when it cannot issue" bash -c "! whp-site ssl cert.test --letsencrypt >/dev/null 2>&1 && whp-site cert cert.test | jq -e '.ssl == \"custom\"' >/dev/null"
+check "wildcard without a Cloudflare token fails cleanly" bash -c "! whp-site ssl cert.test --wildcard 2>/tmp/wc.err && grep -q 'Cloudflare' /tmp/wc.err && whp-site cert cert.test | jq -e '.ssl == \"custom\"' >/dev/null"
+check "certbot Cloudflare plugin installed" python3 -c 'import certbot_dns_cloudflare'
+check "agent reads certificate details" bash -c "python3 $(dirname "$0")/agent_call.py ssl.info '{\"domain\":\"cert.test\"}' | jq -e '.certificate.names == [\"cert.test\",\"www.cert.test\"] and .certificate.days_left >= 29' >/dev/null"
+check "remove site with own certificate" bash -c "whp-site remove cert.test --json >/dev/null && [[ ! -e /etc/webhosting-panel/ssl/cert.test ]]"
+rm -rf "$d"
+check "nginx config valid after certificates" nginx -t
 check "add laravel site" whp-site add app.test --profile laravel --no-ssl --json
 printf '<?php echo "laravel-docroot";\n' >/var/www/vhosts/app.test/app/public/index.php
 check "laravel docroot app/public and pretty URLs" bash -c "curl -s -H 'Host: app.test' http://127.0.0.1/some/route | grep -q laravel-docroot"
@@ -150,6 +170,9 @@ for i in $(seq 1 30); do
 done
 check "local delivery through lmtp into Maildir" compgen -G '/var/vmail/example.test/info/Maildir/new/*'
 check "rspamd scanned the message" bash -c "rspamc -h 127.0.0.1:11334 -P '$RSPAMD_CONTROLLER_PASS' stat | grep -qE 'Messages scanned: [1-9]'"
+check "website mail SMTP listens on loopback only" bash -c "ss -ltnH | grep -q '127.0.0.1:10587 ' && ! ss -ltnH | grep -qE '(0\.0\.0\.0|\[::\]|\*):10587 '"
+check "agent answers wp.mail_status" bash -c "python3 $(dirname "$0")/agent_call.py wp.mail_status '{\"domain\":\"wp.test\"}' | jq -e '.smtp == true' >/dev/null"
+check "WordPress mail through this server (DKIM, sender, Reply-To, staging held back)" python3 "$(dirname "$0")/wp_mail_smoke.py" wp.test test.wp.test info@example.test
 check "spam (GTUBE) from outside gets action reject" bash -c "printf 'From: a@example.org\nTo: info@example.test\nSubject: x\n\nXJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X\n' | rspamc -h 127.0.0.1:11333 --ip 203.0.113.5 --from a@example.org | grep -qi 'Action: reject'"
 
 echo "== tools"

@@ -52,5 +52,22 @@ Rules
   limit (counted over all databases of the customer's websites, `site_databases`).
 * `WHP_APPS_CUSTOMER_INSTALL=false` in `panel.env` hides the page for customers.
 
-Adding an app: a recipe class in `agent/whp_agent/actions/apps.py` (added
+WordPress plugin sets
+
+* Admin › App installer › **WordPress plugin sets** (`/admin/apps/plugin-sets`):
+  named lists of plugins and themes (wordpress.org slugs or https links to a
+  `.zip`), per item "switch on", one theme to use, and two clean-ups (example
+  post/page, unused Twenty… themes). Names come from the wordpress.org API on
+  save; an unknown slug gives a warning.
+* A set can be the default of one or more packages (`wp_plugin_set_packages`,
+  one set per package): the install form preselects it for websites of that
+  package. Customers see the sets marked "Customers can choose this set" plus
+  the default of their own package.
+* The set travels with `apps.install` as `plugin_set` (WordPress and
+  WooCommerce only) and is applied inside the same agent job right after
+  WordPress (`agent/whp_agent/wp_sets.py`, WP-CLI as the site user, Dutch
+  language packs for a Dutch site). A failing item never rolls WordPress back:
+  it is reported in `app_installations.plugin_set_report` and on the app page.
+
+ a recipe class in `agent/whp_agent/actions/apps.py` (added
 to `RECIPES`), a card in `config/apps.php` and its texts in `lang/nl.json`.

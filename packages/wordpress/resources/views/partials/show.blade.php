@@ -15,6 +15,7 @@
     </div>
     <div class="actions">
         <form method="POST" action="{{ $r('refresh') }}">@csrf<x-ui.button icon="refresh">{{ __('Check now') }}</x-ui.button></form>
+        @if (Route::has($area.'.wordpress.extensions.index') && ($area === 'admin' || config('wordpress-extensions.customer_access')))<x-ui.button :href="route($area.'.wordpress.extensions.index', $install)" icon="apps">{{ __('Plugins & themes') }}</x-ui.button>@endif
         <form method="POST" action="{{ $r('login') }}" target="_blank">@csrf<x-ui.button variant="primary" icon="external">{{ __('Log in to WP admin') }}</x-ui.button></form>
     </div>
 </div>
@@ -29,6 +30,9 @@
             <p class="small muted">{{ __('This password is shown only once. Store it in your password manager.') }}</p></div>
     </div>
 @endif
+
+@includeIf('wp-hardening.card', ['install' => $install, 'area' => $area])
+@includeIf('wordpress::switches.card')
 
 <x-ui.card :title="__('Updates')">
     <x-slot:actions>
@@ -85,6 +89,8 @@
     @endif
 </x-ui.card>
 
+@includeIf('wp-integrity::partials.wordpress-card')
+
 <section class="grid grid-2" style="align-items:start">
     <x-ui.card :title="__('WP-cron')">
         <p class="muted small">{{ __('WordPress normally runs scheduled tasks when someone visits the site. On quiet sites tasks run late, on busy sites it slows pages down. Let the server run them on a fixed schedule instead.') }}</p>
@@ -140,6 +146,9 @@
     </x-ui.card>
 </section>
 
+@include('wordpress::search-replace.card')
+@include('wordpress::dbclean.card')
+
 <x-ui.card :title="__('Snapshots')" flush>
     @if (empty($snapshots))
         <x-ui.empty icon="backup">{{ __('A snapshot is made automatically before every update.') }}</x-ui.empty>
@@ -157,3 +166,5 @@
     </x-ui.table>
     @endif
 </x-ui.card>
+
+@includeIf('wordpress::mail.partials.card', ['install' => $install, 'area' => $area])

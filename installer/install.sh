@@ -239,6 +239,7 @@ step "$(t step_php)";       module_php
 step "$(t step_nginx)";     module_nginx
 step "$(t step_web_rules)"; module_web_rules
 step "$(t step_runtimes)";  module_runtimes
+step "$(t step_wp_visual)"; module_wp_visual
 if [[ $WHP_MAIL == yes ]]; then step "$(t step_mail)"; module_mail; fi
 step "$(t step_antivirus)"; module_antivirus
 if [[ $WHP_CROWDSEC == yes ]]; then step "$(t step_crowdsec)"; module_crowdsec; fi

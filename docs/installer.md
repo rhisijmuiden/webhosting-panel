@@ -103,6 +103,13 @@ An update from the panel (Info → Update, or switching channel) runs
 - numbered one-off server migrations in `installer/migrations/` run once per server
   (see [installer/migrations/README.md](../installer/migrations/README.md)).
 
+The updater itself runs in its own systemd unit (`whp-panel-update`, log in
+`/var/log/webhosting-panel/panel-update.log`), so an agent restart or a slow
+installer run can never cut it off halfway. Whatever happens, the panel leaves
+maintenance mode at the end (on failure after rolling the code back), and
+`whp-maintenance-guard.timer` lifts a maintenance mode that is older than 30
+minutes while no update is running, so the panel never stays on HTTP 503.
+
 Nothing has to be run by hand after an update. A failing step stops the update and the
 code is rolled back.
 

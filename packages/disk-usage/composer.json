@@ -1,0 +1,24 @@
+{
+    "name": "rhis/disk-usage",
+    "description": "Disk usage explorer for the Webhosting Panel: which folders, databases and mailboxes fill a website's disk space, with drill-down, for customers and admins.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rhis\\DiskUsage\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rhis\\DiskUsage\\DiskUsageServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

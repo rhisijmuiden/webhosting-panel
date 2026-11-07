@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Request or renew a wildcard Let's Encrypt certificate (<domain> and
+# *.<domain>) with a DNS-01 challenge at Cloudflare (certbot-dns-cloudflare).
+# Certbot's own timer renews it; the deploy hook reloads Nginx.
+#
+#   whp-cert-dns <domain>
+# Certificate name: whp-wildcard-<domain> (/etc/letsencrypt/live/whp-wildcard-<domain>/).
+# The Cloudflare API token is in /etc/webhosting-panel/ssl/cloudflare.ini (0600,
+# written by the panel agent, action ssl.cloudflare). Exit 0 when the
+# certificate is valid afterwards; on failure the reason is printed on stderr.
+set -euo pipefail
+[[ $# -eq 1 ]] || { sed -n '2,10p' "$0"; exit 2; }
+domain=${1,,}
+[[ $domain =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] || { echo "Invalid domain: $domain" >&2; exit 2; }
+creds=/etc/webhosting-panel/ssl/cloudflare.ini
+[[ -s $creds ]] || { echo "No Cloudflare API token on this server yet ($creds). Save the token in the panel under DNS & mail settings." >&2; exit 3; }
+if ! python3 -c 'import certbot_dns_cloudflare' 2>/dev/null; then
+  echo "The certbot Cloudflare plugin (python3-certbot-dns-cloudflare) is not installed. Update the panel to install it." >&2
+  exit 4
+fi
+email=$(grep -E '^WHP_EMAIL=' /etc/webhosting-panel/installer.env 2>/dev/null | cut -d= -f2- || true)
+args=(certonly --dns-cloudflare --dns-cloudflare-credentials "$creds"
+      --dns-cloudflare-propagation-seconds "${WHP_DNS_PROPAGATION:-30}"
+      --non-interactive --agree-tos --no-eff-email --key-type ecdsa
+      --cert-name "whp-wildcard-$domain" -d "$domain" -d "*.$domain" --keep-until-expiring)
+if [[ -n $email ]]; then args+=(--email "$email"); else args+=(--register-unsafely-without-email); fi
+[[ -n ${WHP_ACME_STAGING:-} ]] && args+=(--staging)
+log=/var/log/webhosting-panel/certbot.log
+install -d -m 0750 /var/log/webhosting-panel
+start=$(wc -l <"$log" 2>/dev/null || echo 0)
+if ! certbot "${args[@]}" >>"$log" 2>&1; then
+  # Give the panel the reason (DNS zone not in this token, rate limit, ...).
+  tail -n +"$((start + 1))" "$log" | grep -E 'Error|error|Detail|Problem|Type:|Unable|denied|forbidden' | tail -n 8 >&2 || true
+  exit 1
+fi
+test -r "/etc/letsencrypt/live/whp-wildcard-$domain/fullchain.pem"

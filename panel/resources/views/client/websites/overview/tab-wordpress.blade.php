@@ -14,9 +14,11 @@
 
         <div class="wp-links">
             @if ($o->has('files.browse'))<a href="{{ $o->url('files.browse', [$site, 'path' => $i->path]) }}">@include('client.websites.overview.icon', ['name' => 'folder']){{ __('Files') }}</a>@endif
-            <a href="{{ $o->url('wordpress.show', $i) }}"><x-icon name="refresh" />{{ __('Plugins & themes') }}</a>
+            <a href="{{ $o->url('wordpress.extensions.index', $i) ?? $o->url('wordpress.show', $i) }}"><x-icon name="apps" />{{ __('Plugins & themes') }}</a>
             <a href="{{ $o->url('wordpress.show', $i) }}"><x-icon name="key" />{{ __('Administrators') }}</a>
+            @if ($o->has('wp-hardening.show') && $o->allows('wp-hardening.customer_access'))<a href="{{ $o->url('wp-hardening.show', $i) }}"><x-icon name="shield" />{{ __('Security hardening') }}</a>@endif
             @if ($o->has('backups.index'))<a href="{{ $o->url('backups.index') }}"><x-icon name="backup" />{{ __('Backups') }}</a>@endif
+            @includeIf('wordpress::dbclean.link')
             <a href="{{ $i->url() }}" target="_blank" rel="noopener"><x-icon name="external" />{{ __('Open website') }}</a>
         </div>
 
@@ -51,6 +53,9 @@
                 </dl>
             </div>
         </div>
+        @includeIf('wordpress::mail.partials.domain-row', ['i' => $i, 'o' => $o])
+        @includeIf('wordpress::switches.compact', ['o' => $o, 'i' => $i])
     </div>
 @endforeach
 @includeIf('subdomains::staging.partials.wordpress-card', ['site' => $site])
+@includeIf('wordpress::smart-updates.partials.site-card', ['site' => $site])
