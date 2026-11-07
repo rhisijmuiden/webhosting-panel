@@ -17,7 +17,7 @@ The job:
    of the page changed than the threshold allows, it rolls back to the
    snapshot and takes a last screenshot to show that the site looks as before.
 
-Screenshots: headless Chromium as the unprivileged user whp-shot in a
+Screenshots: headless Chromium (chromium-headless-shell) as the unprivileged user whp-shot in a
 sandboxed transient unit (installer module 58-wp-visual.sh). The site is
 asked of this server itself (host-resolver rules), like the health check.
 Comparison with Pillow (python3-pil): a grid of 16x16 blocks, a block counts
@@ -46,7 +46,8 @@ from . import wordpress as wpa
 
 VISUAL = Path(paths.STATE_DIR) / "wordpress" / "visual"
 WORK = Path(paths.STATE_DIR) / "wordpress" / "shots"
-CHROMIUM = os.environ.get("WHP_CHROMIUM", "/usr/bin/chromium")
+CHROMIUM = os.environ.get("WHP_CHROMIUM") or next(
+    (p for p in ("/usr/bin/chromium-headless-shell", "/usr/bin/chromium") if os.path.exists(p)), "/usr/bin/chromium")
 SHOT_USER = "whp-shot"
 WORKER = Path(__file__).resolve().parent.parent / "shot_worker.py"
 SYSTEMD_RUN = "/usr/bin/systemd-run"
@@ -148,7 +149,7 @@ def shoot(url, viewport, out):
     try:
         shutil.chown(work, SHOT_USER, SHOT_USER)
         shot = work / "shot.png"
-        argv = [SYSTEMD_RUN, "--quiet", "--wait", "--collect", "--pipe",
+        argv = [SYSTEMD_RUN, "--quiet", "--wait", "--collect", "--pipe", "--expand-environment=no",
                 f"--uid={SHOT_USER}", f"--gid={SHOT_USER}",
                 "-p", "ProtectSystem=strict", "-p", f"ReadWritePaths={work}", "-p", "ProtectHome=yes",
                 "-p", "PrivateTmp=yes", "-p", "PrivateDevices=yes", "-p", "NoNewPrivileges=yes",
