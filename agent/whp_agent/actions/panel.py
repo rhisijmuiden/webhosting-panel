@@ -1,6 +1,7 @@
 """Panel version, update check, update and release channel."""
 
 import os
+import time
 
 from .. import paths
 from .. import validate as v
@@ -10,6 +11,12 @@ from ..run import run
 
 CHANNELS = {"production": "main", "test": "test"}
 UPDATE_SCRIPT = os.path.join(paths.ROOT_DIR, "agent", "scripts", "update.sh")
+# The updater runs in its own systemd unit, outside the agent's cgroup: an agent
+# restart (needrestart after apt, a crash, the update itself) or a timeout here
+# must never kill it halfway, which left the panel in maintenance mode (HTTP 503).
+UPDATE_UNIT = "whp-panel-update"
+UPDATE_LOG = os.path.join(paths.LOG_DIR, "panel-update.log")
+UPDATE_TIMEOUT = 3 * 3600
 
 
 def git(*args, timeout=60, check=True):
@@ -101,15 +108,53 @@ def check_update(params):
     }
 
 
+def update_running():
+    return run(["systemctl", "is-active", "--quiet", UPDATE_UNIT + ".service"], check=False).returncode == 0
+
+
+def update_argv(branch):
+    return [
+        "systemd-run", "--wait", "--collect", "--quiet", "--unit", UPDATE_UNIT,
+        "--description", f"Webhosting Panel update ({branch})",
+        "--property", "UMask=0022",
+        "--property", f"StandardOutput=truncate:{UPDATE_LOG}",
+        "--property", f"StandardError=append:{UPDATE_LOG}",
+        f"--setenv=WHP_ROOT={paths.ROOT_DIR}", f"--setenv=WHP_CONFIG_DIR={paths.CONFIG_DIR}",
+        "--setenv=PATH=" + "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "--setenv=LANG=C.UTF-8",
+        "/bin/bash", UPDATE_SCRIPT, branch,
+    ]
+
+
+def _update_log_lines():
+    try:
+        with open(UPDATE_LOG, errors="replace") as fh:
+            return fh.read().splitlines()
+    except FileNotFoundError:
+        return []
+
+
 def _run_update(channel, log):
     branch = CHANNELS[channel]
     log(f"Updating to channel {channel} (branch {branch})")
-    proc = run(["/bin/bash", UPDATE_SCRIPT, branch], timeout=1800, check=False,
-               env={"WHP_ROOT": paths.ROOT_DIR, "WHP_CONFIG_DIR": paths.CONFIG_DIR})
-    for line in (proc.stdout + proc.stderr).splitlines():
+    if update_running():
+        raise ActionError("conflict", "An update is already running; wait for it to finish.")
+    started = time.time()
+    try:
+        proc = run(update_argv(branch), timeout=UPDATE_TIMEOUT, check=False)
+    except ActionError as exc:
+        if exc.code != "timeout":
+            raise
+        for line in _update_log_lines():
+            log(line)
+        raise ActionError("timeout", "The update is still running in the background; check again later.")
+    for line in _update_log_lines():
         log(line)
+    if proc.stderr.strip():
+        log(proc.stderr.strip())
     if proc.returncode != 0:
         raise ActionError("command_failed", f"Update failed with exit code {proc.returncode}")
+    log(f"Finished in {int(time.time() - started)} s")
     return {"channel": channel, "version": local_version(), "commit": git("rev-parse", "--short", "HEAD")}
 
 
