@@ -53,6 +53,7 @@
                 </dl>
             </div>
         </div>
+        @includeIf('wordpress::mail.partials.domain-row', ['i' => $i, 'o' => $o])
         @includeIf('wordpress::switches.compact', ['o' => $o, 'i' => $i])
     </div>
 @endforeach

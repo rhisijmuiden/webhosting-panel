@@ -54,8 +54,10 @@ WHP_SITE = "/usr/local/sbin/whp-site"
 MARIADB = "mariadb"
 MARIADB_DUMP = "mariadb-dump"
 DB_LABEL = "clone"
-# Never copied: caches that are rebuilt and would point at the old site.
+# Never copied: caches that are rebuilt and would point at the old site, and the
+# website mail settings of the source (wp.mail_*: a copy must not send as the original).
 EXCLUDES = ("wp-content/cache/*", "wp-content/et-cache/*", "wp-content/litespeed/*", "wp-content/upgrade/*",
+            "wp-content/mu-plugins/whp-mail.php", "wp-content/mu-plugins/whp-mail/",
             "administrator/cache/*", "cache/*", ".well-known/acme-challenge/")
 _LOCAL_DB_HOSTS = {"", "localhost", "127.0.0.1", "::1", "localhost:3306", "127.0.0.1:3306"}
 _JOOMLA_VAR = r"""(public\s+\${key}\s*=\s*)'((?:\\.|[^'\\])*)'(\s*;)"""

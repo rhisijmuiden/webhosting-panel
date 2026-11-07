@@ -166,3 +166,5 @@
     </x-ui.table>
     @endif
 </x-ui.card>
+
+@includeIf('wordpress::mail.partials.card', ['install' => $install, 'area' => $area])
