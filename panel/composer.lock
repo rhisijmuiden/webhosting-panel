@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "260864a5ead10af4f9fee6194e043cb5",
+    "content-hash": "85c627cd8048a148dbe32669a0bfb7ba",
     "packages": [
         {
             "name": "brick/math",
@@ -3433,6 +3433,39 @@
                 "proprietary"
             ],
             "description": "CRM API for the Webhosting Panel (/api/v1/crm): plans, customers, subscriptions, usage, signed webhooks, catalog and orders.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/cron",
+            "version": "dev-claude/project-thread-32u16i",
+            "dist": {
+                "type": "path",
+                "url": "../packages/cron",
+                "reference": "d3aa6ebfe011d31e04d3848ab6aecbd7183f3503"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Cron\\CronServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Cron\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Cron jobs for the Webhosting Panel: customers schedule commands, PHP scripts or URLs per website, run as the site user in its resource jail, with run history, output log and a mail when a job fails.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -9060,6 +9093,7 @@
         "rhis/backups": 20,
         "rhis/certificates": 20,
         "rhis/crm-api": 20,
+        "rhis/cron": 20,
         "rhis/dns-mail": 20,
         "rhis/domain-aliases": 20,
         "rhis/files": 20,

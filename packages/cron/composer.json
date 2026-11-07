@@ -1,0 +1,24 @@
+{
+    "name": "rhis/cron",
+    "description": "Cron jobs for the Webhosting Panel: customers schedule commands, PHP scripts or URLs per website, run as the site user in its resource jail, with run history, output log and a mail when a job fails.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rhis\\Cron\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rhis\\Cron\\CronServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
