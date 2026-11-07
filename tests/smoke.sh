@@ -118,6 +118,10 @@ echo "== git deployments"
 check "git, ssh-keygen and npm installed" bash -c "command -v git && command -v ssh-keygen && command -v npm"
 check "deploy, zero downtime switch, failed build, rollback, remove" python3 "$(dirname "$0")/git_smoke.py" site.test
 
+echo "== databases and phpMyAdmin"
+check "phpMyAdmin installed for sign-on only" bash -c "test -f /var/www/phpmyadmin/whp-sso.php && ! test -e /var/www/phpmyadmin/setup"
+check "databases, users, passwords and phpMyAdmin sign-on" python3 "$(dirname "$0")/db_smoke.py"
+
 echo "== mail"
 printf 'example.test OK\n' >>/etc/postfix/whp/virtual_domains
 printf 'info@example.test example.test/info/\n' >>/etc/postfix/whp/virtual_mailboxes

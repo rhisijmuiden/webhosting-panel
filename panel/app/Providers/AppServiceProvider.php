@@ -166,6 +166,7 @@ class AppServiceProvider extends ServiceProvider
                 'mail' => ['section' => 'Email & domains', 'order' => 200],
                 'domain-aliases' => ['section' => 'Email & domains', 'order' => 210],
                 'files' => ['section' => 'Files & data', 'order' => 290],
+                'databases' => ['section' => 'Files & data', 'order' => 295],
                 'backups' => ['section' => 'Files & data', 'order' => 300],
                 'shop' => ['section' => 'Account', 'order' => 400],
             ],
