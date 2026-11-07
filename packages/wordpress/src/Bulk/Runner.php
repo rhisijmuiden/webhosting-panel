@@ -59,7 +59,7 @@ final class Runner
     /** Move a run forward once. Returns true while there is still work to do. */
     public function advance(BulkRun $run): bool
     {
-        $lock = Cache::lock("wp-bulk-run:{$run->id}", 900);
+        $lock = Cache::lock("wp-bulk-run:{$run->id}", 1800);
         if (! $lock->get()) {
             return true;
         }
@@ -175,7 +175,15 @@ final class Runner
                 continue;
             } else {
                 $item->update(['status' => 'running', 'started_at' => now()]);
+                $began = microtime(true);
                 $this->record($item, $this->guard(fn () => $action->start($install, $run->options ?? [])));
+                $this->checkFailures($run);
+                // Slow work done here (not in an agent job): end this round so other queued work gets a turn.
+                if (microtime(true) - $began > 2) {
+                    return;
+                }
+
+                continue;
             }
             $this->checkFailures($run);
         }
