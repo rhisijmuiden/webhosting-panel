@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b2a05012e0ef0f08268d24d7dd7aa212",
+    "content-hash": "92406e3b843961931a8eadcc761e07f8",
     "packages": [
         {
             "name": "brick/math",
@@ -3943,6 +3943,39 @@
                 "proprietary"
             ],
             "description": "Security alerts for the Webhosting Panel: vulnerable WordPress core, plugins and themes and malware found on customer sites, a branded mail to the customer with the fix, and the admin security overview with customer risk ranking.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/waf",
+            "version": "dev-claude/project-thread-32u16i",
+            "dist": {
+                "type": "path",
+                "url": "../packages/waf",
+                "reference": "1cf2d5befd5984bb50b65ff55b1a45224f9d96ac"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Waf\\WafServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Waf\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Web application firewall for the Webhosting Panel: ModSecurity with the OWASP Core Rule Set per website (block, detect only, off), rule exceptions and attack events.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -9273,6 +9306,7 @@
         "rhis/site-logs": 20,
         "rhis/subdomains": 20,
         "rhis/vulnerabilities": 20,
+        "rhis/waf": 20,
         "rhis/web-rules": 20,
         "rhis/webapps": 20,
         "rhis/wordpress": 20,

@@ -300,6 +300,7 @@ plan step_php        module_php
 plan step_nginx      module_nginx
 plan step_web_rules  module_web_rules
 plan step_runtimes   module_runtimes
+plan step_waf        module_waf
 plan step_wp_visual  module_wp_visual
 if [[ $WHP_MAIL == yes ]]; then plan step_mail module_mail; fi
 plan step_antivirus  module_antivirus

@@ -31,6 +31,7 @@
         "rhis/site-logs": "@dev",
         "rhis/subdomains": "@dev",
         "rhis/vulnerabilities": "@dev",
+        "rhis/waf": "@dev",
         "rhis/web-rules": "@dev",
         "rhis/webapps": "@dev",
         "rhis/wordpress": "@dev",
