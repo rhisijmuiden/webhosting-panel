@@ -22,6 +22,9 @@
             </p>
         </div>
         <div class="actions">
+            @if ($item->copied_at !== null || in_array($item->status, ['copied', 'live', 'done'], true))
+                <a class="btn btn-primary" href="{{ route('admin.migration.wizard.show', $item) }}"><x-icon name="migrate" />{{ __('Migration wizard') }}</a>
+            @endif
             @if ($item->status === 'failed')
                 <form method="POST" action="{{ route('admin.migration.items.retry', $item) }}">@csrf<button class="btn btn-primary" type="submit"><x-icon name="refresh" />{{ __('Try again') }}</button></form>
             @endif
@@ -114,14 +117,8 @@
 
             @if ($item->status === 'copied')
                 <x-ui.card :title="__('Switch DNS')">
-                    <p class="small">{{ __('Test the website here first, for example by adding this server to your hosts file:') }}</p>
-                    <pre class="log" style="white-space:pre-wrap">{{ $serverIp ?: '<server-ip>' }}  {{ $item->domain }} www.{{ $item->domain }}</pre>
-                    <p class="small">{{ __('Sync again right before the switch, so the latest orders, posts and mail are here. The switch points web and mail to this server and copies the domain\'s own DNS records to Cloudflare.') }}</p>
-                    <form method="POST" action="{{ route('admin.migration.items.cutover', $item) }}" class="form">
-                        @csrf
-                        <label class="check"><input type="checkbox" name="confirm" value="1"><span>{{ __('I checked the copy and synced it just now') }}</span></label>
-                        <div><button class="btn btn-dark" type="submit"><x-icon name="globe" />{{ __('Switch DNS to this server') }}</button></div>
-                    </form>
+                    <p class="small">{{ __('The copy is ready. The migration wizard walks through the website, databases, mailboxes, SSL and every DNS record, and switches DNS in Cloudflare only after your final check.') }}</p>
+                    <div><a class="btn btn-dark" href="{{ route('admin.migration.wizard.show', $item) }}"><x-icon name="migrate" />{{ __('Start the migration wizard') }}</a></div>
                 </x-ui.card>
             @endif
 

@@ -73,6 +73,14 @@ final class DnsCutover
             $result['conflicts'] = count($plan->conflicts);
         }
 
+        $this->finish($item, $result);
+
+        return $result;
+    }
+
+    /** After the DNS change: request Let's Encrypt and mark the domain as live. */
+    public function finish(MigrationItem $item, array $result): void
+    {
         // Let's Encrypt as soon as DNS reaches this server; the retry timer keeps trying until then.
         try {
             $site = $this->agent->call('site.ssl', ['domain' => $item->domain], 300);
@@ -81,10 +89,8 @@ final class DnsCutover
         }
 
         $item->log('DNS switched to this server.', [], 'ok');
-        $item->update(['status' => 'live', 'cutover_at' => now(), 'result' => ($item->result ?? []) + ['dns' => $result]]);
+        $item->update(['status' => 'live', 'cutover_at' => now(), 'result' => array_merge($item->result ?? [], ['dns' => $result])]);
         ActivityLog::record('migration.dns_switched', $item->domain, ['mode' => $result['mode'], 'imported' => $result['imported']], $item->customer_id);
-
-        return $result;
     }
 
     /**

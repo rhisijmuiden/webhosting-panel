@@ -22,6 +22,7 @@ final class MigrationServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'migration');
         $this->loadJsonTranslationsFrom(__DIR__.'/../lang');
+        $this->loadJsonTranslationsFrom(__DIR__.'/../lang/wizard');
 
         if ($this->app->runningInConsole()) {
             $this->commands([TickCommand::class]);
@@ -36,6 +37,8 @@ final class MigrationServiceProvider extends ServiceProvider
         if (! $this->app->routesAreCached()) {
             Route::middleware(['web', 'auth', 'can:admin'])->prefix('admin/migration')->name('admin.migration.')
                 ->group(__DIR__.'/../routes/admin.php');
+            Route::middleware(['web', 'auth', 'can:admin'])->prefix('admin/migration')->name('admin.migration.')
+                ->group(__DIR__.'/../routes/wizard.php');
         }
         Menu::admin()->add('migration', 'Migration', 'admin.migration.index', icon: 'migrate', section: 'Server', order: 87,
             activePatterns: ['admin.migration.*']);
