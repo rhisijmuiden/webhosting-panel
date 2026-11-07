@@ -22,6 +22,7 @@ final class WordPressServiceProvider extends ServiceProvider
         $this->app->register(Switches\SwitchesServiceProvider::class);
         $this->app->register(Bulk\BulkServiceProvider::class);
         $this->app->register(SearchReplace\SearchReplaceServiceProvider::class);
+        $this->app->register(DbCleanup\DbCleanupServiceProvider::class);
     }
 
     public function boot(): void

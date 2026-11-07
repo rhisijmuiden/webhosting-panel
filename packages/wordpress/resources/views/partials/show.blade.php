@@ -146,6 +146,7 @@
 </section>
 
 @include('wordpress::search-replace.card')
+@include('wordpress::dbclean.card')
 
 <x-ui.card :title="__('Snapshots')" flush>
     @if (empty($snapshots))
