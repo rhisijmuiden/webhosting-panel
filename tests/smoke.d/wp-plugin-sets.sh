@@ -39,6 +39,8 @@ else
   check "WordPress with the set answers" bash -c "curl -s -H 'Host: setwp.test' http://127.0.0.1/ | grep -q generatepress"
   check "a bad source is refused before anything starts" bash -c '! $PS_AC apps.install "$(jq -c ".plugin_set.plugins[0].source = \"--exec=id\"" <<<"$PS_PARAMS")"'
   PS_ID=$(jq -r .result.id /tmp/plugin-set-job.json)
-  [[ -n $PS_ID && $PS_ID != null ]] && ps_job apps.remove "{\"domain\":\"setwp.test\",\"id\":\"$PS_ID\"}" >/dev/null || true
+  if [[ -n $PS_ID && $PS_ID != null ]]; then
+    ps_job apps.remove "{\"domain\":\"setwp.test\",\"id\":\"$PS_ID\"}" >/dev/null || true
+  fi
   whp-site remove setwp.test --json >/dev/null 2>&1 || true
 fi
