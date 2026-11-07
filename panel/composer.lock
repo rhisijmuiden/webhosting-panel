@@ -9069,6 +9069,7 @@
         "rhis/server-admin": 20,
         "rhis/subdomains": 20,
         "rhis/vulnerabilities": 20,
+        "rhis/web-rules": 20,
         "rhis/webapps": 20,
         "rhis/wordpress": 20
     },
