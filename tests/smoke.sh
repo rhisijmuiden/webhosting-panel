@@ -444,4 +444,10 @@ PY
   check "logrotate: systemd runs the generator first" bash -c 'systemctl cat logrotate.service | grep -q whp-site-logrotate'
 fi
 
+# Per-feature smoke tests (one file per feature keeps this file out of merge conflicts).
+for f in "$(dirname "$0")"/smoke.d/*.sh; do
+  # shellcheck source=/dev/null
+  [[ -f $f ]] && source "$f"
+done
+
 exit $fail

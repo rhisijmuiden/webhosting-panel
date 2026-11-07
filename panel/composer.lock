@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "2839d13deb5d770ea2ea32e1f66d2e02",
+    "content-hash": "a76a280e743bf8c47ab10a6e672bcbaa",
     "packages": [
         {
             "name": "brick/math",
@@ -3843,6 +3843,39 @@
                 "proprietary"
             ],
             "description": "Security alerts for the Webhosting Panel: vulnerable WordPress core, plugins and themes and malware found on customer sites, a branded mail to the customer with the fix, and the admin security overview with customer risk ranking.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/web-rules",
+            "version": "dev-claude/project-thread-32u16i",
+            "dist": {
+                "type": "path",
+                "url": "../packages/web-rules",
+                "reference": "dd24da96f7e15ae7a7ee98919ca47d9adf84977d"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\WebRules\\WebRulesServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\WebRules\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Redirects & access for the Webhosting Panel: per-site redirects, password-protected folders, custom error pages, force HTTPS, HSTS and IP/country blocking in Nginx through the agent.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -9104,6 +9137,7 @@
         "rhis/site-logs": 20,
         "rhis/subdomains": 20,
         "rhis/vulnerabilities": 20,
+        "rhis/web-rules": 20,
         "rhis/webapps": 20,
         "rhis/wordpress": 20
     },

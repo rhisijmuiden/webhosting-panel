@@ -33,6 +33,7 @@
             'sub' => $o->wordpress->sum(fn ($i) => $i->outdatedCount()) ? trans_choice(':count update|:count updates', $o->wordpress->sum(fn ($i) => $i->outdatedCount())) : __('Up to date'),
             'tone' => $o->wordpress->contains(fn ($i) => $i->isOutdated()) ? 'warn' : null])
         @include('client.websites.overview.tile', ['href' => $o->url('websites.show', [$site, 'tab' => 'hosting']).'#cache', 'icon' => 'gauge', 'label' => __('Speed & caching'), 'sub' => $site->page_cache ? __('Page cache on') : __('Page cache off')])
+        @includeIf('web-rules::tile', ['o' => $o, 'site' => $site, 'kind' => 'redirects'])
     </div>
 </div>
 <div class="tool-group">
@@ -40,6 +41,7 @@
     <div class="tool-grid">
         @include('client.websites.overview.tile', ['href' => $o->url('websites.show', [$site, 'tab' => 'hosting']).'#connection', 'icon' => 'lock', 'label' => __('SSL/TLS certificate'),
             'sub' => $site->ssl_status === 'active' ? __('Let\'s Encrypt, renewed automatically') : __('No valid certificate yet'), 'tone' => $site->ssl_status === 'active' ? 'ok' : 'warn'])
+        @includeIf('web-rules::tile', ['o' => $o, 'site' => $site, 'kind' => 'access'])
         @include('client.websites.overview.tile', ['href' => $o->has('protection.show') ? $o->url('protection.show', $o->isAdmin() ? [] : $site) : null, 'icon' => 'shield', 'label' => __('Login protection'), 'sub' => __('Block password guessing')])
         @include('client.websites.overview.tile', ['href' => $findings !== null ? $o->url('vulns.index') : null, 'icon' => 'firewall', 'label' => __('Security alerts'),
             'sub' => $findings ? trans_choice(':count problem|:count problems', $findings) : __('None found'), 'tone' => $findings ? (($o->security['malware'] ?? 0) ? 'bad' : 'warn') : 'ok'])
