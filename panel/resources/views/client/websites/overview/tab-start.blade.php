@@ -3,6 +3,7 @@
 <div class="tool-grid">
     @include('client.websites.overview.tile', ['href' => $o->has('files.browse') ? $o->url('files.browse', $site) : null, 'icon' => 'upload', 'label' => __('Upload files'), 'sub' => __('With the file manager or SFTP')])
     @include('client.websites.overview.tile', ['href' => $o->has('apps.create') ? $o->url('apps.create', ['app' => 'wordpress', 'website' => $site->id]) : null, 'icon' => 'wordpress', 'label' => 'WordPress', 'sub' => __('Ready in about a minute')])
+    @include('client.websites.overview.tile', ['href' => $o->has('wp-import.index') && $o->allows('wp-import.customer_access') ? $o->url('wp-import.index', ['website' => $site->id]) : null, 'icon' => 'migrate', 'label' => __('Move WordPress here'), 'sub' => __('Import a zip and database export')])
     @include('client.websites.overview.tile', ['href' => $o->has('apps.index') ? $o->url('apps.index', ['website' => $site->id]) : null, 'icon' => 'apps', 'label' => __('Other apps'), 'sub' => 'Joomla, Nextcloud'])
     @include('client.websites.overview.tile', ['href' => $o->has('git.create') && $o->allows('git.customer_access') ? $o->url('git.create', ['website' => $site->id]) : null, 'icon' => 'git', 'label' => __('Publish with Git'), 'sub' => 'GitHub, GitLab, Bitbucket, Gitea'])
     @include('client.websites.overview.tile', ['href' => $o->has('backups.index') ? $o->url('backups.index') : null, 'icon' => 'backup', 'label' => __('Restore a backup'), 'sub' => __('From your own backup or a backup location')])
