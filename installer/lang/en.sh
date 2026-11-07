@@ -70,3 +70,4 @@ EN_quota_device_busy="%s already contains a filesystem or is mounted; it is not 
 EN_step_web_rules="Redirects & access (GeoIP country database)"
 EN_geoip_ok="GeoIP country database ready (country blocking available)"
 EN_geoip_fail="GeoIP country database not available yet: country blocking stays off, the monthly timer tries again"
+EN_php_sessions_ok="Expired PHP sessions of the websites are removed every half hour"

@@ -70,3 +70,4 @@ L_quota_device_busy="%s bevat al een bestandssysteem of is gemount; er wordt nie
 L_step_web_rules="Redirects & toegang (GeoIP-landendatabase)"
 L_geoip_ok="GeoIP-landendatabase klaar (blokkeren per land beschikbaar)"
 L_geoip_fail="GeoIP-landendatabase nog niet beschikbaar: blokkeren per land blijft uit, de maandelijkse timer probeert het opnieuw"
+L_php_sessions_ok="Verlopen PHP-sessies van de websites worden elk halfuur opgeruimd"

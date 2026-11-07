@@ -35,6 +35,9 @@ module_php() {
   # WP-CLI for the WordPress toolkit and the app installer (pinned release, checksum checked).
   install_wp_cli
   printf '%s\n' "${PHP_VERSIONS[@]}" >"$WHP_STATE/php-versions"
+
+  # Expired PHP sessions of the websites (51-php-sessions.sh).
+  module_php_sessions
 }
 
 WP_CLI_VERSION=2.12.0
