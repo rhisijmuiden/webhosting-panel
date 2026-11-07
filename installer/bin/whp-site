@@ -32,6 +32,9 @@
 #                                    (serve the whole site from a Node.js or Python app on
 #                                     127.0.0.1:<port> instead of PHP; the panel's app manager
 #                                     sets this, apps on a sub path use a snippet instead)
+#   whp-site https <domain> force|allow
+#                                    (force: plain HTTP redirects to HTTPS, the default;
+#                                     allow: the site is also served over plain HTTP)
 #   whp-site remove <domain> [--keep-files]
 #   whp-site list [--json]
 #   whp-site show <domain>
@@ -255,6 +258,8 @@ site_apply() {
     SITE_BODY=$body
     # shellcheck disable=SC2016 # nginx variables
     SITE_HTTP_BODY='location / { return 301 https://$host$request_uri; }'
+    # Force HTTPS can be switched off per site (panel: Redirects & access).
+    [[ -f $SITES_DB/$SITE_DOMAIN.http-allowed ]] && SITE_HTTP_BODY=$body
     SITE_HTTPS_SERVER=$(render_string "$TPL/nginx/site-https.conf")
   else
     SITE_HTTP_BODY=$body
@@ -1110,6 +1115,8 @@ cmd_remove() {
     [[ -n $a && $keep == no ]] && { certbot delete --non-interactive --cert-name "$a" >>"$WHP_INSTALL_LOG" 2>&1 || true; }
   done < <(alias_lines "$domain")
   rm -f "$(alias_file "$domain")"
+  # Redirects & access (whp-agent webrules.apply): HSTS entry, password files, HTTP flag.
+  rm -rf "/etc/nginx/whp/hsts/$domain.conf" "/etc/nginx/whp/auth/$domain" "$SITES_DB/$domain.http-allowed"
   userdel "$SITE_USER" 2>/dev/null || true
   rm -f "$(site_file "$domain")"
   ok "$(t site_removed "$domain")"
@@ -1131,6 +1138,18 @@ cmd_list() {
   return 0
 }
 
+# Force HTTPS (default) or also serve the site over plain HTTP.
+cmd_https() {
+  local domain=${1:-} mode=${2:-}
+  [[ -n $domain && $mode =~ ^(force|allow)$ ]] || usage
+  site_load "$domain"
+  local flag=$SITES_DB/$domain.http-allowed
+  if [[ $mode == allow ]]; then install -m 0640 /dev/null "$flag"; else rm -f "$flag"; fi
+  site_apply
+  ok "$domain https $mode"
+  if [[ $JSON == yes ]]; then print_site "$domain" 3>&1 | jq --arg m "$mode" '. + {force_https: ($m == "force")}' >&3; fi
+}
+
 cmd=${1:-}; shift || true
 case $cmd in
   add) cmd_add "$@" ;;
@@ -1143,6 +1162,7 @@ case $cmd in
   slice) cmd_slice "$@" ;;
   phpini) cmd_phpini "$@" ;;
   proxy) cmd_proxy "$@" ;;
+  https) cmd_https "$@" ;;
   suspend) cmd_suspend "${1:-}" yes ;;
   unsuspend) cmd_suspend "${1:-}" no ;;
   remove) cmd_remove "$@" ;;
