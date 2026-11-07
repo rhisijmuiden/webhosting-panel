@@ -171,8 +171,8 @@ def render_nginx(installs):
 
 MU_HEAD = r"""<?php
 /**
- * Plugin Name: Webhosting Panel security hardening
- * Description: Security measures switched on in the Webhosting Panel. Managed by the panel: changes to this file are overwritten.
+ * Plugin Name: Dekwerk security hardening
+ * Description: Security measures switched on in Dekwerk. Managed by Dekwerk: changes to this file are overwritten.
  */
 
 defined( 'ABSPATH' ) || exit;

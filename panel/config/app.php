@@ -13,7 +13,9 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Laravel'),
+    // The product name (config/panel.php brand.name). APP_NAME in .env only seeds
+    // cookie and cache prefixes, so changing it there would log everyone out.
+    'name' => 'Dekwerk',
 
     /*
     |--------------------------------------------------------------------------

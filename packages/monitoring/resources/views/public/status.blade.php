@@ -17,7 +17,7 @@ body { background: var(--surface); }
 </style>
 <header class="st-top">
     <div class="in">
-        <img src="{{ asset('brand/rhis-logo-wit.svg') }}" alt="{{ config('app.name') }}">
+        <img src="{{ asset(\App\Support\Brand::logo()) }}" alt="{{ \App\Support\Brand::name() }}">
         <div style="display:flex;align-items:center;gap:14px"><span class="st-label">{{ __('Status') }}</span>@include('partials.locale-switch')</div>
     </div>
 </header>

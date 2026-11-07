@@ -1,6 +1,6 @@
 <?php
 /**
- * WordPress database cleanup for the Webhosting Panel.
+ * WordPress database cleanup for Dekwerk.
  *
  * Run by whp-agent as the site user:  wp eval-file - <preview|clean> '<options json>'
  * (this file comes in on stdin, WordPress is loaded with --skip-plugins --skip-themes).

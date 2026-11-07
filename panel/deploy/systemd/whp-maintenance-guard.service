@@ -1,5 +1,5 @@
 [Unit]
-Description=Webhosting Panel: never leave the panel in maintenance mode after a broken update
+Description=Dekwerk: never leave the panel in maintenance mode after a broken update
 
 [Service]
 Type=oneshot

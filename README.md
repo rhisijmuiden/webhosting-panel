@@ -1,4 +1,6 @@
-# Webhosting Panel
+<img src="brand/dekwerk/logo/dekwerk-logo.svg" alt="Dekwerk" height="56">
+
+# Dekwerk
 
 A hosting control panel for Debian 13, built to replace Plesk: a fast, secure web
 and mail server (Nginx and PHP-FPM, MariaDB, mail, Let's Encrypt, CrowdSec), with
@@ -22,7 +24,7 @@ See [docs/installer.md](docs/installer.md).
 | `panel/` | Laravel admin and client panel ([README](panel/README.md)) |
 | `agent/` | `whp-agent`, the root daemon that applies changes for the panel |
 | `packages/` | Panel modules (DNS and mail, backups, CRM API) |
-| `brand/` | RHIS house style used by the panel |
+| `brand/` | Dekwerk house style (`brand/dekwerk`), plus the RHIS style for reference |
 | `docs/` | Architecture and API documentation |
 
 How the parts talk to each other: [docs/architecture/interfaces.md](docs/architecture/interfaces.md).

@@ -30,7 +30,7 @@ panel_env() {
   if [[ ! -f $f ]]; then
     install -m 0640 -o root -g whp /dev/null "$f"
     cat >"$f" <<ENV
-APP_NAME="Webhosting Panel"
+APP_NAME="Dekwerk"
 APP_ENV=production
 APP_KEY=base64:$(head -c 32 /dev/urandom | base64)
 APP_DEBUG=false

@@ -18,8 +18,19 @@ return [
     // Admins must set up two-factor authentication before they can use the panel.
     'require_admin_2fa' => (bool) env('WHP_REQUIRE_ADMIN_2FA', true),
 
+    // The brand, in one place. App\Support\Brand reads it; views get $brandName and $provider.
     'brand' => [
-        'name' => env('APP_NAME', 'Webhosting Panel'),
+        // The software.
+        'name' => 'Dekwerk',
+        // Label next to the logo in the admin menu.
         'product' => 'Hosting',
+        // The hosting company customers deal with. Admins can change it under
+        // Tools & settings > Branding; this is the default.
+        'provider' => env('WHP_PROVIDER_NAME', env('WHP_BRAND', 'RHIS')),
+        // Paths under public/.
+        'logo' => 'brand/logo-wit.svg',
+        'logo_dark' => 'brand/logo.svg',
+        'icon' => 'brand/icon.svg',
+        'favicon' => 'brand/favicon.svg',
     ],
 ];

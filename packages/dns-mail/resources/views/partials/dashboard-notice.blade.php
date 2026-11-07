@@ -8,8 +8,8 @@
 @foreach ($onboardings as $o)
     @if ($o->isActive())
         <div class="alert alert-ok" role="status"><x-icon name="check" /><div>
-            <strong>{{ __('DNS for :domain is now live at RHIS', ['domain' => $o->domain->domain]) }}</strong>
-            <p class="small">{{ __('The nameservers point to the RHIS Cloudflare network. We keep your website and mail records up to date.') }}
+            <strong>{{ __('DNS for :domain is now live at :provider', ['provider' => \App\Support\Brand::provider(), 'domain' => $o->domain->domain]) }}</strong>
+            <p class="small">{{ __('The nameservers point to the :provider Cloudflare network. We keep your website and mail records up to date.', ['provider' => \App\Support\Brand::provider()]) }}
                 <a href="{{ route('client.mail.domains.connect', $o->domain->id) }}">{{ __('View') }}</a></p>
         </div></div>
     @else

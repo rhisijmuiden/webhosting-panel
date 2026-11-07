@@ -1,7 +1,7 @@
 <?php
 /**
- * Plugin Name: Webhosting Panel login
- * Description: One-click login from the Webhosting Panel. Installed and updated by the panel; links are single use and expire after two minutes.
+ * Plugin Name: Dekwerk login
+ * Description: One-click login from Dekwerk. Installed and updated by the panel; links are single use and expire after two minutes.
  * Version: 1.0.0
  */
 

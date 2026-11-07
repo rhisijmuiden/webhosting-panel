@@ -26,9 +26,9 @@ class DnsLiveNotification extends Notification
         $url = route('client.mail.domains.show', [$this->mailDomainId, 'tab' => 'dns']);
 
         return (new MailMessage())
-            ->subject(__('DNS for :domain is now live at RHIS', ['domain' => $this->domain]))
+            ->subject(__('DNS for :domain is now live at :provider', ['provider' => \App\Support\Brand::provider(), 'domain' => $this->domain]))
             ->greeting(__('Good news!'))
-            ->line(__('The nameservers of :domain now point to the RHIS Cloudflare network. From now on we keep the DNS records for your website and mail up to date for you.', ['domain' => $this->domain]))
+            ->line(__('The nameservers of :domain now point to the :provider Cloudflare network. From now on we keep the DNS records for your website and mail up to date for you.', ['provider' => \App\Support\Brand::provider(), 'domain' => $this->domain]))
             ->line(__('Nameservers: :ns', ['ns' => implode(', ', $this->nameServers)]))
             ->line(__('You can see and change your records in the client portal.'))
             ->action(__('Open DNS records'), $url)

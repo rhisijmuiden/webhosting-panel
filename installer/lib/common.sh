@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Shared helpers for the Webhosting Panel installer.
+# Shared helpers for the Dekwerk installer.
 # Sourced by install.sh and by the helper CLIs in installer/bin.
 
 WHP_CODE_DIR=${WHP_CODE_DIR:-/opt/webhosting-panel}

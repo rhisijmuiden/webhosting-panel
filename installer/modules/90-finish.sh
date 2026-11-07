@@ -9,7 +9,7 @@ module_finish() {
 
   install -m 0600 /dev/null "$summary"
   {
-    echo "Webhosting Panel $version - $what $(date '+%F %T %Z')"
+    echo "Dekwerk $version - $what $(date '+%F %T %Z')"
     echo
     echo "Hostname      $WHP_HOSTNAME"
     echo "Panel         https://$WHP_HOSTNAME:8443"

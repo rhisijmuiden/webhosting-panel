@@ -13,12 +13,12 @@
 @if ($onboarding?->isPending())
     <div class="alert alert-warn" role="status"><x-icon name="refresh" /><div>
         <strong>{{ __('Waiting for the new nameservers') }}</strong>
-        <p class="small">{{ __('Your records are ready at RHIS Cloudflare. They go live once the nameservers at your registrar point to Cloudflare.') }}</p>
+        <p class="small">{{ __('Your records are ready at :provider Cloudflare. They go live once the nameservers at your registrar point to Cloudflare.', ['provider' => \App\Support\Brand::provider()]) }}</p>
         <a class="btn btn-sm" href="{{ $r('connect') }}">{{ __('Continue the DNS wizard') }}</a>
     </div></div>
 @elseif ($onboarding?->isActive() && $onboarding->activated_at?->gt(now()->subDays(7)))
     <div class="alert alert-ok" role="status"><x-icon name="check" /><div>
-        <strong>{{ __('Your DNS is now live at RHIS Cloudflare') }}</strong>
+        <strong>{{ __('Your DNS is now live at :provider Cloudflare', ['provider' => \App\Support\Brand::provider()]) }}</strong>
         <p class="small">{{ __('Since :date. Records for your website and mail are kept up to date automatically.', ['date' => $onboarding->activated_at->isoFormat('LLL')]) }}</p>
     </div></div>
 @endif
@@ -26,7 +26,7 @@
 @if ($hasCloudflare && $domain->canOnboard() && ! $onboarding?->isPending())
     <x-ui.card>
         <div class="actions" style="justify-content:space-between">
-            <div><h2 style="margin:0">{{ __('Let RHIS run your DNS') }}</h2>
+            <div><h2 style="margin:0">{{ __('Let :provider run your DNS', ['provider' => \App\Support\Brand::provider()]) }}</h2>
                 <p class="muted small" style="margin:4px 0 0">{{ __('Keep your domain at your registrar and only change the nameservers. We then set every record for your website and mail automatically, on the fast Cloudflare network.') }}</p></div>
             <a class="btn btn-primary" href="{{ $r('connect') }}"><x-icon name="cloud" />{{ __('Start the DNS wizard') }}</a>
         </div>

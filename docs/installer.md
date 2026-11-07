@@ -3,7 +3,7 @@
 *Nederlands: [installer.nl.md](installer.nl.md)*
 
 The installer turns a fresh **Debian 13 (Trixie)** server (bare metal or VM) into a
-secure, fast hosting server for the Webhosting Panel. It is safe to run again:
+secure, fast hosting server for Dekwerk. It is safe to run again:
 managed files are rewritten, data and secrets are kept.
 
 ## Install

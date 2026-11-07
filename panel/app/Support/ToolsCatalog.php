@@ -77,7 +77,7 @@ class ToolsCatalog
             ],
             'panel' => [
                 ['Updates & release channel', 'admin.system.index', 'Version, updates and the production/test switch'],
-                ['CRM API', 'admin.crm-api.index', 'Tokens for the RHIS CRM and billing'],
+                ['CRM API', 'admin.crm-api.index', 'Tokens for your CRM and billing'],
                 ['Activity log', 'admin.activity.index', 'Who changed what, and when'],
             ],
             'account' => [

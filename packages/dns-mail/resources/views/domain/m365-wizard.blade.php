@@ -10,7 +10,7 @@
     <x-ui.card>
         <div class="actions" style="justify-content:space-between">
             <div><h2 style="margin:0">{{ __('No Microsoft 365 yet?') }}</h2>
-                <p class="muted small" style="margin:4px 0 0">{{ __('Order your licences through RHIS: set up for you, one invoice, and help when you need it.') }}@if ($m365Price) <strong>{{ $m365Price }}</strong>@endif</p></div>
+                <p class="muted small" style="margin:4px 0 0">{{ __('Order your licences through :provider: set up for you, one invoice, and help when you need it.', ['provider' => \App\Support\Brand::provider()]) }}@if ($m365Price) <strong>{{ $m365Price }}</strong>@endif</p></div>
             <a class="btn btn-primary" href="{{ $m365OrderUrl }}" target="_blank" rel="noopener">{{ __('Order Microsoft 365') }}<x-icon name="external" /></a>
         </div>
     </x-ui.card>

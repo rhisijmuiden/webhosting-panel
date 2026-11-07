@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# whp-backup: backup engine of Webhosting Panel.
+# whp-backup: backup engine of Dekwerk.
 #
 # Wraps restic (encrypted, deduplicated snapshots) and rclone (transport to
 # SFTP/SCP, FTP, FTPS, OneDrive or a local/mounted path). Every target is one
@@ -1361,7 +1361,7 @@ cmd_status() {
 
 usage() {
 	cat <<'EOF'
-whp-backup - backups for Webhosting Panel (restic + rclone)
+whp-backup - backups for Dekwerk (restic + rclone)
 
 Usage: whp-backup [--json] [--quiet] <command> [options]
 

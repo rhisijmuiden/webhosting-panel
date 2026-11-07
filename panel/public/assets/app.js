@@ -1,4 +1,4 @@
-/* Webhosting Panel UI behaviour. Loaded before Alpine, so components exist when it starts. */
+/* Dekwerk UI behaviour. Loaded before Alpine, so components exist when it starts. */
 (function () {
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || '';
   let i18n = null;

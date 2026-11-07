@@ -1,7 +1,7 @@
 @php
-    $font = "font-family:Archivo,'Segoe UI',Helvetica,Arial,sans-serif;";
-    $c = ['ink' => '#14213D', 'muted' => '#4F5B73', 'line' => '#DCE1EB', 'soft' => '#F6F7FB', 'coral' => '#FF6B57',
-        'link' => '#B8392A', 'ok' => '#1C8A57', 'okbg' => '#E7F6EE', 'warn' => '#A86B00', 'warnbg' => '#FFF6E0', 'bad' => '#C23434', 'badbg' => '#FDECEC',
+    $font = "font-family:Lexend,'Segoe UI',Helvetica,Arial,sans-serif;";
+    $c = ['ink' => '#0A2348', 'muted' => '#4D607C', 'line' => '#DFE7F0', 'soft' => '#F6F9FC', 'coral' => '#3FA9F5',
+        'link' => '#0F6CB5', 'ok' => '#1C8A57', 'okbg' => '#E7F6EE', 'warn' => '#A86B00', 'warnbg' => '#FFF6E0', 'bad' => '#C23434', 'badbg' => '#FDECEC',
         'blue' => '#2E5AAC', 'bluebg' => '#EAF2FF'];
     $v = $r['visitors'];
     $up = $r['uptime'];
@@ -115,17 +115,17 @@
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;{{ $font }}color:{{ $c['ink'] }}">
 
     {{-- Header --}}
-    <tr><td style="background:#14213D;border-radius:16px 16px 0 0;padding:28px 32px 24px">
+    <tr><td style="background:#0A2348;border-radius:16px 16px 0 0;padding:28px 32px 24px">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-            <td><img src="{{ isset($message) ? $message->embed($logo) : asset('brand/rhis-logo-wit.svg') }}" width="96" height="34" alt="RHIS" style="display:block;border:0"></td>
-            <td align="right" style="{{ $font }}font-size:12px;color:#9CC3FF;letter-spacing:.08em;text-transform:uppercase">{{ __('Monthly report') }} · {{ $monthName }}</td>
+            <td><img src="{{ isset($message) ? $message->embed($logo) : asset(\App\Support\Brand::logo()) }}" width="132" height="34" alt="{{ config('panel.brand.name') }}" style="display:block;border:0"></td>
+            <td align="right" style="{{ $font }}font-size:12px;color:#8CCBFA;letter-spacing:.08em;text-transform:uppercase">{{ __('Monthly report') }} · {{ $monthName }}</td>
         </tr></table>
     </td></tr>
     <tr><td style="height:4px;background:{{ $c['coral'] }};font-size:0;line-height:0">&nbsp;</td></tr>
 
     {{-- Intro --}}
     <tr><td style="background:#FFFFFF;padding:32px 32px 8px">
-        <h1 style="margin:0 0 16px;{{ $font }}font-size:28px;line-height:1.2;font-weight:800;font-stretch:125%;color:{{ $c['ink'] }}">{{ __('Your hosting in :month', ['month' => $monthName]) }}</h1>
+        <h1 style="margin:0 0 16px;{{ $font }}font-size:28px;line-height:1.2;font-weight:800;color:{{ $c['ink'] }}">{{ __('Your hosting in :month', ['month' => $monthName]) }}</h1>
         <p style="margin:0 0 12px;font-size:16px;line-height:1.6">{{ __('Hello :name,', ['name' => $customer->name]) }}</p>
         <p style="margin:0 0 8px;font-size:16px;line-height:1.6;color:{{ $c['muted'] }}">
             {{ __('Here is what your hosting did for you last month.') }}
@@ -281,8 +281,8 @@
     </td></tr>
 
     {{-- Footer --}}
-    <tr><td style="background:#14213D;border-radius:0 0 16px 16px;padding:24px 32px">
-        <p style="margin:0;font-size:13px;line-height:1.6;color:#C9D3E6">{{ __('You receive this report once a month because you host your website with :app.', ['app' => config('app.name')]) }}
-            <a href="{{ $settingsUrl }}" style="color:#9CC3FF">{{ __('Change who receives it, or stop it') }}</a></p>
+    <tr><td style="background:#0A2348;border-radius:0 0 16px 16px;padding:24px 32px">
+        <p style="margin:0;font-size:13px;line-height:1.6;color:#C6D5E8">{{ __('You receive this report once a month because you host your website with :app.', ['app' => config('app.name')]) }}
+            <a href="{{ $settingsUrl }}" style="color:#8CCBFA">{{ __('Change who receives it, or stop it') }}</a></p>
     </td></tr>
 </table>

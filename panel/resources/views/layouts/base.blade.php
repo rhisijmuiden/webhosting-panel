@@ -3,12 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#14213D">
+    <meta name="theme-color" content="#0A2348">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="robots" content="noindex, nofollow">
-    <title>{{ $title ? $title.' · ' : '' }}{{ config('app.name') }}</title>
+    <title>{{ $title ? $title.' · ' : '' }}{{ \App\Support\Brand::name() }}</title>
     <link rel="icon" href="{{ asset('brand/favicon.svg') }}" type="image/svg+xml">
     <link rel="alternate icon" href="{{ asset('favicon.ico') }}">
+    <link rel="apple-touch-icon" href="{{ asset('brand/apple-touch-icon.png') }}">
     <link rel="stylesheet" href="{{ asset('assets/app.css') }}?v={{ $assetVersion }}">
     <link rel="stylesheet" href="{{ asset('assets/mobile.css') }}?v={{ $assetVersion }}">
     @foreach (\App\Support\PanelAssets::styles() as $style)

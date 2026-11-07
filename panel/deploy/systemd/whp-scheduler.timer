@@ -1,5 +1,5 @@
 [Unit]
-Description=Run the Webhosting Panel scheduler every minute
+Description=Run the Dekwerk scheduler every minute
 
 [Timer]
 OnCalendar=*-*-* *:*:00

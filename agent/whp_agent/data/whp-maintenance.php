@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: Maintenance mode (Webhosting Panel)
+ * Plugin Name: Maintenance mode (Dekwerk)
  * Description: Visitors see a maintenance page while this file exists. Logged-in editors and administrators see the website as usual. Managed by the hosting panel: switch it off there (WordPress > Quick switches), or delete this file.
  * Version: 1.0
  */

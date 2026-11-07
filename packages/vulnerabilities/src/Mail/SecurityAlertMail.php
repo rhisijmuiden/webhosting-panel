@@ -54,7 +54,7 @@ class SecurityAlertMail extends Mailable
                 'settingsUrl' => route('client.vulns.index').'#notifications',
                 'fixUrl' => fn (Finding $f) => $this->fixUrl($f),
                 'copyrights' => $this->findings->pluck('copyright')->filter()->unique()->values(),
-                'logo' => dirname(__DIR__, 2).'/resources/mail/rhis-logo-wit.png',
+                'logo' => dirname(__DIR__, 2).'/resources/mail/logo-wit.png',
             ],
         );
     }

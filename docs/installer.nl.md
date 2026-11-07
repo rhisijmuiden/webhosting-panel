@@ -3,7 +3,7 @@
 *English: [installer.md](installer.md)*
 
 De installer maakt van een verse **Debian 13 (Trixie)**-server (fysiek of VM) een
-veilige, snelle hostingserver voor het Webhosting Panel. Opnieuw draaien is veilig:
+veilige, snelle hostingserver voor Dekwerk. Opnieuw draaien is veilig:
 beheerde bestanden worden herschreven, data en wachtwoorden blijven bewaard.
 
 ## Installeren

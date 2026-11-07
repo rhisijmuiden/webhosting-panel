@@ -40,7 +40,7 @@
                 <x-ui.field name="tlsrpt_rua" type="email" :label="__('TLS reports to')" :value="$values['tlsrpt_rua']" placeholder="tls-reports@rhis.nl" :help="__('Other mail servers report delivery problems with encryption here (TLS-RPT).')" />
             </div>
         </x-ui.card>
-        <x-ui.card :title="__('Microsoft 365 through RHIS')">
+        <x-ui.card :title="__('Microsoft 365 through :provider', ['provider' => \App\Support\Brand::provider()])">
             <p class="muted small">{{ __('Shown in the Microsoft 365 wizard, so customers can order licences from you.') }}</p>
             <div class="form-grid">
                 <x-ui.field name="m365_order_url" type="url" :label="__('Order page')" :value="$values['m365_order_url']" placeholder="https://rhis.nl/shop/microsoft-365" />

@@ -1,4 +1,6 @@
-# Webhosting Panel
+<img src="brand/dekwerk/logo/dekwerk-logo.svg" alt="Dekwerk" height="56">
+
+# Dekwerk
 
 Eigen hostingpanel voor Debian 13: een snelle, veilige web- en mailserver met een
 beheer- en klantpanel, gekoppeld aan het RHIS-CRM.

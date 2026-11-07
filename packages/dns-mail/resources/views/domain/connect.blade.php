@@ -8,16 +8,16 @@
     $old = collect($o?->original_name_servers ?? [])->diff($assigned);
     $step = fn (bool $done, bool $now) => $done ? 'is-done' : ($now ? 'is-current' : 'is-todo');
 @endphp
-<x-dynamic-component :component="'layouts.' . $area" :title="__('Move DNS to RHIS')">
+<x-dynamic-component :component="'layouts.' . $area" :title="__('Move DNS to :provider', ['provider' => \App\Support\Brand::provider()])">
     <div class="page-head">
         <div>
             <div class="crumbs"><a href="{{ route($area . '.mail.domains.index') }}">{{ $area === 'admin' ? __('Domains & mail') : __('Mail & DNS') }}</a>
                 / <a href="{{ $r('show', ['tab' => 'dns']) }}">{{ $domain->domain }}</a></div>
-            <h1>{{ __('Move DNS to RHIS') }}</h1>
-            <p class="sub">{{ __('Keep your domain where it is registered, and let RHIS run its DNS on the Cloudflare network. We then set every record for your website and mail for you.') }}</p>
+            <h1>{{ __('Move DNS to :provider', ['provider' => \App\Support\Brand::provider()]) }}</h1>
+            <p class="sub">{{ __('Keep your domain where it is registered, and let :provider run its DNS on the Cloudflare network. We then set every record for your website and mail for you.', ['provider' => \App\Support\Brand::provider()]) }}</p>
         </div>
         <div class="actions">
-            @if ($live)<x-ui.pill status="ok">{{ __('Live at RHIS') }}</x-ui.pill>
+            @if ($live)<x-ui.pill status="ok">{{ __('Live at :provider', ['provider' => \App\Support\Brand::provider()]) }}</x-ui.pill>
             @elseif ($started)<x-ui.pill status="warn">{{ __('Waiting for nameservers') }}</x-ui.pill>@endif
         </div>
     </div>
@@ -25,12 +25,12 @@
     @include('dns-mail::partials.warnings')
 
     @if (! $hasCloudflare)
-        <div class="alert alert-warn" role="status"><x-icon name="info" /><div>{{ __('Cloudflare is not connected to the panel yet. Contact RHIS.') }}</div></div>
+        <div class="alert alert-warn" role="status"><x-icon name="info" /><div>{{ __('Cloudflare is not connected to the panel yet. Contact :provider.', ['provider' => \App\Support\Brand::provider()]) }}</div></div>
     @endif
 
     @if ($live)
         <div class="alert alert-ok" role="status"><x-icon name="check" /><div>
-            <strong>{{ __('Your DNS is now live at RHIS Cloudflare') }}</strong>
+            <strong>{{ __('Your DNS is now live at :provider Cloudflare', ['provider' => \App\Support\Brand::provider()]) }}</strong>
             <p class="small">{{ __('Since :date. Records for your website and mail are kept up to date automatically. You can add your own records on the DNS tab.', ['date' => $o->activated_at?->isoFormat('LLL')]) }}</p>
         </div></div>
     @endif
@@ -38,7 +38,7 @@
     <x-ui.card>
         <ol class="steps">
             <li class="{{ $step($started, ! $started) }}">
-                <h3>{{ __('Add your domain to RHIS Cloudflare') }}</h3>
+                <h3>{{ __('Add your domain to :provider Cloudflare', ['provider' => \App\Support\Brand::provider()]) }}</h3>
                 @if (! $started)
                     <p class="muted small">{{ __('We create :domain in our Cloudflare account, copy the records we find at your current DNS provider and add the records for your website and mail. Nothing changes for visitors yet: your current provider keeps answering until you change the nameservers.', ['domain' => $domain->domain]) }}</p>
                     @if ($o?->status === \Rhis\DnsMail\Models\DnsOnboarding::EXPIRED)
@@ -86,7 +86,7 @@
                     @endif
                     <div class="alert alert-info" role="note" style="margin-top:8px"><x-icon name="info" /><div class="small">
                         <strong>{{ __('Is DNSSEC on at your registrar?') }}</strong>
-                        {{ __('Switch DNSSEC off (remove the DS record) before you change the nameservers, otherwise your domain stops working until it is removed. You can switch it on again later through RHIS.') }}
+                        {{ __('Switch DNSSEC off (remove the DS record) before you change the nameservers, otherwise your domain stops working until it is removed. You can switch it on again later through :provider.', ['provider' => \App\Support\Brand::provider()]) }}
                     </div></div>
                 @elseif ($live)
                     <p class="muted small">{{ __('Done.') }} @foreach ($assigned as $ns)<span class="mono">{{ $ns }}</span>@if (! $loop->last), @endif @endforeach</p>
@@ -98,7 +98,7 @@
             <li class="{{ $step($live, $started && ! $live) }}">
                 <h3>{{ __('We check and let you know') }}</h3>
                 @if ($started && ! $live)
-                    <p class="muted small">{{ __('We check automatically, often at first and then every hour. Most changes are visible within a few hours; it can take up to 48 hours. You get a mail as soon as your DNS runs on RHIS Cloudflare.') }}</p>
+                    <p class="muted small">{{ __('We check automatically, often at first and then every hour. Most changes are visible within a few hours; it can take up to 48 hours. You get a mail as soon as your DNS runs on :provider Cloudflare.', ['provider' => \App\Support\Brand::provider()]) }}</p>
                     <ul class="check-list small">
                         @foreach ($assigned as $ns)
                             <li>@if ($current->contains($ns))<x-ui.pill status="ok">{{ __('Found') }}</x-ui.pill>@else<x-ui.pill status="neutral">{{ __('Not yet') }}</x-ui.pill>@endif <span class="mono">{{ $ns }}</span></li>

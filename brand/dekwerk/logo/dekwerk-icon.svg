@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Dekwerk">
+<title>Dekwerk</title>
+<rect width="64" height="64" rx="15" fill="#123E7C"/><rect x="17" y="45" width="30" height="6" rx="2" fill="#3FA9F5"/><rect x="25" y="25" width="14" height="22" rx="2" fill="#3FA9F5"/><rect x="19" y="15" width="26" height="11" rx="5.5" fill="#3FA9F5"/><path d="M12 33c8-6 32 8 40 0M12 39c8 6 32-8 40 0" fill="none" stroke="#D9B98C" stroke-width="3.5" stroke-linecap="round"/>
+</svg>

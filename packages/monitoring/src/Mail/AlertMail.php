@@ -46,7 +46,7 @@ class AlertMail extends Mailable
                 'footer' => __('Sent by the monitoring of :server. Change the alert channels under Monitoring > Alerts.', ['server' => $this->server]),
                 'footerUrl' => route('admin.monitoring.alerts'),
                 'footerLink' => __('Alert settings'),
-                'logo' => dirname(__DIR__, 2).'/resources/mail/rhis-logo-wit.png',
+                'logo' => dirname(__DIR__, 2).'/resources/mail/logo-wit.png',
             ],
         );
     }

@@ -1,7 +1,7 @@
 # rhis/dns-mail
 
 Cloudflare DNS sync, per-domain mail routing (RHIS mail or Microsoft 365),
-SPF/DMARC/DKIM/MTA-STS records and mail client setup for the Webhosting Panel.
+SPF/DMARC/DKIM/MTA-STS records and mail client setup for Dekwerk.
 See [docs/dns-mail-webmail.md](../../docs/dns-mail-webmail.md).
 
 ```php

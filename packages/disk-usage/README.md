@@ -1,6 +1,6 @@
 # rhis/disk-usage
 
-Disk usage explorer for the Webhosting Panel: which folders, databases and
+Disk usage explorer for Dekwerk: which folders, databases and
 mailboxes take up the space of a website, with drill-down into folders.
 
 * Client: **Files & data → Disk usage** (`/disk-usage`). Team members need the

@@ -327,7 +327,7 @@ PANEL_PARSER = {
     "onsuccess": "next_stage",
     "filter": "evt.Parsed.program == 'whp-panel'",
     "name": "whp/panel-auth-logs",
-    "description": "Failed logins on the Webhosting Panel",
+    "description": "Failed logins on Dekwerk",
     "grok": {
         "pattern": r"^auth_failed ip=%{IP:source_ip} user=%{NOTSPACE:user}$",
         "apply_on": "message",
