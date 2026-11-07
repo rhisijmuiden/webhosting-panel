@@ -166,6 +166,15 @@ class HelperTest(unittest.TestCase):
         self.assertIn(b"(4, 'note', 'DEFINER=`a`@`b` utf8mb4_0900_ai_ci', 'yes');\n", out, "row data is never changed")
         self.assertFalse(state.get("in_insert"))
 
+    def test_drop_missing_prepend(self):
+        text = "memory_limit = 256M\nauto_prepend_file = '/var/www/x/wordfence-waf.php'\nauto_append_file=/var/www/x/here.php\n"
+        out, dropped = wpi.drop_missing_prepend(text, lambda f: f.endswith("here.php"))
+        self.assertEqual(dropped, ["auto_prepend_file"])
+        self.assertIn("; switched off by the WordPress import, the file is missing: auto_prepend_file", out)
+        self.assertIn("\nauto_append_file=/var/www/x/here.php\n", out)
+        self.assertIn("memory_limit = 256M", out)
+        self.assertEqual(wpi.drop_missing_prepend(out, lambda f: f.endswith("here.php"))[1], [], "a commented line stays as it is")
+
     def test_fix_config(self):
         db = {"name": "nieuw_nl_import_1a2b", "user": "nieuw_nl_import_1a2b", "password": "n'w"}
         out = wpi.fix_config(WP_CONFIG, db, "xyz_", wpi.path_pairs([OLD_ROOT], "/var/www/vhosts/nieuw.nl/public"),

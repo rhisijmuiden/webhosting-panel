@@ -145,7 +145,10 @@ step("files belong to the website user", all(os.lstat(os.path.join(d, f)).st_uid
 grants = subprocess.run(["mariadb", "-uroot", "-N", "-e", f"SHOW GRANTS FOR '{result['database']['user']}'@'localhost'"],
                         capture_output=True, text=True).stdout
 step("the new database user only has its own database", "wpsrc" not in grants and result["database"]["name"] in grants, grants)
-page = subprocess.run(["curl", "-sL", "--resolve", f"{target}:80:127.0.0.1", "--resolve", f"www.{target}:80:127.0.0.1", f"{NEW_URL}/"], capture_output=True, text=True, timeout=60).stdout
-step("the imported website answers", "Imported Smoke" in page, page[:300])
+page = subprocess.run(["curl", "-s", "-k", "-i", "-L", "--max-redirs", "3", "--resolve", f"{target}:80:127.0.0.1",
+                       "--resolve", f"www.{target}:80:127.0.0.1", "--resolve", f"{target}:443:127.0.0.1",
+                       "--resolve", f"www.{target}:443:127.0.0.1", f"{NEW_URL}/"], capture_output=True, text=True, timeout=60)
+step("the imported website answers", "Imported Smoke" in page.stdout,
+     (page.returncode, page.stdout[:800], page.stderr[-300:], result.get("health")))
 step("the health check saw it", 200 <= result["health"] < 400, result["health"])
 step("uploads are removed by discard", wpi.wp_import_discard({"import": import_id})["removed"] == 3)

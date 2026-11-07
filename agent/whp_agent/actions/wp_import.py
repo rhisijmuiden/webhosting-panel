@@ -652,6 +652,22 @@ def filter_sql_line(line: bytes, state: dict) -> bytes | None:
     return line
 
 
+_PREPEND = re.compile(r"""^(\s*)(auto_(?:prepend|append)_file)\s*=\s*["']?([^"'\r\n;]*?)["']?\s*(?:;.*)?$""", re.M)
+
+
+def drop_missing_prepend(text: str, exists) -> tuple[str, list[str]]:
+    """Comment out auto_prepend_file/auto_append_file lines (Wordfence WAF of the old host) whose file is missing:
+    PHP stops every request with a fatal error otherwise (pure, unit tested)."""
+    dropped = []
+
+    def sub(m):
+        if not m.group(3).strip() or exists(m.group(3).strip()):
+            return m.group(0)
+        dropped.append(m.group(2))
+        return f"{m.group(1)}; switched off by the WordPress import, the file is missing: {m.group(0).strip()}"
+    return _PREPEND.sub(sub, text), dropped
+
+
 def load_sql(sql: _Sql, db: dict, log) -> None:
     cnf = os.path.join(cb._private_dir("wpimport-"), "client.cnf")
     from .site_clone import mycnf
@@ -794,6 +810,14 @@ def _run(import_id: str, site: dict, report: dict, options: dict, log) -> dict:
                 if new != old:
                     wpfix._write(path, new, uid, gid)
                     log(f"config: paths updated in {os.path.relpath(path, docroot)}")
+        for name in (".user.ini", "php.ini"):
+            path = os.path.join(docroot, name)
+            old = wpfix._read(path, uid) if os.path.isfile(path) and not os.path.islink(path) else None
+            if old is not None:
+                new, dropped = drop_missing_prepend(old, lambda f: os.path.isfile(f if os.path.isabs(f) else os.path.join(docroot, f)))
+                if dropped:
+                    wpfix._write(path, new, uid, gid)
+                    log(f"config: {name}: switched off {', '.join(dropped)} (file not in the website)")
         disabled = [rel for rel in options["disable"] if _disable(site, rel, uid)]
         for rel in disabled:
             log(f"config: {rel} switched off")
