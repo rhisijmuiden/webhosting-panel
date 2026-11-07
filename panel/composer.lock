@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e5decc00b335397fd40aa8f6e4cecf61",
+    "content-hash": "b2a05012e0ef0f08268d24d7dd7aa212",
     "packages": [
         {
             "name": "brick/math",
@@ -3844,6 +3844,39 @@
                 "proprietary"
             ],
             "description": "Server management for the Webhosting Panel: Debian updates, reboot (never shutdown), a maintenance window with health checks, automatic patching of critical CVEs, PHP end-of-life handling and scheduled maintenance tasks (database optimize, cleanup).",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/site-logs",
+            "version": "dev-claude/project-thread-32u16i",
+            "dist": {
+                "type": "path",
+                "url": "../packages/site-logs",
+                "reference": "b988be21cf555ee15347eacf94cd666d335deb71"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\SiteLogs\\SiteLogsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\SiteLogs\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Log viewer for the Webhosting Panel: access, error, PHP and PHP-FPM logs per website, with search, filters and a live tail, for customers and admins.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -9237,6 +9270,7 @@
         "rhis/reports": 20,
         "rhis/security": 20,
         "rhis/server-admin": 20,
+        "rhis/site-logs": 20,
         "rhis/subdomains": 20,
         "rhis/vulnerabilities": 20,
         "rhis/web-rules": 20,
