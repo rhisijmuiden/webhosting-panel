@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Delete expired PHP sessions of every website (<site>/sessions/sess_*).
+#
+# Each website keeps its PHP sessions in its own folder (session.save_path in
+# its PHP-FPM pool). Debian switches PHP's own session garbage collection off
+# (session.gc_probability = 0) and its phpsessionclean cron only cleans
+# /var/lib/php/sessions, so without this the website folders fill up forever.
+#
+# Runs from whp-site-sessionclean.timer (installer/modules/51-php-sessions.sh).
+# The sessions folder belongs to the website's user, so the cleanup of each
+# website runs as that user (never as root): a link or a swapped folder there
+# can then never reach files the user could not delete anyway. find does not
+# follow links (-P) and only touches regular sess_* files directly inside it.
+# A session expires like PHP's own garbage collection would: not written for
+# longer than session.gc_maxlifetime of the website's PHP version.
+#   whp-site-sessionclean [--dry-run]
+set -euo pipefail
+
+WHP_STATE=${WHP_STATE:-/var/lib/webhosting-panel}
+WHP_VHOSTS=${WHP_VHOSTS:-/var/www/vhosts}
+PHP_ETC=${WHP_PHP_ETC:-/etc/php}
+DEFAULT_LIFETIME=1440   # PHP's own default for session.gc_maxlifetime, in seconds
+DRY=no
+case ${1:-} in
+  --dry-run) DRY=yes ;;
+  '') ;;
+  *) echo "usage: whp-site-sessionclean [--dry-run]" >&2; exit 2 ;;
+esac
+[[ $EUID -eq 0 ]] || { echo "whp-site-sessionclean: run as root" >&2; exit 1; }
+
+declare -A LIFETIME=()
+SECONDS_LIFE=$DEFAULT_LIFETIME
+
+# session.gc_maxlifetime (seconds) that PHP-FPM <version> uses, read the way
+# FPM reads it: its php.ini plus its conf.d folder. Falls back to PHP's default.
+# Sets SECONDS_LIFE (no subshell, so the cache per version is kept).
+lifetime() {
+  local v=${1:-none} s=''
+  if [[ -n ${LIFETIME[$v]:-} ]]; then SECONDS_LIFE=${LIFETIME[$v]}; return 0; fi
+  if [[ $v =~ ^[0-9]+\.[0-9]+$ ]] && command -v "php$v" >/dev/null 2>&1 && [[ -f $PHP_ETC/$v/fpm/php.ini ]]; then
+    s=$(PHP_INI_SCAN_DIR=$PHP_ETC/$v/fpm/conf.d "php$v" -c "$PHP_ETC/$v/fpm/php.ini" \
+          -r 'echo ini_get("session.gc_maxlifetime");' 2>/dev/null || true)
+  fi
+  [[ $s =~ ^[0-9]{1,9}$ ]] || s=$DEFAULT_LIFETIME
+  # Never shorter than PHP's default: a typo in php.ini must not log everyone out.
+  (( s >= DEFAULT_LIFETIME )) || s=$DEFAULT_LIFETIME
+  LIFETIME[$v]=$s
+  SECONDS_LIFE=$s
+}
+
+total=0 sites=0
+shopt -s nullglob
+for f in "$WHP_STATE"/sites/*.env; do
+  domain=$(basename "$f" .env)
+  user=$(sed -n 's/^SITE_USER="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$f" | head -n1)
+  php=$(sed -n 's/^SITE_PHP="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$f" | head -n1)
+  [[ $domain =~ ^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$ ]] || continue
+  [[ $user =~ ^[a-z_][a-z0-9_-]{0,31}$ && $user != root ]] || continue
+  getent passwd "$user" >/dev/null 2>&1 || continue
+  dir=$WHP_VHOSTS/$domain/sessions
+  [[ -d $dir && ! -L $dir && ! -L $WHP_VHOSTS/$domain ]] || continue
+  [[ $(stat -c %U "$dir") == "$user" ]] || continue
+  lifetime "$php"
+  minutes=$(( (SECONDS_LIFE + 59) / 60 ))
+  action=(-delete)
+  [[ $DRY == yes ]] && action=()
+  n=$(setpriv --reuid="$user" --regid="$user" --init-groups --reset-env -- \
+        nice -n 10 ionice -c 3 \
+        find -P "$dir" -mindepth 1 -maxdepth 1 -ignore_readdir_race -type f -name 'sess_*' \
+          -mmin "+$minutes" -print "${action[@]}" | wc -l) \
+    || { printf '%s: could not clean %s\n' "$domain" "$dir" >&2; n=0; }
+  sites=$((sites + 1))
+  total=$((total + n))
+  if (( n > 0 )); then
+    if [[ $DRY == yes ]]; then
+      printf '%s: %s expired sessions (older than %s minutes) would be removed\n' "$domain" "$n" "$minutes"
+    else
+      printf '%s: %s expired sessions removed (older than %s minutes)\n' "$domain" "$n" "$minutes"
+    fi
+  fi
+done
+printf 'checked %s websites, %s expired sessions %s\n' "$sites" "$total" "$([[ $DRY == yes ]] && echo found || echo removed)"
