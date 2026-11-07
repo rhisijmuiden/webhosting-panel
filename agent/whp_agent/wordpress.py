@@ -199,12 +199,67 @@ def wp(domain, args, path="", input_text=None, timeout=300, check=True, plugins=
         raise ActionError("internal", "WP-CLI arguments must be strings")
     site, d = require_install(domain, path)
     ensure_cli()
+    if args and args[0] == "db":
+        use_db_socket(site, d)
     extra = [] if plugins else ["--skip-plugins", "--skip-themes"]
     proc = run(wp_argv(site, d, [*args, *extra], timeout=timeout), timeout=timeout + 15,
                check=False, input_text=input_text)
     if check and proc.returncode != 0:
         raise failure(f"wp {' '.join(args[:2])}", proc)
     return proc
+
+
+# DB_HOST values that make WP-CLI's `wp db ...` (mariadb, mariadb-dump) connect
+# over TCP. MariaDB runs with skip-name-resolve and the site users exist only as
+# 'user'@'localhost', so such a connection is 'user'@'127.0.0.1' and is refused
+# (error 1045), while PHP itself still works: mysqli uses the socket for
+# "localhost:3306". Typical for sites from Plesk, which writes "localhost:3306".
+_TCP_LOCAL_DB_HOSTS = {"127.0.0.1", "127.0.0.1:3306", "localhost:3306", "::1", "[::1]", "[::1]:3306"}
+
+
+def config_path(site, wp_dir):
+    """wp-config.php of an install: in its folder, or one level up inside the docroot."""
+    own = os.path.join(wp_dir, "wp-config.php")
+    if os.path.isfile(own):
+        return own
+    parent = os.path.dirname(wp_dir)
+    docroot = os.path.realpath(site["docroot"])
+    if parent == docroot or parent.startswith(docroot + os.sep):
+        up = os.path.join(parent, "wp-config.php")
+        if os.path.isfile(up):
+            return up
+    return None
+
+
+def socket_db_host(host):
+    """The DB_HOST to write instead of `host`, or None when it is fine as it is."""
+    if host is None:
+        return None
+    return "localhost" if host.strip().lower() in _TCP_LOCAL_DB_HOSTS else None
+
+
+def use_db_socket(site, wp_dir):
+    """Point DB_HOST at the local socket ("localhost") when it is a local TCP address,
+    so WP-CLI database commands can log in. Returns True when wp-config.php changed."""
+    import pwd
+
+    from .migration import wordpress_fix as wpfix
+
+    cfg = config_path(site, wp_dir)
+    if not cfg:
+        return False
+    try:
+        pw = pwd.getpwnam(site["user"])
+    except KeyError:
+        return False
+    text = wpfix._read(cfg, pw.pw_uid)
+    if text is None:
+        return False
+    new_host = socket_db_host(wpfix.config_value(text, "DB_HOST"))
+    if not new_host:
+        return False
+    wpfix._write(cfg, wpfix.set_config(text, "DB_HOST", new_host), pw.pw_uid, pw.pw_gid)
+    return True
 
 
 # Lines from systemd-run itself (the command never started) and from WP-CLI/PHP.

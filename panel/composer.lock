@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "539943df9e22b0a71a46c8f866e97ed0",
+    "content-hash": "e5decc00b335397fd40aa8f6e4cecf61",
     "packages": [
         {
             "name": "brick/math",
@@ -4009,6 +4009,39 @@
                 "proprietary"
             ],
             "description": "WordPress toolkit for the Webhosting Panel: one-click updates, WP-cron takeover, admin passwords and one-click login, outdated plugins in the security screen.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/wp-integrity",
+            "version": "dev-claude/project-thread-32u16i",
+            "dist": {
+                "type": "path",
+                "url": "../packages/wp-integrity",
+                "reference": "68745cf68816e4b86c1313e310cf455e4775d1ce"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\WpIntegrity\\WpIntegrityServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\WpIntegrity\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "WordPress integrity check for the Webhosting Panel: compares core and plugin files with the WordPress.org checksums, links changes to the malware scan and puts original files back.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -9208,7 +9241,8 @@
         "rhis/vulnerabilities": 20,
         "rhis/web-rules": 20,
         "rhis/webapps": 20,
-        "rhis/wordpress": 20
+        "rhis/wordpress": 20,
+        "rhis/wp-integrity": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

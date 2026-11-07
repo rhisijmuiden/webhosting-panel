@@ -30,6 +30,8 @@
     </div>
 @endif
 
+@includeIf('wordpress::switches.card')
+
 <x-ui.card :title="__('Updates')">
     <x-slot:actions>
         <form method="POST" action="{{ $r('update') }}" onsubmit="return confirm(@js(__('Update WordPress, all plugins, themes and translations now?')))">
@@ -84,6 +86,8 @@
         </ul>
     @endif
 </x-ui.card>
+
+@includeIf('wp-integrity::partials.wordpress-card')
 
 <section class="grid grid-2" style="align-items:start">
     <x-ui.card :title="__('WP-cron')">
@@ -140,6 +144,7 @@
     </x-ui.card>
 </section>
 
+@include('wordpress::search-replace.card')
 @include('wordpress::dbclean.card')
 
 <x-ui.card :title="__('Snapshots')" flush>
