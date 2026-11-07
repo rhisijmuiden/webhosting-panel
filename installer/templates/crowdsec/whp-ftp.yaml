@@ -1,0 +1,7 @@
+# Managed by the Webhosting Panel installer (75-ftp.sh): failed FTP/SFTP logins
+# of the extra FTP accounts (ProFTPD logs to the journal).
+source: journalctl
+journalctl_filter:
+  - "_SYSTEMD_UNIT=proftpd.service"
+labels:
+  type: syslog
