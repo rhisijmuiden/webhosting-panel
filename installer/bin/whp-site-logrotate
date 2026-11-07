@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Write /etc/logrotate.d/whp-sites: daily rotation of every website's logs
+# (logs/access.log, error.log, php-error.log) and the per-site PHP-FPM logs.
+#
+# Runs before every logrotate run (ExecStartPre of logrotate.service, see
+# installer/modules/56-site-logs.sh), so new and removed websites are always
+# covered. Each site block rotates as the site's own user ("su"): the logs
+# folder belongs to that user, and root must not follow links planted there.
+# "nocreate": Nginx reopens its logs (USR1, ExecStartPost) and PHP creates
+# php-error.log itself, both with the right owner.
+#   whp-site-logrotate [--print]
+set -euo pipefail
+
+WHP_STATE=${WHP_STATE:-/var/lib/webhosting-panel}
+WHP_VHOSTS=${WHP_VHOSTS:-/var/www/vhosts}
+WHP_LOG_DIR=${WHP_LOG_DIR:-/var/log/webhosting-panel}
+OUT=${WHP_LOGROTATE_OUT:-/etc/logrotate.d/whp-sites}
+DAYS=${WHP_SITE_LOG_DAYS:-14}
+[[ $DAYS =~ ^[0-9]{1,3}$ && $DAYS -ge 1 ]] || DAYS=14
+
+conf() {
+  printf '# Managed by whp-site-logrotate (Webhosting Panel). Do not edit: rewritten before every logrotate run.\n\n'
+  printf '%s/php-fpm/*.log {\n    daily\n    rotate %s\n    missingok\n    notifempty\n    compress\n    delaycompress\n    copytruncate\n    maxsize 100M\n}\n' \
+    "$WHP_LOG_DIR" "$DAYS"
+  local f domain user
+  shopt -s nullglob
+  for f in "$WHP_STATE"/sites/*.env; do
+    domain=$(basename "$f" .env)
+    user=$(sed -n 's/^SITE_USER="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$f" | head -n1)
+    [[ $domain =~ ^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$ ]] || continue
+    [[ $user =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || continue
+    getent passwd "$user" >/dev/null 2>&1 || continue
+    [[ -d $WHP_VHOSTS/$domain/logs && ! -L $WHP_VHOSTS/$domain/logs && ! -L $WHP_VHOSTS/$domain ]] || continue
+    printf '\n%s/%s/logs/access.log %s/%s/logs/error.log %s/%s/logs/php-error.log {\n' \
+      "$WHP_VHOSTS" "$domain" "$WHP_VHOSTS" "$domain" "$WHP_VHOSTS" "$domain"
+    printf '    su %s %s\n    daily\n    rotate %s\n    missingok\n    notifempty\n    compress\n    delaycompress\n    nocreate\n    maxsize 200M\n}\n' \
+      "$user" "$user" "$DAYS"
+  done
+}
+
+if [[ ${1:-} == --print ]]; then
+  conf
+  exit 0
+fi
+tmp=$(mktemp "${OUT}.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+conf >"$tmp"
+chmod 0644 "$tmp"
+mv -f "$tmp" "$OUT"
+trap - EXIT

@@ -20,6 +20,7 @@
         @include('client.websites.overview.tile', ['href' => $git ? ($o->gitRepos->count() === 1 ? $o->url('git.show', $o->gitRepos->first()) : ($o->gitRepos->isEmpty() ? $o->url('git.create', ['website' => $site->id]) : $o->url('git.index'))) : null,
             'icon' => 'git', 'label' => __('Git deployments'), 'sub' => $o->gitRepos->isEmpty() ? __('Deploy on every push') : trans_choice(':count repository|:count repositories', $o->gitRepos->count())])
         @include('client.websites.overview.tile', ['href' => $o->canUseTerminal() ? $o->url('files.terminal', $site) : null, 'icon' => 'terminal', 'label' => __('Web terminal'), 'sub' => __('Command line in your browser')])
+        @include('client.websites.overview.tile', ['href' => $o->allows('site-logs.customer_access') ? $o->url('site-logs.show', $site) : null, 'icon' => 'list', 'label' => __('Logs and errors'), 'sub' => __('Access, error and PHP logs')])
         @include('client.websites.overview.tile', ['href' => $o->has('apps.index') ? $o->url('apps.index') : null, 'icon' => 'apps', 'label' => __('App installer'), 'sub' => __('WordPress, Joomla, Nextcloud')])
         @if ($o->has('clones.create'))
             @include('client.websites.overview.tile', ['href' => $o->allows('subdomains.customer_clone') && $site->status === 'active' ? $o->url('clones.create', $site) : null, 'icon' => 'migrate', 'label' => __('Clone website'), 'sub' => __('Test copy on a subdomain')])
