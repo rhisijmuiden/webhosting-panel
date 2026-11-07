@@ -30,8 +30,10 @@ as_panel php "$PANEL/artisan" whp:limits:apply >/dev/null 2>&1 || echo "whp:limi
 install -m 0644 "$PANEL/deploy/systemd/whp-queue.service" /etc/systemd/system/
 install -m 0644 "$PANEL/deploy/systemd/whp-scheduler.service" /etc/systemd/system/
 install -m 0644 "$PANEL/deploy/systemd/whp-scheduler.timer" /etc/systemd/system/
+install -m 0644 "$PANEL/deploy/systemd/whp-maintenance-guard.service" /etc/systemd/system/
+install -m 0644 "$PANEL/deploy/systemd/whp-maintenance-guard.timer" /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now whp-queue.service whp-scheduler.timer
+systemctl enable --now whp-queue.service whp-scheduler.timer whp-maintenance-guard.timer
 
 # Login protection: write the CrowdSec scenarios and profiles (needs the agent).
 as_panel php "$PANEL/artisan" whp:security:apply || echo "Login protection not applied yet (is the agent running?)" >&2
