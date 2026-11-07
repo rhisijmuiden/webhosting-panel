@@ -14,15 +14,16 @@ module_site_logs() {
 # Managed by the Webhosting Panel installer (module 56-site-logs).
 [Service]
 Environment=WHP_SITE_LOG_DAYS=${WHP_SITE_LOG_DAYS:-14}
-ExecStartPre=$WHP_CODE_DIR/installer/bin/whp-site-logrotate
+ExecStartPre=/usr/local/sbin/whp-site-logrotate
 ExecStartPost=-/bin/systemctl kill --kill-whom=main --signal=USR1 nginx.service
 UNIT
   mv -f "$dropin.new" "$dropin"
   chmod 0644 "$dropin"
   [[ $(files_sum "$dropin") == "$before" ]] || run systemctl daemon-reload
-  chmod 0755 "$WHP_CODE_DIR/installer/bin/whp-site-logrotate"
-  ln -sf "$WHP_CODE_DIR/installer/bin/whp-site-logrotate" /usr/local/sbin/whp-site-logrotate
-  run env WHP_SITE_LOG_DAYS="${WHP_SITE_LOG_DAYS:-14}" "$WHP_CODE_DIR/installer/bin/whp-site-logrotate"
+  # A copy, not a link: it must not depend on where the code is checked out.
+  rm -f /usr/local/sbin/whp-site-logrotate
+  install -m 0755 "$INSTALLER_DIR/bin/whp-site-logrotate" /usr/local/sbin/whp-site-logrotate
+  run env WHP_SITE_LOG_DAYS="${WHP_SITE_LOG_DAYS:-14}" /usr/local/sbin/whp-site-logrotate
   run logrotate --debug /etc/logrotate.d/whp-sites
   svc_enable logrotate.timer
   ok "$(t sitelogs_ok "${WHP_SITE_LOG_DAYS:-14}")"
