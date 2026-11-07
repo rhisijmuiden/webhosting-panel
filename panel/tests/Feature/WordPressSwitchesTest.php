@@ -56,7 +56,7 @@ class WordPressSwitchesTest extends TestCase
         $this->assertSame('Even geduld', $state->maintenance_title);
         $this->assertTrue(ActivityLog::where('action', 'wordpress.maintenance_on')->exists());
 
-        $this->get("/admin/wordpress/{$install->id}")->assertSee('On since');
+        $this->get("/admin/wordpress/{$install->id}")->assertSee('On for');
 
         $this->put("/admin/wordpress/{$install->id}/switches/maintenance", ['enabled' => 0])->assertSessionHas('status');
         $this->assertFalse($state->fresh()->maintenance);

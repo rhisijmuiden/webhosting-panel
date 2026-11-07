@@ -21,11 +21,11 @@
 <div @class(['wps-list', 'is-compact' => $compact])>
     {{-- Maintenance mode --}}
     @if ($url('maintenance'))
-    <div @class(['wps-row', 'is-on' => $switches->maintenance, 'is-warn' => $switches->maintenance]) x-data="{ open: false }">
+    <div @class(['wps-row', 'is-on' => $switches->maintenance, 'is-alert' => $switches->maintenance]) x-data="{ open: false }">
         <div class="wps-icon" aria-hidden="true"><x-icon name="tools" /></div>
         <div class="wps-text">
             <strong id="{{ $uid }}-m">{{ __('Maintenance mode') }}</strong>
-            @if ($switches->maintenance)<x-ui.pill status="warn">{{ $switches->maintenance_since ? __('On since :time', ['time' => $switches->maintenance_since->diffForHumans(null, true)]) : __('On') }}</x-ui.pill>@endif
+            @if ($switches->maintenance)<x-ui.pill status="warn">{{ $switches->maintenance_since ? __('On for :time', ['time' => $switches->maintenance_since->diffForHumans(null, true)]) : __('On') }}</x-ui.pill>@endif
             @unless ($compact)<p class="muted small">{{ __('Visitors see a maintenance page. You keep seeing the website while you are logged in to WordPress.') }}</p>@endunless
         </div>
         <div class="wps-control">
@@ -58,7 +58,7 @@
         <div class="wps-text">
             <strong id="{{ $uid }}-d">{{ __('Debug mode') }}</strong>
             @if ($switches->debug)
-                <x-ui.pill status="info">{{ $switches->debug_until ? __('Off :time', ['time' => $switches->debug_until->diffForHumans()]) : __('On') }}</x-ui.pill>
+                <x-ui.pill status="info">{{ $switches->debug_until ? __('Switches off :time', ['time' => $switches->debug_until->diffForHumans()]) : __('On') }}</x-ui.pill>
             @endif
             @unless ($compact)<p class="muted small">{{ __('Writes PHP errors and warnings to a private log. Visitors never see them.') }}</p>@endunless
             @if ($url('log') && ($switches->debug || $switches->log_size > 0))
@@ -66,7 +66,7 @@
                     <span class="muted">{{ $switches->log_size > 0 ? $kb($switches->log_size) : __('empty') }}</span></p>
             @endif
             @if ($switches->debug && $switches->debug_log === 'public')
-                <p class="small is-warn">{{ __('This install writes its log to wp-content/debug.log. Switch debug mode off and on again to move it to the private log.') }}</p>
+                <p class="small wps-warn">{{ __('This install writes its log to wp-content/debug.log. Switch debug mode off and on again to move it to the private log.') }}</p>
             @endif
         </div>
         <div class="wps-control">
