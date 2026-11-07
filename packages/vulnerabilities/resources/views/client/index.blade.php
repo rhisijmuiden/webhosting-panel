@@ -21,7 +21,7 @@
             <h2 class="vx-site">{{ $site }}</h2>
             <div class="vx-list">
                 @foreach ($list as $f)
-                    @include('vulnerabilities::partials.finding', ['f' => $f, 'fixUrl' => ! $f->isMalware() && $toolkit && $f->install && Route::has('client.wordpress.show') ? route('client.wordpress.show', $f->install) : null])
+                    @include('vulnerabilities::partials.finding', ['f' => $f, 'fixUrl' => $f->isIntegrity() ? $f->clientFixUrl() : (! $f->isMalware() && $toolkit && $f->install && Route::has('client.wordpress.show') ? route('client.wordpress.show', $f->install) : null)])
                 @endforeach
             </div>
         @endforeach

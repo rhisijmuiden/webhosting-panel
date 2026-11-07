@@ -55,7 +55,7 @@
                         <td>@if ($p->crm_id)<span class="mono small" title="{{ __('Linked to the CRM') }}">CRM {{ $p->crm_id }}</span>@else<span class="muted">{{ __('Panel') }}</span>@endif</td>
                         <td class="num"><a href="{{ route('admin.subscriptions.index', ['package' => $p->id]) }}">{{ $p->subscriptions_count }}</a></td>
                         <td class="actions-col">
-                            <div class="quick-actions">
+                            <div class="row-actions">
                                 <a href="{{ route('admin.packages.edit', $p) }}" title="{{ __('Edit') }}" aria-label="{{ __('Edit') }} {{ $p->name }}"><x-icon name="edit" /></a>
                                 <form method="POST" action="{{ route('admin.packages.duplicate', $p) }}">@csrf
                                     <button type="submit" class="icon-link" title="{{ __('Clone') }}" aria-label="{{ __('Clone') }} {{ $p->name }}"><x-icon name="apps" /></button>

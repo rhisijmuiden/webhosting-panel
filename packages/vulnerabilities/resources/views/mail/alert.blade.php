@@ -76,7 +76,7 @@
                     <p style="margin:0;font-size:14px;line-height:1.5;color:#14213D">{{ $f->advice() }}</p>
                 </td></tr></table>
                 <p style="margin:12px 0 0;font-size:13px;line-height:1.5">
-                    <a href="{{ $fixUrl($f) }}" style="color:#B8392A;font-weight:700;text-decoration:none">{{ $f->isMalware() ? __('View in the control panel') : __('Update now in the control panel') }} &rarr;</a>
+                    <a href="{{ $fixUrl($f) }}" style="color:#B8392A;font-weight:700;text-decoration:none">{{ $f->isMalware() ? __('View in the control panel') : ($f->isIntegrity() ? __('Restore the original files in the control panel') : __('Update now in the control panel')) }} &rarr;</a>
                     @if ($f->cve)<span style="color:#4F5B73"> &nbsp;·&nbsp; </span><a href="https://www.cve.org/CVERecord?id={{ urlencode($f->cve) }}" style="color:#4F5B73;text-decoration:underline">{{ $f->cve }}</a>@endif
                 </p>
             </td></tr>
