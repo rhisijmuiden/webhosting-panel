@@ -32,11 +32,19 @@ final class FakeWpImport
             return ['job' => $job];
         });
         $agent->respond('wp_import.discard', fn (array $p) => ['import' => $p['import'] ?? '', 'removed' => 3]);
-        $agent->respond('job.status', function (array $p) {
+        // job.status answers our own jobs; everything else goes to whoever answered before us.
+        $previous = (fn () => $this->responses['job.status'] ?? null)->call($agent);
+        $agent->respond('job.status', function (array $p) use ($previous) {
             $job = (string) ($p['job'] ?? '');
             $state = str_starts_with($job, 'fake-wpi-') ? Cache::get("fake-agent.job.{$job}") : null;
+            if ($state) {
+                return ['id' => $job, 'error' => null] + $state;
+            }
+            if ($previous instanceof \Closure) {
+                return $previous($p);
+            }
 
-            return $state ? ['id' => $job, 'error' => null] + $state
+            return is_array($previous) ? $previous
                 : ['id' => $job, 'status' => 'succeeded', 'log' => ['Done'], 'result' => [], 'error' => null];
         });
     }
