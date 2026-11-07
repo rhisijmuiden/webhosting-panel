@@ -18,6 +18,8 @@ final class WordPressServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/wordpress.php', 'wordpress');
         $this->app->register(Extensions\ExtensionsServiceProvider::class);
+        // Quick switches (maintenance, debug + debug.log, indexing, clear cache): own routes, views and translations.
+        $this->app->register(Switches\SwitchesServiceProvider::class);
         $this->app->register(Bulk\BulkServiceProvider::class);
     }
 
