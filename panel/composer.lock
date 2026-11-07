@@ -9241,7 +9241,8 @@
         "rhis/vulnerabilities": 20,
         "rhis/web-rules": 20,
         "rhis/webapps": 20,
-        "rhis/wordpress": 20
+        "rhis/wordpress": 20,
+        "rhis/wp-integrity": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,
