@@ -236,7 +236,8 @@ def update(params, log):
         if params["core"]:
             old = wordpress.read_version(d)
             log("Updating WordPress core")
-            wordpress.wp(domain, ["core", "update"], path=path, timeout=900)
+            # core_minor: only the newest release of the installed branch (security fixes).
+            wordpress.wp(domain, ["core", "update", *(["--minor"] if params.get("core_minor") else [])], path=path, timeout=900)
             wordpress.wp(domain, ["core", "update-db"], path=path, timeout=900, check=False)
             new = wordpress.read_version(d)
             if new != old:
