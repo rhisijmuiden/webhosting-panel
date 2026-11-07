@@ -140,6 +140,8 @@
     </x-ui.card>
 </section>
 
+@include('wordpress::search-replace.card')
+
 <x-ui.card :title="__('Snapshots')" flush>
     @if (empty($snapshots))
         <x-ui.empty icon="backup">{{ __('A snapshot is made automatically before every update.') }}</x-ui.empty>
