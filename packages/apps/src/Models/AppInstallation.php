@@ -15,11 +15,12 @@ final class AppInstallation extends Model
     protected $fillable = [
         'website_id', 'customer_id', 'app', 'path', 'status', 'agent_id', 'job_id', 'version',
         'url', 'admin_url', 'admin_user', 'database', 'locale', 'error', 'installed_at',
+        'plugin_set_id', 'plugin_set_name', 'plugin_set_report',
     ];
 
     protected function casts(): array
     {
-        return ['installed_at' => 'datetime'];
+        return ['installed_at' => 'datetime', 'plugin_set_report' => 'array'];
     }
 
     public function website(): BelongsTo
