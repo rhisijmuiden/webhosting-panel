@@ -19,7 +19,7 @@ waf_crs_rules_dir() {
 
 # Switch every site's firewall include off (nginx must keep working without the module).
 waf_disable_sites() {
-  rm -f /etc/nginx/conf.d/whp-waf.conf /etc/nginx/whp/sites/*/20-waf.conf
+  rm -f /etc/nginx/conf.d/whp-waf.conf /etc/nginx/whp/sites/*/20-waf.conf /etc/nginx/modules-enabled/50-whp-modsecurity.conf
 }
 
 module_waf() {
@@ -32,7 +32,9 @@ module_waf() {
   fi
   apt_install libnginx-mod-http-modsecurity modsecurity-crs
 
-  if ! grep -qrs ngx_http_modsecurity_module /etc/nginx/modules-enabled/; then
+  # Debian enables the module with a symlink in modules-enabled (grep -R follows it).
+  rm -f /etc/nginx/modules-enabled/50-whp-modsecurity.conf
+  if ! grep -qRs ngx_http_modsecurity_module /etc/nginx/modules-enabled/; then
     if [[ -f $WAF_MODULE_SO ]]; then
       printf 'load_module %s;\n' "$WAF_MODULE_SO" >/etc/nginx/modules-enabled/50-whp-modsecurity.conf
     else
