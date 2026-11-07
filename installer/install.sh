@@ -237,10 +237,12 @@ step "$(t step_valkey)";    module_valkey
 step "$(t step_mariadb)";   module_mariadb
 step "$(t step_php)";       module_php
 step "$(t step_nginx)";     module_nginx
+step "$(t step_web_rules)"; module_web_rules
 step "$(t step_runtimes)";  module_runtimes
 if [[ $WHP_MAIL == yes ]]; then step "$(t step_mail)"; module_mail; fi
 step "$(t step_antivirus)"; module_antivirus
 if [[ $WHP_CROWDSEC == yes ]]; then step "$(t step_crowdsec)"; module_crowdsec; fi
+step "$(t step_ftp)";       module_ftp
 step "$(t step_panel)";     module_panel
 step "$(t step_phpmyadmin)"; module_phpmyadmin
 step "$(t step_migrations)"; module_migrations
