@@ -228,6 +228,11 @@ client `/uptime`, public `/status`): `monitor.check` (read only) returns per web
 certificate it serves (SNI on 127.0.0.1:443: days left, issuer, host match), real disks with inode use,
 service states, memory, load and the Postfix queue. See `docs/monitoring.md`.
 
+Cron jobs (`cron.py`, screens in `packages/cron`, `Rhis\Cron\`, admin `/admin/cron`, client `/cron`):
+`cron.apply`, `cron.calendar`, `cron.list`, `cron.run`, `cron.stop`, `cron.runs`, `cron.suspend`, `cron.remove`.
+One `whp-cron-<id>.timer` + oneshot service per job (site user, subscription slice); `cron_finish.py` saves
+every run (ExecStopPost). `site.php` / `site.owner` rewrite the units. See `docs/cron.md`.
+
 ## Release channels
 
 | Channel | Git branch |

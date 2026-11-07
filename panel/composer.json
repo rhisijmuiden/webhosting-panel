@@ -15,6 +15,7 @@
         "rhis/apps": "@dev",
         "rhis/backups": "@dev",
         "rhis/crm-api": "@dev",
+        "rhis/cron": "@dev",
         "rhis/dns-mail": "@dev",
         "rhis/domain-aliases": "@dev",
         "rhis/files": "@dev",
