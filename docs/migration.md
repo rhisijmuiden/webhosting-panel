@@ -47,14 +47,43 @@ running until you switch DNS per domain, so visitors notice nothing.
    - SSL: the certificate Plesk uses is installed with
      `whp-site ssl <domain> --import-cert … --import-key …` (state `imported`)
      until Let's Encrypt can issue one after the switch.
-5. **Check and sync.** Test the site through your hosts file. **Sync again**
-   copies only what changed (rsync delta, fresh database dump, mail mirror).
-6. **Switch DNS.** Adds the domain's own records from Plesk (verification TXT,
-   extra CNAMEs, SRV, …) to Cloudflare, turns DNS management on and lets the
-   panel write web, MX, SPF, DKIM, DMARC and autodiscover records. Records that
-   pointed at the old server and Plesk service names are left out (listed on the
-   page). Without Cloudflare the page shows a BIND zone file to load at the DNS
-   host. Let's Encrypt is requested right away and retried by `whp-cert-retry`.
+5. **Migration wizard, per domain.** Copying runs for all chosen domains at
+   once; afterwards each domain gets its own wizard (**Start wizard** on the
+   source list, or **Migration wizard** on the domain's migration page,
+   `/admin/migration/items/{item}/wizard`). It walks through:
+   - **Website**: what was copied, last copy time, **Test the website** (the
+     panel requests `https://<domain>/` from this server via `CURLOPT_RESOLVE`),
+     the hosts-file line and **Fix WordPress settings** for WordPress;
+   - **Databases** and **Mailboxes**: per item copied/failed, new passwords.
+     The mail step also asks where mail goes: *to this server*, or *keep it where
+     it is* (mail provider `external`, so the switch leaves MX/SPF/autodiscover
+     alone). When Plesk's MX points at Microsoft 365, Google and the like the
+     wizard says so;
+   - **SSL**: imported certificate now, Let's Encrypt after the switch;
+   - **DNS records**: a comparison of what Cloudflare has now with what this
+     server needs (`SyncPlanner` with take-over) plus the domain's own records
+     from Plesk (`DnsCutover::importable`). Every change (add, change, remove)
+     has a checkbox; changes that replace a record of an external service
+     (Microsoft 365, Google, Mailgun, …) or where Cloudflare differs from Plesk
+     start unticked. Records that are already right or that the switch never
+     touches are listed separately. Without a zone the step can add the domain
+     to Cloudflare (zone + record scan, nothing switched) or fall back to the
+     zone file;
+   - **Final check**: lists what blocks the switch (unconfirmed steps, failed
+     copies, copy not finished), the chosen changes and the ones kept. The
+     switch needs a tick and the domain name typed. **Sync again** right before.
+   Nothing is sent to Cloudflare before the final check. The switch
+   (`Wizard\DnsSwitch`) recomputes the comparison and refuses when Cloudflare
+   changed since the choice, saves a snapshot of the domain's records
+   (`migration_dns_snapshots`) and applies only the ticked lines in one atomic
+   Cloudflare batch. **Put old DNS back** restores the snapshot: changed records
+   get their old value, removed ones return, records the switch added are
+   deleted, DNS management is turned off again and the domain goes back to
+   *Copied*. Records added by hand afterwards stay.
+6. **Switch DNS (without the wizard).** The older one-click switch
+   (`items.cutover`) still exists: it adds the domain's own Plesk records and lets
+   the panel take over web and mail records. Without Cloudflare it gives a BIND
+   zone file. Let's Encrypt is requested right away and retried by `whp-cert-retry`.
 7. **Late mail.** After the switch, **Fetch late mail** copies messages that
    still arrived on Plesk (only new files, nothing is deleted here).
 8. **Finish.** Removes the stored temporary database passwords.
