@@ -62,6 +62,12 @@
             </div>
         </x-ui.card>
 
+        @if (($pluginSets ?? collect())->isNotEmpty())
+            @include('apps::plugin-sets.pick')
+        @elseif ($area === 'admin' && in_array($app, \Rhis\Apps\PluginSets\PluginSet::APPS, true))
+            <p class="small muted"><x-icon name="wordpress" /> {{ __('Want the same plugins on every new site?') }} <a href="{{ route('admin.apps.sets.create') }}">{{ __('Make a plugin set') }}</a></p>
+        @endif
+
         @if ($databasesLeft !== null)
             <p class="small muted"><x-icon name="database" /> {{ __('A database is created for :app. Databases left in your package: :n.', ['app' => $meta['name'], 'n' => $databasesLeft]) }}</p>
         @endif
