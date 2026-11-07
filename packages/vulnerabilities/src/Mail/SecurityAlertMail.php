@@ -77,6 +77,9 @@ class SecurityAlertMail extends Mailable
 
     private function fixUrl(Finding $f): string
     {
+        if ($f->isIntegrity() && ($url = $f->clientFixUrl())) {
+            return $url;
+        }
         if (! $f->isMalware() && $f->install && config('wordpress.customer_toolkit') && \Route::has('client.wordpress.show')) {
             return route('client.wordpress.show', $f->install);
         }
