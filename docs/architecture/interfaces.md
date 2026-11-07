@@ -250,7 +250,8 @@ every run (ExecStopPost). `site.php` / `site.owner` rewrite the units. See `docs
 | production | `main` |
 | test | `test` |
 
-`panel.update` runs `agent/scripts/update.sh <channel>`: fetch, check out the
+`panel.update` runs `agent/scripts/update.sh <channel>` in its own unit
+(`systemd-run --wait --unit whp-panel-update`, so an agent restart cannot kill it): fetch, check out the
 channel branch, `composer install --no-dev`, `php artisan migrate --force`,
 cache config, restart the pool and the queue worker. Built frontend assets are
 committed in `panel/public/build`, so the server needs no Node.js.

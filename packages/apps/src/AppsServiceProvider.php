@@ -20,6 +20,7 @@ final class AppsServiceProvider extends ServiceProvider
     {
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'apps');
         $this->loadJsonTranslationsFrom(__DIR__.'/../lang');
+        $this->loadJsonTranslationsFrom(__DIR__.'/../lang/plugin-sets');
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         if (! class_exists(Menu::class)) {
@@ -31,6 +32,12 @@ final class AppsServiceProvider extends ServiceProvider
             Route::middleware(['web', 'auth', 'client'])->prefix('apps')->name('client.apps.')
                 ->group(__DIR__.'/../routes/client.php');
         }
+
+        \App\Models\ActivityLog::labels([
+            'plugin_set.created' => 'WordPress plugin set created',
+            'plugin_set.updated' => 'WordPress plugin set changed',
+            'plugin_set.deleted' => 'WordPress plugin set deleted',
+        ]);
 
         Menu::admin()->add('apps', 'App installer', 'admin.apps.index', icon: 'apps', section: 'Hosting', order: 32);
         Menu::client()->add('apps', 'Apps', 'client.apps.index', icon: 'apps', order: 15,

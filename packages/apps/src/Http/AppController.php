@@ -15,6 +15,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Rhis\Apps\AppInstaller;
 use Rhis\Apps\Models\AppInstallation;
+use Rhis\Apps\PluginSets\PluginSet;
 
 /**
  * Shared by the admin and the client panel. The admin sees every website,
@@ -78,7 +79,30 @@ abstract class AppController extends Controller
             'selected' => $request->integer('website') ?: $websites->first()?->id,
             'databasesLeft' => ($meta['database'] ?? true) ? $left : null,
             'defaults' => $this->defaults($request),
+            ...$this->pluginSetChoices($app, $websites),
         ]);
+    }
+
+    /**
+     * WordPress plugin sets for the install form: the sets to pick from and the default
+     * set per website (from the website's package).
+     */
+    protected function pluginSetChoices(string $app, $websites): array
+    {
+        if (! in_array($app, PluginSet::APPS, true)) {
+            return ['pluginSets' => collect(), 'pluginSetDefaults' => []];
+        }
+        $byPackage = PluginSet::defaultsByPackage();
+        $defaults = [];
+        foreach ($websites as $w) {
+            $defaults[$w->id] = $byPackage[$w->package?->id] ?? null;
+        }
+        $sets = PluginSet::query()->orderBy('name')
+            ->when($this->area !== 'admin', fn ($q) => $q->where(fn ($q) => $q->where('customer_visible', true)
+                ->orWhereIn('id', array_filter($defaults))))
+            ->get();
+
+        return ['pluginSets' => $sets, 'pluginSetDefaults' => $defaults];
     }
 
     public function store(Request $request, string $app): RedirectResponse
@@ -106,6 +130,13 @@ abstract class AppController extends Controller
             return back()->withInput()->withErrors(['agent' => __('Your package allows no more databases. Remove an app or ask us for a larger package.')]);
         }
         $data['path'] = trim((string) ($data['path'] ?? ''), '/');
+        if (in_array($app, PluginSet::APPS, true) && $request->filled('plugin_set')) {
+            $set = PluginSet::choicesFor($website, $this->area === 'admin')->firstWhere('id', $request->integer('plugin_set'));
+            if (! $set) {
+                return back()->withInput($request->except('admin_password'))->withErrors(['plugin_set' => __('Choose one of the plugin sets in the list.')]);
+            }
+            $data['plugin_set'] = $set;
+        }
 
         try {
             $installation = $this->installer->install($website, $app, $data);
