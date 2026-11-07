@@ -27,7 +27,7 @@
         <p class="muted small">{{ __('Was this you or a normal visitor (a contact form, an editor, an upload)? Then switch these rules off here. Real attacks are still stopped by the other rules.') }}</p>
         <form method="POST" action="{{ $allowUrl }}" class="form">
             @csrf
-            <fieldset class="field"><legend>{{ __('Rules') }}</legend>
+            <fieldset class="field waf-fieldset"><legend>{{ __('Rules') }}</legend>
                 @foreach ($event->rules as $r)
                     <label class="check"><input type="checkbox" name="rules[]" value="{{ $r['id'] }}" checked> <code>{{ $r['id'] }}</code> <span class="small">{{ \Illuminate\Support\Str::limit($r['message'], 80) }}</span></label>
                 @endforeach

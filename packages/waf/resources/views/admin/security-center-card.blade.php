@@ -7,10 +7,10 @@
         <div><span>{{ __('Attacks blocked, 24 h') }}</span><strong>{{ number_format($waf['blocked_24h']) }}</strong></div>
         <div><span>{{ __('Detected only, 24 h') }}</span><strong>{{ number_format($waf['detected_24h']) }}</strong></div>
         <div><span>{{ __('Websites blocking') }}</span><strong>{{ $waf['modes']['block'] }}<small class="muted"> / {{ array_sum($waf['modes']) }}</small></strong></div>
-        <div><span>{{ __('Most attacked, 7 days') }}</span><strong style="font-size:16px">@if ($waf['top_sites'])<a href="{{ route('admin.waf.site', $waf['top_sites'][0]['id']) }}">{{ $waf['top_sites'][0]['domain'] }}</a> <small class="muted">({{ number_format($waf['top_sites'][0]['hits']) }})</small>@else – @endif</strong></div>
+        <div><span>{{ __('Most attacked, 7 days') }}</span><strong style="font-size:15px;font-stretch:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block">@if ($waf['top_sites'])<a href="{{ route('admin.waf.site', $waf['top_sites'][0]['id']) }}">{{ $waf['top_sites'][0]['domain'] }}</a> <small class="muted">({{ number_format($waf['top_sites'][0]['hits']) }})</small>@else – @endif</strong></div>
     </div>
     @if ($waf['modes']['detect'] + $waf['modes']['off'] > 0)
-        <p class="muted small">{{ __(':detect websites only detect and :off have the firewall off.', ['detect' => $waf['modes']['detect'], 'off' => $waf['modes']['off']]) }} <a href="{{ route('admin.waf.sites') }}">{{ __('Manage') }}</a></p>
+        <p class="muted small">{{ __('Not blocking yet: :detect detect only, :off off.', ['detect' => $waf['modes']['detect'], 'off' => $waf['modes']['off']]) }} <a href="{{ route('admin.waf.sites') }}">{{ __('Manage') }}</a></p>
     @endif
 </div>
 @endif

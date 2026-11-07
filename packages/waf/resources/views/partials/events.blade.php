@@ -20,5 +20,5 @@
             </tr>
         @endforeach
     </x-ui.table>
-    @if ($events->hasPages())<div style="padding:12px 20px">{{ $events->links() }}</div>@endif
+    @if ($events->hasPages())<div style="padding:12px 20px">{{ $events->links('partials.pagination') }}</div>@endif
 @endif

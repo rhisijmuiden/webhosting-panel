@@ -30,6 +30,7 @@
 .waf-split div { padding: 12px 14px; border-radius: var(--radius-md); background: var(--surface-sunken); border-top: 3px solid var(--wc); display: flex; flex-direction: column; }
 .waf-split strong { font-size: 24px; font-weight: 800; font-stretch: 125%; line-height: 1.15; } .waf-split span { font-size: 12px; color: var(--ink-muted); }
 .waf-split .m-block { --wc: var(--status-online); } .waf-split .m-detect { --wc: var(--status-warning); } .waf-split .m-off { --wc: var(--status-offline); }
+.waf-fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; } .waf-fieldset legend { font-weight: 700; font-size: 14px; margin-bottom: 8px; padding: 0; }
 .waf-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; padding: 0 20px 16px; }
 .waf-filters .field { margin: 0; min-width: 150px; }
 @media (max-width: 640px) { .waf-split { grid-template-columns: 1fr; } .waf-uri { max-width: 220px; } .waf-filters { padding: 0 16px 14px; } }

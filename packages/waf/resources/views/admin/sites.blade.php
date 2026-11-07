@@ -39,7 +39,7 @@
                 </tr>
             @endforeach
         </x-ui.table>
-        @if ($websites->hasPages())<div style="padding:12px 20px">{{ $websites->links() }}</div>@endif
+        @if ($websites->hasPages())<div style="padding:12px 20px">{{ $websites->links('partials.pagination') }}</div>@endif
         @endif
     </x-ui.card>
 </x-layouts.admin>
