@@ -136,6 +136,13 @@ days, days forever.
 Other phases add their own module (`dns.py`, `mail.py`, `backup.py`), for
 example `backup.run` calling `whp-backup … --json`.
 
+Website logs (`sitelogs.py`, see `packages/site-logs/README.md`): `sitelog.files`
+(access, error, PHP and PHP-FPM log of a site with their rotated copies) and
+`sitelog.read` (newest matching entries, parsed, with filters and an
+`{inode, offset}` cursor for the live tail). Files are opened with
+`O_NOFOLLOW` from the vhosts folder; links and non-regular files are refused.
+logrotate rotates them daily as the site user (`installer/bin/whp-site-logrotate`).
+
 Mail log (`maillog.py`, see `docs/mail-log.md`): `mail.log_read` (Postfix
 events from the journal after a cursor) and `mail.spam_history` (Rspamd scan
 history).

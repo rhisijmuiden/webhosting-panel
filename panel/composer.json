@@ -28,6 +28,7 @@
         "rhis/reports": "@dev",
         "rhis/security": "@dev",
         "rhis/server-admin": "@dev",
+        "rhis/site-logs": "@dev",
         "rhis/subdomains": "@dev",
         "rhis/vulnerabilities": "@dev",
         "rhis/web-rules": "@dev",
