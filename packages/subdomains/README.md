@@ -49,3 +49,40 @@ databases on another server. Other sites (no CMS) are copied as files only.
 Panel: `SiteClone` model (table `site_clones`), `CloneManager`; a clone into a
 new subdomain waits until that subdomain is set up (`site-clone:tick`, every
 minute, and the status page). Server smoke test: `tests/clone_smoke.py`.
+
+## WordPress staging
+
+"Make staging copy" (WordPress tab of a website, or `/websites/{id}/staging`)
+clones a WordPress website into `staging.<domain>` with the clone tool above,
+then marks the copy as staging (agent `wp.staging_prepare`): a mu-plugin
+`wp-content/mu-plugins/whp-staging.php` holds back all outgoing mail
+(`pre_wp_mail`; define `WHP_STAGING_SEND_MAIL` to allow it), keeps the copy out
+of search engines and shows "STAGING" in the admin bar.
+
+"Push to live" (agent job `wp.staging_push`, `agent/whp_agent/actions/wp_staging.py`):
+
+1. Backup of the live install: all files (rsync with hard links to the previous
+   backup) and a dump of its database made as the live site's own database
+   user, in `/var/lib/webhosting-panel/staging/backups/<domain>/<stamp>/`.
+   The last 3 are kept; each can be put back from the staging page
+   (`wp.staging_restore`).
+2. Files (optional): the staging install is synced onto live with `--delete`,
+   except the live `wp-config.php`, caches and the staging mu-plugin. By default
+   media that only exists on live (uploaded meanwhile) is kept. Paths and
+   addresses in `.htaccess` and cache/firewall configs are changed to live.
+3. Database (optional): the staging tables are dumped with the staging
+   credentials and loaded into the live database as the live user, except the
+   tables the customer keeps. For shops the order, customer, comment and form
+   entry tables are pre-ticked (`suggested_keep`), so orders that came in on
+   live meanwhile are not lost. WP-CLI search-replace turns the staging
+   addresses and folder back into the live ones; the live search engine
+   setting is put back.
+4. The live front page is checked. If it worked before and answers 500+
+   after, or any step fails, the backup is put back automatically.
+
+Refused with a reason: different table prefixes, the copy using the live
+database, multisite, a database on another server. Panel: `Staging` and
+`StagingPush` models (tables `wp_stagings`, `wp_staging_pushes`),
+`StagingManager`, `wp-staging:tick` every minute. Customers: team area
+"WordPress & apps"; `WHP_WP_STAGING_CUSTOMER=false` turns it off for customers.
+Server smoke test: `tests/staging_smoke.py`.
