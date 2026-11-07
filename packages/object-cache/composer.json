@@ -1,0 +1,24 @@
+{
+    "name": "rhis/object-cache",
+    "description": "Valkey object cache per website for the Webhosting Panel: an isolated Valkey server per site with the memory limit of its package, automatic WordPress/WooCommerce configuration and a flush button.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rhis\\ObjectCache\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rhis\\ObjectCache\\ObjectCacheServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

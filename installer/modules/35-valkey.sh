@@ -32,5 +32,10 @@ module_valkey() {
     sleep 1
   done
   [[ $(REDISCLI_AUTH=$VALKEY_WHP_PASS valkey-cli --user whp ping 2>/dev/null || true) == PONG ]] || die "valkey does not answer"
+  # Object cache per website (agent objcache.*): every site that switches it on
+  # gets its own valkey-server as the site user (whp-objcache-<user>.service),
+  # with its config here. The shared server above is never used by websites.
+  install -d -m 0755 -o root -g root "$WHP_ETC/objcache"
+  install -d -m 0750 -o root -g root "$WHP_STATE/objcache"
   ok "valkey ${VALKEY_MAXMEM} MB, ACL users: default, whp"
 }

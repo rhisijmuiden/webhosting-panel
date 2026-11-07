@@ -1101,6 +1101,10 @@ cmd_remove() {
   systemctl disable --now "whp-site-$SITE_ID" >/dev/null 2>&1 || true
   rm -rf "/etc/systemd/system/whp-site-$SITE_ID.service" "/etc/systemd/system/whp-site-$SITE_ID.service.d" \
     "$WHP_ETC/php-fpm/$SITE_ID.conf"
+  # Object cache of the site (agent objcache.*), when the panel did not remove it first.
+  systemctl disable --now "whp-objcache-$SITE_USER" >/dev/null 2>&1 || true
+  rm -f "/etc/systemd/system/whp-objcache-$SITE_USER.service" "$WHP_ETC/objcache/$SITE_USER.conf" \
+    "$WHP_STATE/objcache/$domain.json"
   [[ $keep == yes ]] || rm -f "$WHP_LOG_DIR/php-fpm/$SITE_ID.log"
   systemctl daemon-reload
   pkill -u "$SITE_USER" 2>/dev/null || true

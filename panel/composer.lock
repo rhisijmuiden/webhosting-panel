@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "7d0fae0df1967960a1cfbc776e8a054e",
+    "content-hash": "ec981f6db299ce1a4b9a80083689a682",
     "packages": [
         {
             "name": "brick/math",
@@ -3645,6 +3645,39 @@
                 "proprietary"
             ],
             "description": "Monitoring and alerts for the Webhosting Panel: uptime checks per website, certificates, disks, services and load, alerts by mail and Microsoft Teams, and a status page for customers.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/object-cache",
+            "version": "dev-claude/project-thread-32u16i",
+            "dist": {
+                "type": "path",
+                "url": "../packages/object-cache",
+                "reference": "7e1297b96b24e255be5c42c5f70ded695355dafe"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\ObjectCache\\ObjectCacheServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\ObjectCache\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Valkey object cache per website for the Webhosting Panel: an isolated Valkey server per site with the memory limit of its package, automatic WordPress/WooCommerce configuration and a flush button.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -9098,6 +9131,7 @@
         "rhis/git": 20,
         "rhis/migration": 20,
         "rhis/monitoring": 20,
+        "rhis/object-cache": 20,
         "rhis/reports": 20,
         "rhis/security": 20,
         "rhis/server-admin": 20,
