@@ -7,6 +7,7 @@ use App\Providers\FtpAccountsServiceProvider;
 use App\Providers\PasswordResetServiceProvider;
 use App\Providers\TeamServiceProvider;
 use App\Providers\WpHardeningServiceProvider;
+use App\Providers\WpImportServiceProvider;
 
 return [
     AppServiceProvider::class,
@@ -16,4 +17,5 @@ return [
     FtpAccountsServiceProvider::class,
     PasswordResetServiceProvider::class,
     WpHardeningServiceProvider::class,
+    WpImportServiceProvider::class,
 ];
