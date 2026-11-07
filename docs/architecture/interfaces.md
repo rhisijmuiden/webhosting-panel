@@ -234,6 +234,10 @@ skips scans younger than `max_age_hours`), `disk.usage` (one folder of the last 
 and `disk.summary` (scanned totals per website and the size of every MariaDB database). Scans are cached in
 `/var/lib/webhosting-panel/disk-usage/<domain>.json`. See `packages/disk-usage/README.md`.
 
+Extra FTP/SFTP accounts (`ftp.py`, ProFTPD from `installer/modules/75-ftp.sh`, screens in the core panel:
+`App\Services\FtpAccounts`, admin `/admin/ftp-accounts`, client `/ftp-accounts`): `ftp.sync` (the complete list of
+virtual users, password hashes only) and `ftp.status`. FTPS on 21 (TLS required), SFTP on 2222. See `docs/ftp-accounts.md`.
+
 Cron jobs (`cron.py`, screens in `packages/cron`, `Rhis\Cron\`, admin `/admin/cron`, client `/cron`):
 `cron.apply`, `cron.calendar`, `cron.list`, `cron.run`, `cron.stop`, `cron.runs`, `cron.suspend`, `cron.remove`.
 One `whp-cron-<id>.timer` + oneshot service per job (site user, subscription slice); `cron_finish.py` saves
