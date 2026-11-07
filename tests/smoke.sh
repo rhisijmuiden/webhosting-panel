@@ -281,15 +281,6 @@ PY
   check "ftp.status reports the ports" bash -c 'agent ftp.status | jq -e ".active and .ftp_port == 21 and .sftp_port == 2222 and .accounts == 2"'
   check "ftp.sync removes the accounts again" bash -c 'agent ftp.sync "{\"accounts\":[]}" | jq -e ".accounts == 0" && ! curl -s --ssl-reqd -k -u "up@site.test:Smoke-ftp-pass-123" ftp://127.0.0.1/'
   rm -rf /tmp/ftp-smoke.txt /var/www/vhosts/site.test/public/ftp-up
-  # TEMP diagnostics (PR #89): outbound reachability from the container
-  { echo "== diag"; cat /etc/resolv.conf; getent ahosts download.dokuwiki.org; getent ahosts raw.githubusercontent.com; getent ahosts api.github.com | head -3
-    ip -4 route; ip -6 route; ip -4 addr | grep inet
-    curl -4 -sS -o /dev/null -w "dokuwiki v4 %{http_code} %{remote_ip}\n" --max-time 15 https://download.dokuwiki.org/ || echo "dokuwiki v4 failed"
-    curl -4 -sS -o /dev/null -w "raw v4 %{http_code} %{remote_ip}\n" --max-time 15 https://raw.githubusercontent.com/dokuwiki/dokuwiki/stable/VERSION || echo "raw v4 failed"
-    curl -4 -sS -o /dev/null -w "api v4 %{http_code} %{remote_ip}\n" --max-time 15 https://api.github.com/ || echo "api v4 failed"
-    python3 -c "import socket;print(socket.getaddrinfo('download.dokuwiki.org',443,type=socket.SOCK_STREAM))"
-    nft list ruleset | grep -n -i -E "hook output|ip daddr|drop|reject" | head -40
-    cscli decisions list -o raw 2>/dev/null | head -20; } 2>&1 | sed 's/^/   /' || true
   check "app catalog" bash -c 'agent apps.catalog | jq -e "[.apps[].id] == [\"wordpress\",\"woocommerce\",\"joomla\",\"nextcloud\",\"piwigo\",\"mediawiki\",\"dokuwiki\",\"phpbb\",\"freshrss\"]"'
   agent apps.catalog | jq -r '.apps[] | "   \(.id): \(.latest_version) released \(.released_at // "-") maintained=\(.maintained)"' || true
   check "app catalog: every app has a latest release and is maintained" bash -c 'agent apps.catalog | jq -e "all(.apps[]; .latest_version != null and .maintained == true)"'
