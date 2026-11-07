@@ -34,5 +34,5 @@
 {{ __('Questions or wishes? Mail us at') }} {{ $supportEmail }}
 @endif
 
-{{ __('You receive this report once a month because you host your website with :app.', ['app' => config('app.name')]) }}
+{{ __('You receive this report once a month because you host your website with :app.', ['app' => \App\Support\Brand::provider()]) }}
 {{ __('Change who receives it, or stop it') }}: {{ $settingsUrl }}

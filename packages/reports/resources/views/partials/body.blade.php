@@ -282,7 +282,7 @@
 
     {{-- Footer --}}
     <tr><td style="background:#0A2348;border-radius:0 0 16px 16px;padding:24px 32px">
-        <p style="margin:0;font-size:13px;line-height:1.6;color:#C6D5E8">{{ __('You receive this report once a month because you host your website with :app.', ['app' => config('app.name')]) }}
+        <p style="margin:0;font-size:13px;line-height:1.6;color:#C6D5E8">{{ __('You receive this report once a month because you host your website with :app.', ['app' => \App\Support\Brand::provider()]) }}
             <a href="{{ $settingsUrl }}" style="color:#8CCBFA">{{ __('Change who receives it, or stop it') }}</a></p>
     </td></tr>
 </table>

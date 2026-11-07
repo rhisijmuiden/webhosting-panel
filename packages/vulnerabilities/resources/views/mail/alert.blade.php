@@ -98,7 +98,7 @@
 
     {{-- Footer --}}
     <tr><td style="background:#0A2348;border-radius:0 0 16px 16px;padding:24px 32px">
-        <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#C6D5E8">{{ __('You receive this mail because you host your website with :app. We send it only when we find a security problem.', ['app' => config('app.name')]) }}
+        <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#C6D5E8">{{ __('You receive this mail because you host your website with :app. We send it only when we find a security problem.', ['app' => \App\Support\Brand::provider()]) }}
             <a href="{{ $settingsUrl }}" style="color:#8CCBFA">{{ __('Change who receives these mails') }}</a></p>
         @if ($copyrights->isNotEmpty())
             <p style="margin:8px 0 0;font-size:11px;line-height:1.5;color:#8C99B3">{{ __('Vulnerability data:') }} {{ $copyrights->implode(' ') }}</p>

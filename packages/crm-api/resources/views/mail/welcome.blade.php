@@ -9,5 +9,5 @@
 
 {{ __('After that you log in at :url with your e-mail address :email.', ['url' => url('/login'), 'email' => $customer->email]) }}
 
-{{ config('app.name') }}
+{{ \App\Support\Brand::provider() }}
 </x-mail::message>

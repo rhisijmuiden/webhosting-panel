@@ -19,7 +19,7 @@ final class CustomerWelcome extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: __('Your hosting account at :app', ['app' => config('app.name')]));
+        return new Envelope(subject: __('Your hosting account at :app', ['app' => \App\Support\Brand::provider()]));
     }
 
     public function content(): Content
