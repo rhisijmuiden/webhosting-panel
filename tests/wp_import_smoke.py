@@ -10,6 +10,7 @@ must work on TARGET with its own database.
 Needs internet access to wordpress.org. Usage: python3 tests/wp_import_smoke.py wpsrc.test import.test
 """
 
+import json
 import os
 import pwd
 import re
@@ -130,7 +131,7 @@ step("the new address is set", option(target, "home") == NEW_URL and option(targ
      option(target, "home"))
 step("old paths are changed in the database", option(target, "upload_path") == f"{docroot}/wp-content/uploads")
 serial = wordpress.wp(target, ["option", "get", "whp_smoke_paths", "--format=json"]).stdout
-step("serialized values are changed too", docroot in serial and OLD_ROOT not in serial, serial)
+step("serialized values are changed too", json.loads(serial).get("cache_dir") == f"{docroot}/wp-content/cache/x", serial)
 content = wordpress.wp(target, ["post", "list", "--post_type=post", "--fields=post_content", "--format=csv"]).stdout
 step("old links in posts point at the new address", "oldhost.example" not in content and f"{NEW_URL}/wp-content/uploads/a.jpg" in content, content)
 step("the Redis drop-in is switched off", os.path.isfile(os.path.join(docroot, "wp-content/object-cache.php.whp-disabled"))
