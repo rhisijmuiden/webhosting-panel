@@ -148,6 +148,24 @@ class HelperTest(unittest.TestCase):
         with self.assertRaises(ActionError):
             wpi.scan_sql(io.BytesIO(b"<!DOCTYPE html><html><body>Login</body></html>\n"))
 
+    def test_multi_line_inserts(self):
+        # phpMyAdmin and newer mariadb-dump put every row of an INSERT on its own line.
+        sql = (b"CREATE TABLE `wp_options` (\n  `option_id` bigint(20)\n);\n"
+               b"INSERT INTO `wp_options` (`option_id`, `option_name`, `option_value`, `autoload`) VALUES\n"
+               b"(1, 'siteurl', 'https://oud.nl', 'yes'),\n"
+               b"(2, 'home', 'https://www.oud.nl', 'yes'),\n"
+               b"(3, 'upload_path', '" + OLD_ROOT.encode() + b"/wp-content/uploads', 'yes'),\n"
+               b"(4, 'note', 'DEFINER=`a`@`b` utf8mb4_0900_ai_ci', 'yes');\n"
+               b"CREATE TABLE `wp_posts` (\n  `ID` bigint(20)\n);\n"
+               b"(1, 'home', 'https://not.a.row', 'no');\n")
+        scan = wpi.scan_sql(io.BytesIO(sql))
+        self.assertEqual(scan["urls"]["wp_"], {"siteurl": "https://oud.nl", "home": "https://www.oud.nl"})
+        self.assertEqual(scan["paths"][OLD_ROOT], 1)
+        state: dict = {}
+        out = [wpi.filter_sql_line(line, state) for line in io.BytesIO(sql)]
+        self.assertIn(b"(4, 'note', 'DEFINER=`a`@`b` utf8mb4_0900_ai_ci', 'yes');\n", out, "row data is never changed")
+        self.assertFalse(state.get("in_insert"))
+
     def test_fix_config(self):
         db = {"name": "nieuw_nl_import_1a2b", "user": "nieuw_nl_import_1a2b", "password": "n'w"}
         out = wpi.fix_config(WP_CONFIG, db, "xyz_", wpi.path_pairs([OLD_ROOT], "/var/www/vhosts/nieuw.nl/public"),

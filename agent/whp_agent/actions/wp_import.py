@@ -82,7 +82,7 @@ _HOSTING_ROOTS = re.compile(r"^/(home\d*|var|srv|data\d*|www|usr/home|nas|mnt|op
                             r"domains|public_html|htdocs|chroot|kunden|hsphere|vhosts|webspace|clientes|homepages|hp|users?|u\d+)(/|$)")
 _SYSTEM_PATHS = ("/usr/", "/etc/", "/proc/", "/dev/", "/tmp/", "/bin/", "/sbin/", "/lib/")
 _CREATE_TABLE = re.compile(rb"^CREATE TABLE (?:IF NOT EXISTS )?`((?:[^`]|``)+)`", re.I)
-_OPTION = re.compile(rb"\(\s*\d+\s*,\s*'(siteurl|home)'\s*,\s*'((?:[^'\\]|\\.){0,2000})'")
+_OPTION = re.compile(rb"\(\s*'?\d+'?\s*,\s*'(siteurl|home)'\s*,\s*'((?:[^'\\]|\\.){0,2000})'")
 _INSERT_INTO = re.compile(rb"^INSERT INTO `((?:[^`]|``)+)`", re.I)
 _SKIP_SQL = re.compile(rb"^\s*(CREATE\s+DATABASE\b|USE\s+[`\w])", re.I)
 _SUPER_SQL = re.compile(rb"^\s*(SET\s+@@GLOBAL\.|SET\s+@@SESSION\.SQL_LOG_BIN|SET\s+@MYSQLDUMP_TEMP_LOG_BIN)", re.I)
@@ -243,6 +243,7 @@ def scan_sql(stream, size_hint: int = 0) -> dict:
     create_db = use_db = super_lines = 0
     mysql8 = False
     first = b""
+    table = None  # the table of the INSERT whose rows are being read
     for i, line in enumerate(stream):
         if i == 0:
             first = line[:200]
@@ -264,12 +265,18 @@ def scan_sql(stream, size_hint: int = 0) -> dict:
             continue
         ins = _INSERT_INTO.match(line)
         if ins:
-            table = ins.group(1).decode("utf-8", "replace")
-            if table.endswith("options"):
-                for o in _OPTION.finditer(line):
-                    urls.setdefault(table[: -len("options")], {})[o.group(1).decode()] = _unescape_sql(o.group(2))
-            if b"/" in line:
-                _merge(found, old_paths(line.decode("utf-8", "replace").replace("\\\\/", "/").replace("\\/", "/")))
+            table = ins.group(1).replace(b"``", b"`").decode("utf-8", "replace")
+        elif table is None or not line.lstrip().startswith(b"("):
+            table = None
+            continue
+        # Rows of an INSERT can follow on their own lines (phpMyAdmin, newer mariadb-dump): "(1,'siteurl',...),"
+        if table.endswith("options"):
+            for o in _OPTION.finditer(line):
+                urls.setdefault(table[: -len("options")], {})[o.group(1).decode()] = _unescape_sql(o.group(2))
+        if b"/" in line:
+            _merge(found, old_paths(line.decode("utf-8", "replace").replace("\\\\/", "/").replace("\\/", "/")))
+        if line.rstrip().endswith(b";"):
+            table = None
     if not tables and b"<html" in first.lower():
         raise ActionError("invalid_params", "The database file is a web page, not a database export")
     return {"tables": tables, "urls": urls, "paths": found, "create_database": create_db, "use_database": use_db,
@@ -625,7 +632,14 @@ def filter_sql_line(line: bytes, state: dict) -> bytes | None:
         if line.rstrip().endswith(b";"):
             state["skip_until_semicolon"] = False
         return None
+    if state.get("in_insert"):
+        # A row of a multi-line INSERT: data, passed on unchanged.
+        if line.rstrip().endswith(b";"):
+            state["in_insert"] = False
+        return line
     if line.startswith(b"INSERT INTO"):
+        if not line.rstrip().endswith(b";"):
+            state["in_insert"] = True
         return line
     if _SKIP_SQL.match(line) or _SUPER_SQL.match(line):
         if not line.rstrip().endswith(b";"):

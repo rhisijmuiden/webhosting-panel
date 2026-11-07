@@ -98,6 +98,9 @@ step("check job succeeds", state["status"] == "succeeded", state.get("error"))
 report = state["result"]
 step("check passes", report["ok"], report["checks"])
 step("check finds WordPress below public_html", report["site"]["folder"] == "public_html" and report["site"]["version"], report["site"])
+if report["database"]["home"] != OLD_URL:  # show how this mariadb-dump writes wp_options
+    at = dump.stdout.find(b"INSERT INTO `wp_options`")
+    print(dump.stdout[at:at + 600] if at >= 0 else dump.stdout[:1500])
 step("check reads the old address from the dump", report["database"]["home"] == OLD_URL, report["database"])
 step("check finds the old path", any(p["old"] == OLD_ROOT and p["likely"] for p in report["paths"]), report["paths"])
 step("check lists the Redis drop-in", any(c["file"] == "wp-content/object-cache.php" for c in report["site"]["cache"]))
