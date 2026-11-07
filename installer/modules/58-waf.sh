@@ -65,8 +65,10 @@ module_waf() {
   render "$TPL/waf/logrotate" /etc/logrotate.d/whp-modsecurity
 
   render "$TPL/waf/nginx-http.conf" /etc/nginx/conf.d/whp-waf.conf
-  if ! nginx -t >>"$WHP_INSTALL_LOG" 2>&1; then
-    warn "web application firewall: nginx does not accept the ModSecurity configuration, switched off (see $WHP_INSTALL_LOG)"
+  local test_out
+  if ! test_out=$(nginx -t 2>&1); then
+    printf '%s\n' "$test_out" >>"$WHP_INSTALL_LOG"
+    warn "web application firewall: nginx does not accept the ModSecurity configuration, switched off: $(grep -m1 emerg <<<"$test_out")"
     waf_disable_sites
     run nginx -t
   fi
