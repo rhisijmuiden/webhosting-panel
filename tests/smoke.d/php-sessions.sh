@@ -24,7 +24,8 @@ check "cleanup run" whp-site-sessionclean
 check "expired session removed" bash -c '[[ ! -e /var/www/vhosts/sess.test/sessions/sess_smokeold ]]'
 check "fresh sessions and other files kept" bash -c 'cd /var/www/vhosts/sess.test/sessions && [[ -f sess_smokenew && -f keep-me ]] && compgen -G "sess_*" | grep -vq "^sess_smoke"'
 check "a link is not followed or touched" bash -c '[[ -L /var/www/vhosts/sess.test/sessions/sess_smokelink && $(cat /root/sess_smoke_target) == root-owned ]]'
-# A query string keeps the page cache out of it (it ignores the session cookie on the first request).
-check "the site still continues its session" bash -c 'c=$(mktemp); curl -s -c "$c" -H "Host: sess.test" http://127.0.0.1/session.php?nocache=1 >/dev/null; whp-site-sessionclean >/dev/null; curl -s -b "$c" -H "Host: sess.test" http://127.0.0.1/session.php?nocache=1 | grep -q n=2; r=$?; rm -f "$c"; exit $r'
+# The session cookie is "secure" (90-whp.ini) and the test talks plain HTTP, so
+# the cookie is sent back by hand. The query string keeps the page cache out.
+check "the site still continues its session" bash -c 'id=$(curl -s -D - -o /dev/null -H "Host: sess.test" "http://127.0.0.1/session.php?nocache=1" | sed -n "s/^[Ss]et-[Cc]ookie: PHPSESSID=\([^;]*\).*/\1/p" | tr -d "\r"); [[ -n $id ]] || { echo "no session cookie"; exit 1; }; whp-site-sessionclean; curl -s -H "Host: sess.test" -H "Cookie: PHPSESSID=$id" "http://127.0.0.1/session.php?nocache=1" | tee /dev/stderr | grep -q n=2'
 rm -f /root/sess_smoke_target
 check "remove site sess.test" whp-site remove sess.test --json
