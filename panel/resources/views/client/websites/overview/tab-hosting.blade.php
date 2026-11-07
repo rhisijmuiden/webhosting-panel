@@ -38,7 +38,7 @@
             <dt>{{ __('SFTP user') }}</dt><dd class="mono">{{ $site->system_user ?? '–' }}</dd>
             <dt>{{ __('Website folder') }}</dt><dd class="mono">{{ $site->document_root ?? '–' }}</dd>
             <dt>{{ __('Database server') }}</dt><dd class="mono">localhost</dd>
-            <dt>{{ __('Certificate') }}</dt><dd>{{ $site->ssl_status === 'active' ? __('Let\'s Encrypt, renewed automatically') : __(ucfirst($site->ssl_status)) }}</dd>
+            <dt>{{ __('Certificate') }}</dt><dd>{{ class_exists(\Rhis\Certificates\Present::class) ? \Rhis\Certificates\Present::summary($site) : ($site->ssl_status === 'active' ? __('Let\'s Encrypt, renewed automatically') : __(ucfirst($site->ssl_status))) }}</dd>
         </dl>
     </x-ui.card>
     <x-ui.card :title="__('Databases')" id="databases">
@@ -56,3 +56,4 @@
 @includeIf('domain-aliases::partials.website-card', ['website' => $site])
 @include('ftp-accounts.partials.website-card', ['website' => $site])
 @includeIf('subdomains::partials.website-card', ['website' => $site])
+@includeIf('certificates::partials.website-card', ['website' => $site])

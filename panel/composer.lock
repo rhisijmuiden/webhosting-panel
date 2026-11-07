@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "d141709be14f2c7ab04880d8ac67eb0f",
+    "content-hash": "539943df9e22b0a71a46c8f866e97ed0",
     "packages": [
         {
             "name": "brick/math",
@@ -3366,6 +3366,40 @@
                 "proprietary"
             ],
             "description": "Backup screens for the Webhosting Panel (admin and client), on top of whp-backup through the agent.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "rhis/certificates",
+            "version": "dev-claude/project-thread-32u16i",
+            "dist": {
+                "type": "path",
+                "url": "../packages/certificates",
+                "reference": "df318792b86136c6a323670505d2d6ff401d47eb"
+            },
+            "require": {
+                "ext-openssl": "*",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Rhis\\Certificates\\CertificatesServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Rhis\\Certificates\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "SSL certificates for the Webhosting Panel: upload own certificates (PEM or PFX, CSR generator), wildcard Let's Encrypt through Cloudflare DNS-01, and expiry warnings.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -9156,6 +9190,7 @@
     "stability-flags": {
         "rhis/apps": 20,
         "rhis/backups": 20,
+        "rhis/certificates": 20,
         "rhis/crm-api": 20,
         "rhis/cron": 20,
         "rhis/disk-usage": 20,
