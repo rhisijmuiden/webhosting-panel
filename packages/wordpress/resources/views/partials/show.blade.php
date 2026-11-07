@@ -15,6 +15,7 @@
     </div>
     <div class="actions">
         <form method="POST" action="{{ $r('refresh') }}">@csrf<x-ui.button icon="refresh">{{ __('Check now') }}</x-ui.button></form>
+        @if (Route::has($area.'.wordpress.extensions.index') && ($area === 'admin' || config('wordpress-extensions.customer_access')))<x-ui.button :href="route($area.'.wordpress.extensions.index', $install)" icon="apps">{{ __('Plugins & themes') }}</x-ui.button>@endif
         <form method="POST" action="{{ $r('login') }}" target="_blank">@csrf<x-ui.button variant="primary" icon="external">{{ __('Log in to WP admin') }}</x-ui.button></form>
     </div>
 </div>
