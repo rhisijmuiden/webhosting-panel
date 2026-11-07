@@ -11,6 +11,9 @@ return [
     // Customers clone their websites (to a test subdomain or another website of theirs).
     'customer_clone' => (bool) env('WHP_SITE_CLONE_CUSTOMER', true),
 
+    // Customers make a WordPress staging copy and push it to their live website.
+    'customer_staging' => (bool) env('WHP_WP_STAGING_CUSTOMER', true),
+
     // Names that are never a customer's website: mail, DNS and panel services use them.
     'reserved' => ['www', 'mail', 'smtp', 'imap', 'pop', 'pop3', 'webmail', 'autodiscover', 'autoconfig', 'mta-sts',
         'ns1', 'ns2', 'ns', 'mx', 'ftp', 'cpanel', 'panel', 'admin', 'localhost', 'wpad', 'isatap'],

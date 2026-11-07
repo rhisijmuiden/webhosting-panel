@@ -53,3 +53,4 @@
         </div>
     </div>
 @endforeach
+@includeIf('subdomains::staging.partials.wordpress-card', ['site' => $site])
